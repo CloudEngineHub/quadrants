@@ -255,7 +255,7 @@ def subscript(ast_builder, value, *_indices, skip_reordered=False):
 
     indices_expr_group = None
     if has_slice:
-        if isinstance(value, (Field, AnyArray)):
+        if isinstance(value, (Field, AnyArray, SharedArray)):
             slice_indices = [i for i in indices if isinstance(i, slice)]
             non_slice_indices = [i for i in indices if not isinstance(i, slice)]
             if len(slice_indices) == 2:

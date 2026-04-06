@@ -68,6 +68,30 @@ def test_tile16_eye(tensor_type):
 
 @test_utils.test(arch=qd.cuda)
 @pytest.mark.parametrize("tensor_type", [qd.ndarray, qd.field])
+def test_tile16_eye_inplace(tensor_type):
+    """Load non-zero data into tile, call eye_(), verify identity overwrites it."""
+    src = tensor_type(qd.f32, (N, N))
+    dst = tensor_type(qd.f32, (N, N))
+
+    Ann = _ann(tensor_type, qd.f32, 2)
+
+    @qd.kernel
+    def run(src_arr: Ann, dst_arr: Ann):
+        qd.loop_config(block_dim=N)
+        for _ in range(N):
+            t = Tile16x16.zeros()
+            t[:] = src_arr[0:N, 0:N]
+            t.eye_()
+            dst_arr[0:N, 0:N] = t
+
+    data = np.arange(N * N, dtype=np.float32).reshape(N, N) + 100.0
+    src.from_numpy(data)
+    run(src, dst)
+    np.testing.assert_allclose(dst.to_numpy(), np.eye(N, dtype=np.float32))
+
+
+@test_utils.test(arch=qd.cuda)
+@pytest.mark.parametrize("tensor_type", [qd.ndarray, qd.field])
 def test_tile16_load_store(tensor_type):
     src = tensor_type(qd.f32, (N, N))
     dst = tensor_type(qd.f32, (N, N))
@@ -111,6 +135,86 @@ def test_tile16_load_store_partial(tensor_type):
     result = dst.to_numpy()
     np.testing.assert_allclose(result[:, :NCOLS], data[:, :NCOLS])
     np.testing.assert_allclose(result[:, NCOLS:], 0.0)
+
+
+@test_utils.test(arch=qd.cuda)
+@pytest.mark.parametrize("tensor_type", [qd.ndarray, qd.field])
+def test_tile16_store_partial_cols(tensor_type):
+    """Load full 16 columns, store only NCOLS < 16. Remaining dst columns must be untouched."""
+    NCOLS = 10
+    src = tensor_type(qd.f32, (N, N))
+    dst = tensor_type(qd.f32, (N, N))
+
+    Ann = _ann(tensor_type, qd.f32, 2)
+
+    @qd.kernel
+    def run(src_arr: Ann, dst_arr: Ann):
+        qd.loop_config(block_dim=N)
+        for _ in range(N):
+            t = Tile16x16.zeros()
+            t[:] = src_arr[0:N, 0:N]
+            dst_arr[0:N, 0:NCOLS] = t
+
+    data = np.arange(N * N, dtype=np.float32).reshape(N, N) + 1.0
+    src.from_numpy(data)
+    dst.from_numpy(np.full((N, N), -1.0, dtype=np.float32))
+    run(src, dst)
+    result = dst.to_numpy()
+    np.testing.assert_allclose(result[:, :NCOLS], data[:, :NCOLS])
+    np.testing.assert_allclose(result[:, NCOLS:], -1.0)
+
+
+@test_utils.test(arch=qd.cuda)
+@pytest.mark.parametrize("tensor_type", [qd.ndarray, qd.field])
+def test_tile16_load_clamp_to_array_shape(tensor_type):
+    """Load from an array narrower than 16 columns. Columns beyond arr width should be zero."""
+    NCOLS = 10
+    src = tensor_type(qd.f32, (N, NCOLS))
+    dst = tensor_type(qd.f32, (N, N))
+
+    Ann_src = _ann(tensor_type, qd.f32, 2)
+    Ann_dst = _ann(tensor_type, qd.f32, 2)
+
+    @qd.kernel
+    def run(src_arr: Ann_src, dst_arr: Ann_dst):
+        qd.loop_config(block_dim=N)
+        for _ in range(N):
+            t = Tile16x16.zeros()
+            t[:] = src_arr[0:N, 0:N]
+            dst_arr[0:N, 0:N] = t
+
+    data = np.arange(N * NCOLS, dtype=np.float32).reshape(N, NCOLS) + 1.0
+    src.from_numpy(data)
+    run(src, dst)
+    result = dst.to_numpy()
+    np.testing.assert_allclose(result[:, :NCOLS], data)
+    np.testing.assert_allclose(result[:, NCOLS:], 0.0)
+
+
+@test_utils.test(arch=qd.cuda)
+@pytest.mark.parametrize("tensor_type", [qd.ndarray, qd.field])
+def test_tile16_store_clamp_to_array_shape(tensor_type):
+    """Store to an array narrower than 16 columns. Must not write out of bounds."""
+    NCOLS = 10
+    src = tensor_type(qd.f32, (N, N))
+    dst = tensor_type(qd.f32, (N, NCOLS))
+
+    Ann_src = _ann(tensor_type, qd.f32, 2)
+    Ann_dst = _ann(tensor_type, qd.f32, 2)
+
+    @qd.kernel
+    def run(src_arr: Ann_src, dst_arr: Ann_dst):
+        qd.loop_config(block_dim=N)
+        for _ in range(N):
+            t = Tile16x16.zeros()
+            t[:] = src_arr[0:N, 0:N]
+            dst_arr[0:N, 0:N] = t
+
+    data = np.arange(N * N, dtype=np.float32).reshape(N, N) + 1.0
+    src.from_numpy(data)
+    run(src, dst)
+    result = dst.to_numpy()
+    np.testing.assert_allclose(result, data[:, :NCOLS])
 
 
 @test_utils.test(arch=qd.cuda)
@@ -416,3 +520,205 @@ def test_tile16_load3d_store3d(tensor_type):
     src.from_numpy(data)
     run(src, dst)
     np.testing.assert_allclose(dst.to_numpy(), data)
+
+
+# =============================================================================
+# SharedArray load/store tests — verify tile <-> shared memory transfers
+# =============================================================================
+
+
+@test_utils.test(arch=qd.cuda)
+def test_tile16_shared_array_roundtrip():
+    """Load from field -> tile -> SharedArray -> tile -> field, verify data survives."""
+    src = qd.field(dtype=qd.f32, shape=(N, N))
+    dst = qd.field(dtype=qd.f32, shape=(N, N))
+
+    @qd.kernel
+    def run():
+        qd.loop_config(block_dim=N)
+        for _ in range(N):
+            sh = qd.simt.block.SharedArray((N, N), qd.f32)
+            t = Tile16x16.zeros()
+            t[:] = src[0:N, 0:N]
+            sh[0:N, 0:N] = t
+            qd.simt.block.sync()
+            t2 = Tile16x16.zeros()
+            t2[:] = sh[0:N, 0:N]
+            dst[0:N, 0:N] = t2
+
+    data = np.arange(N * N, dtype=np.float32).reshape(N, N) + 1.0
+    src.from_numpy(data)
+    run()
+    np.testing.assert_allclose(dst.to_numpy(), data)
+
+
+@test_utils.test(arch=qd.cuda)
+def test_tile16_shared_array_partial_cols():
+    """Store/load partial columns (< 16) via SharedArray slice syntax."""
+    NCOLS = 10
+    src = qd.field(dtype=qd.f32, shape=(N, N))
+    dst = qd.field(dtype=qd.f32, shape=(N, N))
+
+    @qd.kernel
+    def run():
+        qd.loop_config(block_dim=N)
+        for _ in range(N):
+            sh = qd.simt.block.SharedArray((N, N), qd.f32)
+            t = Tile16x16.zeros()
+            t[:] = src[0:N, 0:NCOLS]
+            sh[0:N, 0:NCOLS] = t
+            qd.simt.block.sync()
+            t2 = Tile16x16.zeros()
+            t2[:] = sh[0:N, 0:NCOLS]
+            dst[0:N, 0:N] = t2
+
+    data = np.arange(N * N, dtype=np.float32).reshape(N, N) + 1.0
+    src.from_numpy(data)
+    run()
+    result = dst.to_numpy()
+    np.testing.assert_allclose(result[:, :NCOLS], data[:, :NCOLS])
+    np.testing.assert_allclose(result[:, NCOLS:], 0.0)
+
+
+@test_utils.test(arch=qd.cuda)
+def test_tile16_shared_array_cholesky():
+    """Cholesky via tiles, L stored in SharedArray, verify reconstruction."""
+    src = qd.field(dtype=qd.f32, shape=(N, N))
+    dst = qd.field(dtype=qd.f32, shape=(N, N))
+    eps_field = qd.field(dtype=qd.f32, shape=())
+
+    @qd.kernel
+    def run():
+        qd.loop_config(block_dim=N)
+        for _ in range(N):
+            sh = qd.simt.block.SharedArray((N, N), qd.f32)
+            t = Tile16x16.zeros()
+            t[:] = src[0:N, 0:N]
+            t.cholesky_(eps_field[None])
+            sh[0:N, 0:N] = t
+            qd.simt.block.sync()
+            t2 = Tile16x16.zeros()
+            t2[:] = sh[0:N, 0:N]
+            dst[0:N, 0:N] = t2
+
+    A = _make_spd()
+    src.from_numpy(A)
+    eps_field[None] = 1e-10
+    run()
+    L_expected = np.linalg.cholesky(A.astype(np.float64)).astype(np.float32)
+    np.testing.assert_allclose(np.tril(dst.to_numpy()), L_expected, atol=1e-4)
+
+
+@test_utils.test(arch=qd.cuda)
+def test_tile16_shared_array_store_partial_cols():
+    """Store only NCOLS < 16 from tile to SharedArray; remaining SharedArray columns untouched."""
+    NCOLS = 10
+    src = qd.field(dtype=qd.f32, shape=(N, N))
+    dst = qd.field(dtype=qd.f32, shape=(N, N))
+
+    @qd.kernel
+    def run():
+        qd.loop_config(block_dim=N)
+        for _ in range(N):
+            sh = qd.simt.block.SharedArray((N, N), qd.f32)
+            tid = qd.i32(qd.simt.subgroup.invocation_id())
+            for c in range(N):
+                sh[tid, c] = qd.f32(-1.0)
+            qd.simt.block.sync()
+            t = Tile16x16.zeros()
+            t[:] = src[0:N, 0:N]
+            sh[0:N, 0:NCOLS] = t
+            qd.simt.block.sync()
+            t2 = Tile16x16.zeros()
+            t2[:] = sh[0:N, 0:N]
+            dst[0:N, 0:N] = t2
+
+    data = np.arange(N * N, dtype=np.float32).reshape(N, N) + 1.0
+    src.from_numpy(data)
+    run()
+    result = dst.to_numpy()
+    np.testing.assert_allclose(result[:, :NCOLS], data[:, :NCOLS])
+    np.testing.assert_allclose(result[:, NCOLS:], -1.0)
+
+
+@test_utils.test(arch=qd.cuda)
+def test_tile16_shared_array_load_partial_cols():
+    """Load only NCOLS < 16 from SharedArray to tile; remaining tile registers should be zero."""
+    NCOLS = 10
+    src = qd.field(dtype=qd.f32, shape=(N, N))
+    dst = qd.field(dtype=qd.f32, shape=(N, N))
+
+    @qd.kernel
+    def run():
+        qd.loop_config(block_dim=N)
+        for _ in range(N):
+            sh = qd.simt.block.SharedArray((N, N), qd.f32)
+            t_load = Tile16x16.zeros()
+            t_load[:] = src[0:N, 0:N]
+            sh[0:N, 0:N] = t_load
+            qd.simt.block.sync()
+            t = Tile16x16.zeros()
+            t[:] = sh[0:N, 0:NCOLS]
+            dst[0:N, 0:N] = t
+
+    data = np.arange(N * N, dtype=np.float32).reshape(N, N) + 1.0
+    src.from_numpy(data)
+    run()
+    result = dst.to_numpy()
+    np.testing.assert_allclose(result[:, :NCOLS], data[:, :NCOLS])
+    np.testing.assert_allclose(result[:, NCOLS:], 0.0)
+
+
+@test_utils.test(arch=qd.cuda)
+def test_tile16_shared_array_clamp_store():
+    """Store tile to SharedArray narrower than 16 cols. Must auto-clamp, no OOB."""
+    NCOLS = 10
+    src = qd.field(dtype=qd.f32, shape=(N, N))
+    dst = qd.field(dtype=qd.f32, shape=(N, NCOLS))
+
+    @qd.kernel
+    def run():
+        qd.loop_config(block_dim=N)
+        for _ in range(N):
+            sh = qd.simt.block.SharedArray((N, NCOLS), qd.f32)
+            t = Tile16x16.zeros()
+            t[:] = src[0:N, 0:N]
+            sh[0:N, 0:N] = t
+            qd.simt.block.sync()
+            t2 = Tile16x16.zeros()
+            t2[:] = sh[0:N, 0:NCOLS]
+            dst[0:N, 0:NCOLS] = t2
+
+    data = np.arange(N * N, dtype=np.float32).reshape(N, N) + 1.0
+    src.from_numpy(data)
+    run()
+    result = dst.to_numpy()
+    np.testing.assert_allclose(result, data[:, :NCOLS])
+
+
+@test_utils.test(arch=qd.cuda)
+def test_tile16_shared_array_clamp_load():
+    """Load tile from SharedArray narrower than 16 cols. Must auto-clamp, extra regs zero."""
+    NCOLS = 10
+    src = qd.field(dtype=qd.f32, shape=(N, NCOLS))
+    dst = qd.field(dtype=qd.f32, shape=(N, N))
+
+    @qd.kernel
+    def run():
+        qd.loop_config(block_dim=N)
+        for _ in range(N):
+            sh = qd.simt.block.SharedArray((N, NCOLS), qd.f32)
+            t_load = Tile16x16.zeros()
+            t_load[:] = src[0:N, 0:NCOLS]
+            sh[0:N, 0:NCOLS] = t_load
+            qd.simt.block.sync()
+            t = Tile16x16.zeros()
+            t[:] = sh[0:N, 0:N]
+            dst[0:N, 0:N] = t
+
+    data = np.arange(N * NCOLS, dtype=np.float32).reshape(N, NCOLS) + 1.0
+    src.from_numpy(data)
+    run()
+    result = dst.to_numpy()
+    np.testing.assert_allclose(result[:, :NCOLS], data)
+    np.testing.assert_allclose(result[:, NCOLS:], 0.0)
