@@ -728,35 +728,41 @@ def test_tile16_shared_array_clamp_load():
 # VecSliceProxy tests — verify column-vector loads via arr[r0:r_end, col]
 # =============================================================================
 
+M = 40  # rows in vec source arrays; not a multiple of 16 to test partial blocks
+
 
 @test_utils.test(arch=qd.cuda)
 @pytest.mark.parametrize("tensor_type", [qd.ndarray, qd.field])
 def test_tile16_vec_proxy_syr_sub_2d(tensor_type):
-    """Symmetric rank-1 subtract via vec proxy from a 2D array."""
+    """Symmetric rank-1 subtract via vec proxy from a 2D array, non-zero row offset."""
     mat = tensor_type(qd.f32, (N, N))
-    vecs = tensor_type(qd.f32, (N, N))
+    vecs = tensor_type(qd.f32, (M, M))
     out = tensor_type(qd.f32, (N, N))
 
-    Ann = _ann(tensor_type, qd.f32, 2)
+    Ann_tile = _ann(tensor_type, qd.f32, 2)
+    Ann_vecs = _ann(tensor_type, qd.f32, 2)
+
+    K0 = 16
+    COL = 5
 
     @qd.kernel
-    def run(mat_arr: Ann, vecs_arr: Ann, out_arr: Ann):
+    def run(mat_arr: Ann_tile, vecs_arr: Ann_vecs, out_arr: Ann_tile):
         qd.loop_config(block_dim=N)
         for _ in range(N):
             t = Tile16x16.zeros()
             t[:] = mat_arr[0:N, 0:N]
-            v = vecs_arr[0:N, 0]
+            v = vecs_arr[K0:K0 + Tile16x16.SIZE, COL]
             t -= outer(v, v)
             out_arr[0:N, 0:N] = t
 
     rng = np.random.RandomState(100)
     R = rng.randn(N, N).astype(np.float32)
-    V = rng.randn(N, N).astype(np.float32)
+    V = rng.randn(M, M).astype(np.float32)
     mat.from_numpy(R)
     vecs.from_numpy(V)
     run(mat, vecs, out)
-    col0 = V[:, 0]
-    np.testing.assert_allclose(out.to_numpy(), R - np.outer(col0, col0), atol=1e-5)
+    col = V[K0:K0 + 16, COL]
+    np.testing.assert_allclose(out.to_numpy(), R - np.outer(col, col), atol=1e-5)
 
 
 @test_utils.test(arch=qd.cuda)
@@ -765,155 +771,177 @@ def test_tile16_vec_proxy_syr_sub_3d(tensor_type):
     """Symmetric rank-1 subtract via vec proxy from a 3D array (batch dimension)."""
     N_BATCH = 2
     mat = tensor_type(qd.f32, (N, N))
-    vecs = tensor_type(qd.f32, (N_BATCH, N, N))
+    vecs = tensor_type(qd.f32, (N_BATCH, M, M))
     out = tensor_type(qd.f32, (N, N))
 
-    Ann2 = _ann(tensor_type, qd.f32, 2)
-    Ann3 = _ann(tensor_type, qd.f32, 3)
+    Ann_tile = _ann(tensor_type, qd.f32, 2)
+    Ann_vecs = _ann(tensor_type, qd.f32, 3)
+
+    K0 = 16
+    COL = 3
 
     @qd.kernel
-    def run(mat_arr: Ann2, vecs_arr: Ann3, out_arr: Ann2):
+    def run(mat_arr: Ann_tile, vecs_arr: Ann_vecs, out_arr: Ann_tile):
         qd.loop_config(block_dim=N)
         for _ in range(N):
             t = Tile16x16.zeros()
             t[:] = mat_arr[0:N, 0:N]
-            v = vecs_arr[1, 0:N, 3]
+            v = vecs_arr[1, K0:K0 + Tile16x16.SIZE, COL]
             t -= outer(v, v)
             out_arr[0:N, 0:N] = t
 
     rng = np.random.RandomState(200)
     R = rng.randn(N, N).astype(np.float32)
-    V = rng.randn(N_BATCH, N, N).astype(np.float32)
+    V = rng.randn(N_BATCH, M, M).astype(np.float32)
     mat.from_numpy(R)
     vecs.from_numpy(V)
     run(mat, vecs, out)
-    col = V[1, :, 3]
+    col = V[1, K0:K0 + 16, COL]
     np.testing.assert_allclose(out.to_numpy(), R - np.outer(col, col), atol=1e-5)
 
 
 @test_utils.test(arch=qd.cuda)
 @pytest.mark.parametrize("tensor_type", [qd.ndarray, qd.field])
 def test_tile16_vec_proxy_ger_sub_2d(tensor_type):
-    """General rank-1 subtract via two different vec proxies from a 2D array."""
+    """General rank-1 subtract via two vec proxies at different row offsets."""
     mat = tensor_type(qd.f32, (N, N))
-    vecs = tensor_type(qd.f32, (N, N))
+    vecs = tensor_type(qd.f32, (M, M))
     out = tensor_type(qd.f32, (N, N))
 
-    Ann = _ann(tensor_type, qd.f32, 2)
+    Ann_tile = _ann(tensor_type, qd.f32, 2)
+    Ann_vecs = _ann(tensor_type, qd.f32, 2)
+
+    K0_A = 0
+    K0_B = 16
+    COL = 7
 
     @qd.kernel
-    def run(mat_arr: Ann, vecs_arr: Ann, out_arr: Ann):
+    def run(mat_arr: Ann_tile, vecs_arr: Ann_vecs, out_arr: Ann_tile):
         qd.loop_config(block_dim=N)
         for _ in range(N):
             t = Tile16x16.zeros()
             t[:] = mat_arr[0:N, 0:N]
-            a = vecs_arr[0:N, 0]
-            b = vecs_arr[0:N, 1]
+            a = vecs_arr[K0_A:K0_A + Tile16x16.SIZE, COL]
+            b = vecs_arr[K0_B:K0_B + Tile16x16.SIZE, COL]
             t -= outer(a, b)
             out_arr[0:N, 0:N] = t
 
     rng = np.random.RandomState(300)
     R = rng.randn(N, N).astype(np.float32)
-    V = rng.randn(N, N).astype(np.float32)
+    V = rng.randn(M, M).astype(np.float32)
     mat.from_numpy(R)
     vecs.from_numpy(V)
     run(mat, vecs, out)
-    np.testing.assert_allclose(out.to_numpy(), R - np.outer(V[:, 0], V[:, 1]), atol=1e-5)
+    va = V[K0_A:K0_A + 16, COL]
+    vb = V[K0_B:K0_B + 16, COL]
+    np.testing.assert_allclose(out.to_numpy(), R - np.outer(va, vb), atol=1e-5)
 
 
 @test_utils.test(arch=qd.cuda)
-def test_tile16_vec_proxy_shared_array(tensor_type=qd.field):
-    """Symmetric rank-1 subtract via vec proxy from SharedArray."""
+def test_tile16_vec_proxy_shared_array():
+    """Symmetric rank-1 subtract via vec proxy from SharedArray at non-zero offset."""
     mat = qd.field(dtype=qd.f32, shape=(N, N))
-    vecs = qd.field(dtype=qd.f32, shape=(N, N))
+    vecs = qd.field(dtype=qd.f32, shape=(M, M))
     out = qd.field(dtype=qd.f32, shape=(N, N))
+
+    K0 = 16
+    COL = 2
 
     @qd.kernel
     def run():
         qd.loop_config(block_dim=N)
         for _ in range(N):
-            sh = qd.simt.block.SharedArray((N, N), qd.f32)
+            sh = qd.simt.block.SharedArray((M, M), qd.f32)
             tid = qd.i32(qd.simt.subgroup.invocation_id())
-            for c in range(N):
-                sh[tid, c] = vecs[tid, c]
+            for row in range(M):
+                if row % N == tid:
+                    for c in range(M):
+                        sh[row, c] = vecs[row, c]
             qd.simt.block.sync()
             t = Tile16x16.zeros()
             t[:] = mat[0:N, 0:N]
-            v = sh[0:N, 2]
+            v = sh[K0:K0 + Tile16x16.SIZE, COL]
             t -= outer(v, v)
             out[0:N, 0:N] = t
 
     rng = np.random.RandomState(400)
     R = rng.randn(N, N).astype(np.float32)
-    V = rng.randn(N, N).astype(np.float32)
+    V = rng.randn(M, M).astype(np.float32)
     mat.from_numpy(R)
     vecs.from_numpy(V)
     run()
-    col = V[:, 2]
+    col = V[K0:K0 + 16, COL]
     np.testing.assert_allclose(out.to_numpy(), R - np.outer(col, col), atol=1e-5)
 
 
 @test_utils.test(arch=qd.cuda)
 @pytest.mark.parametrize("tensor_type", [qd.ndarray, qd.field])
 def test_tile16_vec_proxy_partial_rows(tensor_type):
-    """Vec proxy with row_stop < row_start + 16: out-of-range threads contribute 0."""
-    N_VALID = 10
+    """Vec proxy with partial last block: only M-K0=8 of 16 threads contribute."""
     mat = tensor_type(qd.f32, (N, N))
-    vecs = tensor_type(qd.f32, (N, N))
+    vecs = tensor_type(qd.f32, (M, M))
     out = tensor_type(qd.f32, (N, N))
 
-    Ann = _ann(tensor_type, qd.f32, 2)
+    Ann_tile = _ann(tensor_type, qd.f32, 2)
+    Ann_vecs = _ann(tensor_type, qd.f32, 2)
+
+    K0 = 32
+    COL = 3
 
     @qd.kernel
-    def run(mat_arr: Ann, vecs_arr: Ann, out_arr: Ann):
+    def run(mat_arr: Ann_tile, vecs_arr: Ann_vecs, out_arr: Ann_tile):
         qd.loop_config(block_dim=N)
         for _ in range(N):
             t = Tile16x16.zeros()
             t[:] = mat_arr[0:N, 0:N]
-            v = vecs_arr[0:N_VALID, 0]
+            v = vecs_arr[K0:M, COL]
             t -= outer(v, v)
             out_arr[0:N, 0:N] = t
 
     rng = np.random.RandomState(500)
     R = rng.randn(N, N).astype(np.float32)
-    V = rng.randn(N, N).astype(np.float32)
+    V = rng.randn(M, M).astype(np.float32)
     mat.from_numpy(R)
     vecs.from_numpy(V)
     run(mat, vecs, out)
     col_padded = np.zeros(N, dtype=np.float32)
-    col_padded[:N_VALID] = V[:N_VALID, 0]
+    col_padded[:M - K0] = V[K0:M, COL]
     np.testing.assert_allclose(out.to_numpy(), R - np.outer(col_padded, col_padded), atol=1e-5)
 
 
 @test_utils.test(arch=qd.cuda)
 @pytest.mark.parametrize("tensor_type", [qd.ndarray, qd.field])
 def test_tile16_vec_proxy_multi_column_accumulate(tensor_type):
-    """Accumulate multiple rank-1 updates from consecutive columns, like Cholesky lookback."""
+    """Accumulate rank-1 updates over columns at a non-zero row offset, like Cholesky lookback."""
     mat = tensor_type(qd.f32, (N, N))
-    vecs = tensor_type(qd.f32, (N, N))
+    vecs = tensor_type(qd.f32, (M, M))
     out = tensor_type(qd.f32, (N, N))
 
-    Ann = _ann(tensor_type, qd.f32, 2)
+    Ann_tile = _ann(tensor_type, qd.f32, 2)
+    Ann_vecs = _ann(tensor_type, qd.f32, 2)
+
+    K0 = 16
     NCOLS = 4
 
     @qd.kernel
-    def run(mat_arr: Ann, vecs_arr: Ann, out_arr: Ann):
+    def run(mat_arr: Ann_tile, vecs_arr: Ann_vecs, out_arr: Ann_tile):
         qd.loop_config(block_dim=N)
         for _ in range(N):
             t = Tile16x16.zeros()
             t[:] = mat_arr[0:N, 0:N]
             for c in range(NCOLS):
-                v = vecs_arr[0:N, c]
+                v = vecs_arr[K0:K0 + Tile16x16.SIZE, c]
                 t -= outer(v, v)
             out_arr[0:N, 0:N] = t
 
     rng = np.random.RandomState(600)
     R = rng.randn(N, N).astype(np.float32)
-    V = rng.randn(N, N).astype(np.float32)
+    V = rng.randn(M, M).astype(np.float32)
     mat.from_numpy(R)
     vecs.from_numpy(V)
     run(mat, vecs, out)
     expected = R.copy()
     for c in range(NCOLS):
-        expected -= np.outer(V[:, c], V[:, c])
+        col = V[K0:K0 + 16, c]
+        expected -= np.outer(col, col)
     np.testing.assert_allclose(out.to_numpy(), expected, atol=1e-4)
