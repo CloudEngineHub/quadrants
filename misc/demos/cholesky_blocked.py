@@ -220,9 +220,7 @@ def cholesky_tile16():
             for jb in range(kb):
                 j0 = jb * Tile16x16.SIZE
                 for t in range(Tile16x16.SIZE):
-                    v = qd.f32(0.0)
-                    if k0 + tid < N:
-                        v = L_tile16_field[env, k0 + tid, j0 + t]
+                    v = L_tile16_field[env, k0:N, j0 + t]
                     L_kk -= qd.outer(v, v)
 
             # Factorize diagonal block: L_kk such that L_kk @ L_kk^T = A_kk
@@ -242,12 +240,8 @@ def cholesky_tile16():
                 for jb in range(kb):
                     j0 = jb * Tile16x16.SIZE
                     for t in range(Tile16x16.SIZE):
-                        v_own = qd.f32(0.0)
-                        v_diag = qd.f32(0.0)
-                        if i0 + tid < N:
-                            v_own = L_tile16_field[env, i0 + tid, j0 + t]
-                        if k0 + tid < N:
-                            v_diag = L_tile16_field[env, k0 + tid, j0 + t]
+                        v_own = L_tile16_field[env, i0:N, j0 + t]
+                        v_diag = L_tile16_field[env, k0:N, j0 + t]
                         L_ik -= qd.outer(v_own, v_diag)
 
                 # Triangular solve: L_ik = L_ik @ L_kk^{-T}
