@@ -1,3 +1,4 @@
+import platform
 import time
 
 import numpy as np
@@ -15,6 +16,16 @@ _QD_DTYPES = [qd.f32, qd.f64]
 _NP_DTYPES = {qd.f32: np.float32, qd.f64: np.float64}
 _ATOLS = {qd.f32: 1e-4, qd.f64: 1e-10}
 _EPS_VALS = {qd.f32: 1e-6, qd.f64: 1e-14}
+
+
+def _skip_if_f64_unsupported(dtype):
+    if dtype != qd.f64:
+        return
+    arch = qd.lang.impl.current_cfg().arch
+    if arch == qd.metal:
+        pytest.skip("Metal does not support f64")
+    if arch == qd.vulkan and platform.system() == "Darwin":
+        pytest.skip("MoltenVK does not support f64")
 
 
 def _make_spd(seed: int = 42, dtype: type = np.float32):
@@ -35,10 +46,11 @@ def _ann(tensor_type, dtype, ndim):
 # =============================================================================
 
 
-@test_utils.test(arch=[qd.cuda, qd.amdgpu])
+@test_utils.test(arch=qd.gpu)
 @pytest.mark.parametrize("tensor_type", [qd.ndarray, qd.field])
 @pytest.mark.parametrize("qd_dtype", _QD_DTYPES)
 def test_tile16_zeros(tensor_type, qd_dtype):
+    _skip_if_f64_unsupported(qd_dtype)
     np_dtype = _NP_DTYPES[qd_dtype]
     dst = tensor_type(qd_dtype, (N, N))
 
@@ -55,10 +67,11 @@ def test_tile16_zeros(tensor_type, qd_dtype):
     np.testing.assert_allclose(dst.to_numpy(), np.zeros((N, N), dtype=np_dtype))
 
 
-@test_utils.test(arch=[qd.cuda, qd.amdgpu])
+@test_utils.test(arch=qd.gpu)
 @pytest.mark.parametrize("tensor_type", [qd.ndarray, qd.field])
 @pytest.mark.parametrize("qd_dtype", _QD_DTYPES)
 def test_tile16_eye(tensor_type, qd_dtype):
+    _skip_if_f64_unsupported(qd_dtype)
     np_dtype = _NP_DTYPES[qd_dtype]
     dst = tensor_type(qd_dtype, (N, N))
 
@@ -75,11 +88,12 @@ def test_tile16_eye(tensor_type, qd_dtype):
     np.testing.assert_allclose(dst.to_numpy(), np.eye(N, dtype=np_dtype))
 
 
-@test_utils.test(arch=[qd.cuda, qd.amdgpu])
+@test_utils.test(arch=qd.gpu)
 @pytest.mark.parametrize("tensor_type", [qd.ndarray, qd.field])
 @pytest.mark.parametrize("qd_dtype", _QD_DTYPES)
 def test_tile16_eye_inplace(tensor_type, qd_dtype):
     """Load non-zero data into tile, call eye_(), verify identity overwrites it."""
+    _skip_if_f64_unsupported(qd_dtype)
     np_dtype = _NP_DTYPES[qd_dtype]
     src = tensor_type(qd_dtype, (N, N))
     dst = tensor_type(qd_dtype, (N, N))
@@ -101,10 +115,11 @@ def test_tile16_eye_inplace(tensor_type, qd_dtype):
     np.testing.assert_allclose(dst.to_numpy(), np.eye(N, dtype=np_dtype))
 
 
-@test_utils.test(arch=[qd.cuda, qd.amdgpu])
+@test_utils.test(arch=qd.gpu)
 @pytest.mark.parametrize("tensor_type", [qd.ndarray, qd.field])
 @pytest.mark.parametrize("qd_dtype", _QD_DTYPES)
 def test_tile16_load_store(tensor_type, qd_dtype):
+    _skip_if_f64_unsupported(qd_dtype)
     np_dtype = _NP_DTYPES[qd_dtype]
     src = tensor_type(qd_dtype, (N, N))
     dst = tensor_type(qd_dtype, (N, N))
@@ -125,10 +140,11 @@ def test_tile16_load_store(tensor_type, qd_dtype):
     np.testing.assert_allclose(dst.to_numpy(), data)
 
 
-@test_utils.test(arch=[qd.cuda, qd.amdgpu])
+@test_utils.test(arch=qd.gpu)
 @pytest.mark.parametrize("tensor_type", [qd.ndarray, qd.field])
 @pytest.mark.parametrize("qd_dtype", _QD_DTYPES)
 def test_tile16_load_store_partial(tensor_type, qd_dtype):
+    _skip_if_f64_unsupported(qd_dtype)
     np_dtype = _NP_DTYPES[qd_dtype]
     NCOLS = 12
     src = tensor_type(qd_dtype, (N, N))
@@ -152,11 +168,12 @@ def test_tile16_load_store_partial(tensor_type, qd_dtype):
     np.testing.assert_allclose(result[:, NCOLS:], 0.0)
 
 
-@test_utils.test(arch=[qd.cuda, qd.amdgpu])
+@test_utils.test(arch=qd.gpu)
 @pytest.mark.parametrize("tensor_type", [qd.ndarray, qd.field])
 @pytest.mark.parametrize("qd_dtype", _QD_DTYPES)
 def test_tile16_store_partial_cols(tensor_type, qd_dtype):
     """Load full 16 columns, store only NCOLS < 16. Remaining dst columns must be untouched."""
+    _skip_if_f64_unsupported(qd_dtype)
     np_dtype = _NP_DTYPES[qd_dtype]
     NCOLS = 10
     src = tensor_type(qd_dtype, (N, N))
@@ -181,11 +198,12 @@ def test_tile16_store_partial_cols(tensor_type, qd_dtype):
     np.testing.assert_allclose(result[:, NCOLS:], -1.0)
 
 
-@test_utils.test(arch=[qd.cuda, qd.amdgpu])
+@test_utils.test(arch=qd.gpu)
 @pytest.mark.parametrize("tensor_type", [qd.ndarray, qd.field])
 @pytest.mark.parametrize("qd_dtype", _QD_DTYPES)
 def test_tile16_load_clamp_to_array_shape(tensor_type, qd_dtype):
     """Load from an array narrower than 16 columns. Columns beyond arr width should be zero."""
+    _skip_if_f64_unsupported(qd_dtype)
     np_dtype = _NP_DTYPES[qd_dtype]
     NCOLS = 10
     src = tensor_type(qd_dtype, (N, NCOLS))
@@ -210,11 +228,12 @@ def test_tile16_load_clamp_to_array_shape(tensor_type, qd_dtype):
     np.testing.assert_allclose(result[:, NCOLS:], 0.0)
 
 
-@test_utils.test(arch=[qd.cuda, qd.amdgpu])
+@test_utils.test(arch=qd.gpu)
 @pytest.mark.parametrize("tensor_type", [qd.ndarray, qd.field])
 @pytest.mark.parametrize("qd_dtype", _QD_DTYPES)
 def test_tile16_store_clamp_to_array_shape(tensor_type, qd_dtype):
     """Store to an array narrower than 16 columns. Must not write out of bounds."""
+    _skip_if_f64_unsupported(qd_dtype)
     np_dtype = _NP_DTYPES[qd_dtype]
     NCOLS = 10
     src = tensor_type(qd_dtype, (N, N))
@@ -238,10 +257,11 @@ def test_tile16_store_clamp_to_array_shape(tensor_type, qd_dtype):
     np.testing.assert_allclose(result, data[:, :NCOLS])
 
 
-@test_utils.test(arch=[qd.cuda, qd.amdgpu])
+@test_utils.test(arch=qd.gpu)
 @pytest.mark.parametrize("tensor_type", [qd.ndarray, qd.field])
 @pytest.mark.parametrize("qd_dtype", _QD_DTYPES)
 def test_tile16_syr_sub(tensor_type, qd_dtype):
+    _skip_if_f64_unsupported(qd_dtype)
     np_dtype = _NP_DTYPES[qd_dtype]
     mat = tensor_type(qd_dtype, (N, N))
     vec = tensor_type(qd_dtype, (N,))
@@ -285,10 +305,11 @@ def test_tile16_syr_sub(tensor_type, qd_dtype):
     np.testing.assert_allclose(out.to_numpy(), R - np.outer(v, v), atol=1e-5)
 
 
-@test_utils.test(arch=[qd.cuda, qd.amdgpu])
+@test_utils.test(arch=qd.gpu)
 @pytest.mark.parametrize("tensor_type", [qd.ndarray, qd.field])
 @pytest.mark.parametrize("qd_dtype", _QD_DTYPES)
 def test_tile16_ger_sub(tensor_type, qd_dtype):
+    _skip_if_f64_unsupported(qd_dtype)
     np_dtype = _NP_DTYPES[qd_dtype]
     mat = tensor_type(qd_dtype, (N, N))
     vec_a = tensor_type(qd_dtype, (N,))
@@ -340,10 +361,11 @@ def test_tile16_ger_sub(tensor_type, qd_dtype):
     np.testing.assert_allclose(out.to_numpy(), R - np.outer(a, b), atol=1e-5)
 
 
-@test_utils.test(arch=[qd.cuda, qd.amdgpu])
+@test_utils.test(arch=qd.gpu)
 @pytest.mark.parametrize("tensor_type", [qd.ndarray, qd.field])
 @pytest.mark.parametrize("qd_dtype", _QD_DTYPES)
 def test_tile16_potrf(tensor_type, qd_dtype):
+    _skip_if_f64_unsupported(qd_dtype)
     np_dtype = _NP_DTYPES[qd_dtype]
     atol = _ATOLS[qd_dtype]
     src = tensor_type(qd_dtype, (N, N))
@@ -369,10 +391,11 @@ def test_tile16_potrf(tensor_type, qd_dtype):
     np.testing.assert_allclose(np.tril(dst.to_numpy()), L_expected, atol=atol)
 
 
-@test_utils.test(arch=[qd.cuda, qd.amdgpu])
+@test_utils.test(arch=qd.gpu)
 @pytest.mark.parametrize("tensor_type", [qd.ndarray, qd.field])
 @pytest.mark.parametrize("qd_dtype", _QD_DTYPES)
 def test_tile16_trsm(tensor_type, qd_dtype):
+    _skip_if_f64_unsupported(qd_dtype)
     np_dtype = _NP_DTYPES[qd_dtype]
     atol = _ATOLS[qd_dtype]
     l_field = tensor_type(qd_dtype, (N, N))
@@ -403,10 +426,11 @@ def test_tile16_trsm(tensor_type, qd_dtype):
     np.testing.assert_allclose(X @ Lnp.T, Bnp, atol=max(atol, 1e-3))
 
 
-@test_utils.test(arch=[qd.cuda, qd.amdgpu])
+@test_utils.test(arch=qd.gpu)
 @pytest.mark.parametrize("tensor_type", [qd.ndarray, qd.field])
 @pytest.mark.parametrize("qd_dtype", _QD_DTYPES)
 def test_tile16_potrf_then_trsm(tensor_type, qd_dtype):
+    _skip_if_f64_unsupported(qd_dtype)
     np_dtype = _NP_DTYPES[qd_dtype]
     atol = _ATOLS[qd_dtype]
     a_field = tensor_type(qd_dtype, (N, N))
@@ -446,10 +470,11 @@ def test_tile16_potrf_then_trsm(tensor_type, qd_dtype):
 # =============================================================================
 
 
-@test_utils.test(arch=[qd.cuda, qd.amdgpu])
+@test_utils.test(arch=qd.gpu)
 @pytest.mark.parametrize("tensor_type", [qd.ndarray, qd.field])
 @pytest.mark.parametrize("qd_dtype", _QD_DTYPES)
 def test_tile16_load3d_store3d(tensor_type, qd_dtype):
+    _skip_if_f64_unsupported(qd_dtype)
     np_dtype = _NP_DTYPES[qd_dtype]
     N_BATCH = 2
     src = tensor_type(qd_dtype, (N_BATCH, N, N))
@@ -477,7 +502,7 @@ def test_tile16_load3d_store3d(tensor_type, qd_dtype):
 # =============================================================================
 
 
-@test_utils.test(arch=qd.cuda)
+@test_utils.test(arch=qd.gpu)
 def test_tile16_shared_array_roundtrip():
     """Load from field -> tile -> SharedArray -> tile -> field, verify data survives."""
     src = qd.field(dtype=qd.f32, shape=(N, N))
@@ -502,7 +527,7 @@ def test_tile16_shared_array_roundtrip():
     np.testing.assert_allclose(dst.to_numpy(), data)
 
 
-@test_utils.test(arch=qd.cuda)
+@test_utils.test(arch=qd.gpu)
 def test_tile16_shared_array_partial_cols():
     """Store/load partial columns (< 16) via SharedArray slice syntax."""
     NCOLS = 10
@@ -530,7 +555,7 @@ def test_tile16_shared_array_partial_cols():
     np.testing.assert_allclose(result[:, NCOLS:], 0.0)
 
 
-@test_utils.test(arch=qd.cuda)
+@test_utils.test(arch=qd.gpu)
 def test_tile16_shared_array_cholesky():
     """Cholesky via tiles, L stored in SharedArray, verify reconstruction."""
     src = qd.field(dtype=qd.f32, shape=(N, N))
@@ -559,7 +584,7 @@ def test_tile16_shared_array_cholesky():
     np.testing.assert_allclose(np.tril(dst.to_numpy()), L_expected, atol=1e-4)
 
 
-@test_utils.test(arch=qd.cuda)
+@test_utils.test(arch=qd.gpu)
 def test_tile16_shared_array_store_partial_cols():
     """Store only NCOLS < 16 from tile to SharedArray; remaining SharedArray columns untouched."""
     NCOLS = 10
@@ -591,7 +616,7 @@ def test_tile16_shared_array_store_partial_cols():
     np.testing.assert_allclose(result[:, NCOLS:], -1.0)
 
 
-@test_utils.test(arch=qd.cuda)
+@test_utils.test(arch=qd.gpu)
 def test_tile16_shared_array_load_partial_cols():
     """Load only NCOLS < 16 from SharedArray to tile; remaining tile registers should be zero."""
     NCOLS = 10
@@ -619,7 +644,7 @@ def test_tile16_shared_array_load_partial_cols():
     np.testing.assert_allclose(result[:, NCOLS:], 0.0)
 
 
-@test_utils.test(arch=qd.cuda)
+@test_utils.test(arch=qd.gpu)
 def test_tile16_shared_array_clamp_store():
     """Store tile to SharedArray narrower than 16 cols. Must auto-clamp, no OOB."""
     NCOLS = 10
@@ -646,7 +671,7 @@ def test_tile16_shared_array_clamp_store():
     np.testing.assert_allclose(result, data[:, :NCOLS])
 
 
-@test_utils.test(arch=qd.cuda)
+@test_utils.test(arch=qd.gpu)
 def test_tile16_shared_array_clamp_load():
     """Load tile from SharedArray narrower than 16 cols. Must auto-clamp, extra regs zero."""
     NCOLS = 10
@@ -681,7 +706,7 @@ def test_tile16_shared_array_clamp_load():
 M = 40  # rows in vec source arrays; not a multiple of 16 to test partial blocks
 
 
-@test_utils.test(arch=qd.cuda)
+@test_utils.test(arch=qd.gpu)
 @pytest.mark.parametrize("tensor_type", [qd.ndarray, qd.field])
 def test_tile16_vec_proxy_syr_sub_2d(tensor_type):
     """Symmetric rank-1 subtract via vec proxy from a 2D array, non-zero row offset."""
@@ -715,7 +740,7 @@ def test_tile16_vec_proxy_syr_sub_2d(tensor_type):
     np.testing.assert_allclose(out.to_numpy(), R - np.outer(col, col), atol=1e-5)
 
 
-@test_utils.test(arch=qd.cuda)
+@test_utils.test(arch=qd.gpu)
 @pytest.mark.parametrize("tensor_type", [qd.ndarray, qd.field])
 def test_tile16_vec_proxy_syr_sub_3d(tensor_type):
     """Symmetric rank-1 subtract via vec proxy from a 3D array (batch dimension)."""
@@ -750,7 +775,7 @@ def test_tile16_vec_proxy_syr_sub_3d(tensor_type):
     np.testing.assert_allclose(out.to_numpy(), R - np.outer(col, col), atol=1e-5)
 
 
-@test_utils.test(arch=qd.cuda)
+@test_utils.test(arch=qd.gpu)
 @pytest.mark.parametrize("tensor_type", [qd.ndarray, qd.field])
 def test_tile16_vec_proxy_ger_sub_2d(tensor_type):
     """General rank-1 subtract via two vec proxies at different row offsets."""
@@ -787,7 +812,7 @@ def test_tile16_vec_proxy_ger_sub_2d(tensor_type):
     np.testing.assert_allclose(out.to_numpy(), R - np.outer(va, vb), atol=1e-5)
 
 
-@test_utils.test(arch=qd.cuda)
+@test_utils.test(arch=qd.gpu)
 def test_tile16_vec_proxy_shared_array():
     """Symmetric rank-1 subtract via vec proxy from SharedArray at non-zero offset."""
     mat = qd.field(dtype=qd.f32, shape=(N, N))
@@ -824,7 +849,7 @@ def test_tile16_vec_proxy_shared_array():
     np.testing.assert_allclose(out.to_numpy(), R - np.outer(col, col), atol=1e-5)
 
 
-@test_utils.test(arch=qd.cuda)
+@test_utils.test(arch=qd.gpu)
 @pytest.mark.parametrize("tensor_type", [qd.ndarray, qd.field])
 def test_tile16_vec_proxy_partial_rows(tensor_type):
     """Vec proxy with partial last block: only M-K0=8 of 16 threads contribute."""
@@ -859,7 +884,7 @@ def test_tile16_vec_proxy_partial_rows(tensor_type):
     np.testing.assert_allclose(out.to_numpy(), R - np.outer(col_padded, col_padded), atol=1e-5)
 
 
-@test_utils.test(arch=qd.cuda)
+@test_utils.test(arch=qd.gpu)
 @pytest.mark.parametrize("tensor_type", [qd.ndarray, qd.field])
 def test_tile16_vec_proxy_multi_column_accumulate(tensor_type):
     """Accumulate rank-1 updates over columns at a non-zero row offset, like Cholesky lookback."""
@@ -902,7 +927,7 @@ def test_tile16_vec_proxy_multi_column_accumulate(tensor_type):
 # =============================================================================
 
 
-@test_utils.test(arch=[qd.cuda, qd.amdgpu])
+@test_utils.test(arch=qd.gpu)
 def test_tile16_f64_roundtrip_into_f32_array():
     """Load f32 data through an f64 tile and store back — must be lossless."""
     src = qd.ndarray(shape=(N, N), dtype=qd.f32)
@@ -1004,7 +1029,7 @@ def _make_cholesky_kernel(qd_dtype):
     return cholesky_tiled
 
 
-@test_utils.test(arch=qd.cuda)
+@test_utils.test(arch=qd.gpu)
 def test_tile16_f64_on_f32_arrays_perf_regression():
     """f64 Tile16x16 on f32 arrays must not be silently slower than f32 tile.
 
@@ -1080,12 +1105,12 @@ def test_tile16_f64_on_f32_arrays_perf_regression():
 # =============================================================================
 
 
-@test_utils.test(arch=qd.cuda)
+@test_utils.test(arch=qd.gpu)
 def test_proxy_size_constant():
     assert qd.simt.Tile16x16.SIZE == 16
 
 
-@test_utils.test(arch=qd.cuda)
+@test_utils.test(arch=qd.gpu)
 @pytest.mark.parametrize("tensor_type", [qd.ndarray, qd.field])
 def test_proxy_default_dtype(tensor_type):
     """Omitting dtype= uses the compile config's default_fp (f32 by default)."""
@@ -1104,7 +1129,7 @@ def test_proxy_default_dtype(tensor_type):
     np.testing.assert_allclose(dst.to_numpy(), np.zeros((N, N), dtype=np.float32))
 
 
-@test_utils.test(arch=qd.cuda)
+@test_utils.test(arch=qd.gpu)
 @pytest.mark.parametrize("tensor_type", [qd.ndarray, qd.field])
 def test_proxy_in_func(tensor_type):
     """Proxy works when called from a @qd.func, not just @qd.kernel."""
@@ -1136,7 +1161,7 @@ def test_proxy_in_func(tensor_type):
     np.testing.assert_allclose(L_qd, L_ref, atol=1e-4)
 
 
-@test_utils.test(arch=qd.cuda)
+@test_utils.test(arch=qd.gpu)
 def test_proxy_default_dtype_survives_reinit():
     """Proxy with default dtype must follow default_fp across init/reset cycles.
 
@@ -1161,7 +1186,7 @@ def test_proxy_default_dtype_survives_reinit():
 
     # Phase 2: reset, reinit with f32
     qd.reset()
-    qd.init(arch=qd.cuda, default_fp=qd.f32)
+    qd.init(arch=qd.gpu, default_fp=qd.f32)
 
     @qd.kernel
     def write_eye_f32(dst: qd.types.NDArray[qd.f32, 2]):
