@@ -1288,9 +1288,16 @@
 
     <span class="nd">@staticmethod</span>
     <span class="k">def</span><span class="w"> </span><span class="nf">_resolve</span><span class="p">(</span><span class="n">dtype</span><span class="p">):</span>
-        <span class="k">if</span> <span class="n">dtype</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
-            <span class="kn">from</span><span class="w"> </span><span class="nn">quadrants.lang</span><span class="w"> </span><span class="kn">import</span> <span class="n">impl</span>  <span class="c1"># pylint: disable=import-outside-toplevel</span>
+        <span class="kn">from</span><span class="w"> </span><span class="nn">quadrants.lang</span><span class="w"> </span><span class="kn">import</span> <span class="n">impl</span>  <span class="c1"># pylint: disable=import-outside-toplevel</span>
+        <span class="kn">from</span><span class="w"> </span><span class="nn">quadrants.lang.exception</span><span class="w"> </span><span class="kn">import</span> <span class="n">QuadrantsSyntaxError</span>  <span class="c1"># pylint: disable=import-outside-toplevel</span>
 
+        <span class="n">arch</span> <span class="o">=</span> <span class="n">impl</span><span class="o">.</span><span class="n">current_cfg</span><span class="p">()</span><span class="o">.</span><span class="n">arch</span>
+        <span class="k">if</span> <span class="n">arch</span> <span class="ow">in</span> <span class="p">(</span><span class="n">qd</span><span class="o">.</span><span class="n">cpu</span><span class="p">,</span> <span class="n">qd</span><span class="o">.</span><span class="n">x64</span><span class="p">,</span> <span class="nb">getattr</span><span class="p">(</span><span class="n">qd</span><span class="p">,</span> <span class="s2">&quot;arm64&quot;</span><span class="p">,</span> <span class="kc">None</span><span class="p">)):</span>
+            <span class="k">raise</span> <span class="n">QuadrantsSyntaxError</span><span class="p">(</span>
+                <span class="s2">&quot;Tile16x16 requires a GPU backend (cuda, metal, vulkan, amdgpu). &quot;</span>
+                <span class="sa">f</span><span class="s2">&quot;Current arch is </span><span class="si">{</span><span class="n">arch</span><span class="si">}</span><span class="s2">.&quot;</span>
+            <span class="p">)</span>
+        <span class="k">if</span> <span class="n">dtype</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
             <span class="n">dtype</span> <span class="o">=</span> <span class="n">impl</span><span class="o">.</span><span class="n">get_runtime</span><span class="p">()</span><span class="o">.</span><span class="n">default_fp</span>
         <span class="k">return</span> <span class="n">_make_tile16x16</span><span class="p">(</span><span class="n">dtype</span><span class="p">)</span>
 
