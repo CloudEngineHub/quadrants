@@ -1075,6 +1075,8 @@ Value IRBuilder::float_atomic(AtomicOpType op_type,
                               Value addr_ptr,
                               Value data,
                               const DataType &dt) {
+  // Use dt-derived type instead of t_fp32_ so FMin/FMax work for f16/f64.
+  auto float_type = get_primitive_type(dt);
   if (op_type == AtomicOpType::add) {
     return atomic_operation(
         addr_ptr, data, [&](Value lhs, Value rhs) { return add(lhs, rhs); },
@@ -1091,14 +1093,14 @@ Value IRBuilder::float_atomic(AtomicOpType op_type,
     return atomic_operation(
         addr_ptr, data,
         [&](Value lhs, Value rhs) {
-          return call_glsl450(t_fp32_, /*FMin*/ 37, lhs, rhs);
+          return call_glsl450(float_type, /*FMin*/ 37, lhs, rhs);
         },
         dt);
   } else if (op_type == AtomicOpType::max) {
     return atomic_operation(
         addr_ptr, data,
         [&](Value lhs, Value rhs) {
-          return call_glsl450(t_fp32_, /*FMax*/ 40, lhs, rhs);
+          return call_glsl450(float_type, /*FMax*/ 40, lhs, rhs);
         },
         dt);
   } else {

@@ -1521,13 +1521,16 @@ void TaskCodegen::visit(AtomicOpStmt *stmt) {
 
   spirv::Value addr_ptr;
   spirv::Value dest_val = ir_->query_value(stmt->dest->raw_name());
-  // Shared arrays have already created an accesschain, use it directly.
+  // Shared arrays already have a pointer from OpAccessChain (dest_is_ptr=true).
+  // at_buffer() looks up ptr_to_buffers_ to find the StorageBuffer and compute
+  // a byte offset - shared/workgroup arrays aren't in ptr_to_buffers_, so
+  // at_buffer() would fail on them.
   const bool dest_is_ptr = dest_val.stype.flag == TypeKind::kPtr;
 
   if (dt->is_primitive(PrimitiveTypeID::f64)) {
     if (caps_->get(DeviceCapability::spirv_has_atomic_float64_add) &&
         stmt->op_type == AtomicOpType::add) {
-      addr_ptr = at_buffer(stmt->dest, dt);
+      addr_ptr = dest_is_ptr ? dest_val : at_buffer(stmt->dest, dt);
     } else {
       addr_ptr = dest_is_ptr
                      ? dest_val
@@ -1536,7 +1539,7 @@ void TaskCodegen::visit(AtomicOpStmt *stmt) {
   } else if (dt->is_primitive(PrimitiveTypeID::f32)) {
     if (caps_->get(DeviceCapability::spirv_has_atomic_float_add) &&
         stmt->op_type == AtomicOpType::add) {
-      addr_ptr = at_buffer(stmt->dest, dt);
+      addr_ptr = dest_is_ptr ? dest_val : at_buffer(stmt->dest, dt);
     } else {
       addr_ptr = dest_is_ptr
                      ? dest_val
@@ -2096,6 +2099,9 @@ void TaskCodegen::generate_struct_for_kernel(OffloadedStmt *stmt) {
   task_attribs_.buffer_binds = get_buffer_binds();
 }
 
+// Return the address in device memory for a global/storage-buffer access.
+// Only works for device-buffer-backed pointers (via ptr_to_buffers_), not
+// workgroup arrays - those already have a pointer from OpAccessChain.
 spirv::Value TaskCodegen::at_buffer(const Stmt *ptr, DataType dt) {
   spirv::Value ptr_val = ir_->query_value(ptr->raw_name());
 

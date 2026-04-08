@@ -426,6 +426,34 @@ def test_atomic_max_f32():
     assert max_kernel() == -1.0
 
 
+@pytest.mark.parametrize("op", ["add", "sub", "min", "max"])
+@pytest.mark.parametrize("dtype", [qd.f16, qd.f32])
+@test_utils.test()
+def test_atomic_float_ops(op, dtype):
+    N = 32
+    SCALE = 0.1523
+    atomic_op = getattr(qd, f"atomic_{op}")
+
+    @qd.kernel
+    def kern(out: qd.types.ndarray()):
+        for i in range(N):
+            val = qd.cast(i * SCALE, dtype)
+            atomic_op(out[0], val)
+
+    arr = qd.ndarray(dtype, (1,))
+    arr[0] = 0.0
+    kern(arr)
+    expected_sum = SCALE * N * (N - 1) / 2.0
+    expected = {
+        "add": expected_sum,
+        "sub": -expected_sum,
+        "min": 0.0,
+        "max": (N - 1) * SCALE,
+    }
+    rtol = 1e-3 if dtype == qd.f16 else 1e-6
+    assert arr[0] == test_utils.approx(expected[op], rel=rtol)
+
+
 @test_utils.test()
 def test_atomic_mul_f32():
     @qd.kernel
