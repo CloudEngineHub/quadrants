@@ -22,7 +22,8 @@ void scan_shared_atomic_allocs(Block *ir_block,
                                std::unordered_map<const Stmt *, bool> &out);
 
 // Retype a shared float alloca to uint backing for CAS-based atomics.
-// Modifies elem_num and elem_type in-place when retyping is needed.
+// Modifies elem_num and elem_type in-place when retyping is needed (including
+// flattening nested tensor types into the element count).
 // No-op when the alloca is not targeted by float atomics.
 void maybe_retype_shared_alloca(
     IRBuilder &ir,
@@ -35,7 +36,8 @@ void maybe_retype_shared_alloca(
     SType &elem_type);
 
 // If origin is in retyped_stmts, propagate retyping to stmt and change dt
-// to the uint-backed DataType. Otherwise leave dt unchanged.
+// to the uint-backed DataType (flattening nested tensor types first).
+// Otherwise just flatten dt if it is a nested tensor type.
 void maybe_retype_derived_ptr(IRBuilder &ir,
                               const Stmt *origin,
                               const Stmt *stmt,
