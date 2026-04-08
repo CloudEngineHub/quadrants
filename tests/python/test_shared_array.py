@@ -214,7 +214,7 @@ def test_large_shared_array(graph):
     assert np.allclose(reference.to_numpy(), a_arr.to_numpy())
 
 
-@test_utils.test(arch=[qd.cuda, qd.vulkan, qd.amdgpu])
+@test_utils.test(arch=qd.gpu)
 def test_multiple_shared_array():
     assert qd.cfg is not None
     if qd.cfg.arch == qd.amdgpu:
@@ -222,8 +222,11 @@ def test_multiple_shared_array():
     block_dim = 128
     nBlocks = 64
     N = nBlocks * block_dim * 4
-    v_arr = np.random.randn(N).astype(np.float32)
-    d_arr = np.random.randn(N).astype(np.float32)
+    # Seed the RNG to avoid flaky failures from FP accumulation-order
+    # differences between the reference and tiled shared-memory kernels.
+    rng = np.random.RandomState(42)
+    v_arr = rng.randn(N).astype(np.float32)
+    d_arr = rng.randn(N).astype(np.float32)
     a_arr = np.zeros(N).astype(np.float32)
     reference = np.zeros(N).astype(np.float32)
 
@@ -271,10 +274,10 @@ def test_multiple_shared_array():
 
     calc(v_arr, d_arr, reference)
     calc_shared_array(v_arr, d_arr, a_arr)
-    assert np.allclose(reference, a_arr, rtol=1e-4)
+    np.testing.assert_allclose(a_arr, reference, rtol=1e-4)
 
 
-@test_utils.test(arch=[qd.cuda, qd.vulkan, qd.amdgpu])
+@test_utils.test(arch=qd.gpu)
 def test_shared_array_atomics():
     N = 256
     block_dim = 32
@@ -300,6 +303,80 @@ def test_shared_array_atomics():
     assert arr[32] == sum
     assert arr[128] == sum
     assert arr[224] == sum
+
+
+@pytest.mark.parametrize("dtype", [qd.i8, qd.i16, qd.i32, qd.u8, qd.u16, qd.u32])
+@test_utils.test(arch=qd.gpu)
+def test_shared_array_int_dtypes(dtype):
+    N = 128
+    block_dim = 32
+
+    @qd.kernel
+    def kern(out: qd.types.ndarray()):
+        qd.loop_config(block_dim=block_dim)
+        for i in range(N):
+            tid = i % block_dim
+            sharr = qd.simt.block.SharedArray((block_dim,), dtype)
+            sharr[tid] = qd.cast(tid, dtype)
+            qd.simt.block.sync()
+            out[i] = sharr[tid]
+
+    arr = qd.ndarray(dtype, (N,))
+    kern(arr)
+    for block_start in (0, 32, 64, 96):
+        for tid in range(block_dim):
+            assert arr[block_start + tid] == tid
+
+
+@pytest.mark.parametrize("dtype", [qd.f16, qd.f32, qd.f64])
+@test_utils.test(arch=qd.gpu)
+def test_shared_array_float_dtypes(dtype):
+    if dtype == qd.f64:
+        caps = qd.lang.impl.get_runtime().prog.get_device_caps()
+        if not caps.get(qd._lib.core.DeviceCapability.spirv_has_float64):
+            pytest.skip("Device does not support f64")
+    N = 128
+    block_dim = 32
+    SCALE = 0.1523
+
+    @qd.kernel
+    def kern(out: qd.types.ndarray()):
+        qd.loop_config(block_dim=block_dim)
+        for i in range(N):
+            tid = i % block_dim
+            sharr = qd.simt.block.SharedArray((block_dim,), dtype)
+            sharr[tid] = qd.cast(tid * SCALE, dtype)
+            qd.simt.block.sync()
+            out[i] = sharr[tid]
+
+    rtol = 1e-3 if dtype == qd.f16 else 1e-6
+    arr = qd.ndarray(qd.f32, (N,))
+    kern(arr)
+    for block_start in (0, 32, 64, 96):
+        for tid in range(block_dim):
+            assert arr[block_start + tid] == test_utils.approx(tid * SCALE, rel=rtol)
+
+
+@test_utils.test(arch=qd.gpu)
+def test_shared_array_bool_dtype():
+    N = 128
+    block_dim = 32
+
+    @qd.kernel
+    def kern(out: qd.types.ndarray()):
+        qd.loop_config(block_dim=block_dim)
+        for i in range(N):
+            tid = i % block_dim
+            sharr = qd.simt.block.SharedArray((block_dim,), qd.u1)
+            sharr[tid] = qd.cast(tid % 2, qd.u1)
+            qd.simt.block.sync()
+            out[i] = sharr[tid]
+
+    arr = qd.ndarray(qd.i32, (N,))
+    kern(arr)
+    for block_start in (0, 32, 64, 96):
+        for tid in range(block_dim):
+            assert arr[block_start + tid] == tid % 2
 
 
 @test_utils.test(arch=[qd.cuda])
