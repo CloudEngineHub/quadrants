@@ -2,10 +2,14 @@
 #include "quadrants/runtime/cuda/cuda_utils.h"
 #include "quadrants/rhi/cuda/cuda_context.h"
 
+#include <algorithm>
 #include <cstdlib>
 #include <cstring>
 #include <filesystem>
 #include <vector>
+#ifdef _WIN32
+#include <windows.h>
+#endif
 
 namespace quadrants::lang {
 namespace cuda {
@@ -229,12 +233,40 @@ void GraphManager::ensure_condition_kernel_loaded() {
   std::vector<std::string> candidates;
   for (const char *env_name : {"CUDA_HOME", "CUDA_PATH"}) {
     if (const char *env_val = std::getenv(env_name)) {
+#ifdef _WIN32
+      candidates.push_back(std::string(env_val) + "\\lib\\x64\\cudadevrt.lib");
+#else
       candidates.push_back(std::string(env_val) + "/lib64/libcudadevrt.a");
       candidates.push_back(std::string(env_val) + "/lib/libcudadevrt.a");
+#endif
     }
   }
+#ifdef _WIN32
+  char windir[MAX_PATH];
+  GetWindowsDirectoryA(windir, MAX_PATH);
+  const std::string toolkit_base =
+      std::string(windir, 2) +
+      "\\Program Files\\NVIDIA GPU Computing Toolkit\\CUDA";
+  if (std::filesystem::is_directory(toolkit_base)) {
+    std::vector<std::filesystem::path> cuda_dirs;
+    try {
+      for (const auto &entry :
+           std::filesystem::directory_iterator(toolkit_base)) {
+        if (entry.is_directory())
+          cuda_dirs.push_back(entry.path());
+      }
+    } catch (const std::filesystem::filesystem_error &) {
+    }
+    // Sort descending so the newest CUDA version is tried first.
+    std::sort(cuda_dirs.rbegin(), cuda_dirs.rend());
+    for (const auto &dir : cuda_dirs) {
+      candidates.push_back(dir.string() + "\\lib\\x64\\cudadevrt.lib");
+    }
+  }
+#else
   candidates.push_back("/usr/local/cuda/lib64/libcudadevrt.a");
   candidates.push_back("/usr/lib/x86_64-linux-gnu/libcudadevrt.a");
+#endif
   for (const auto &candidate : candidates) {
     if (std::filesystem::exists(candidate)) {
       cudadevrt_path = candidate;
@@ -242,8 +274,8 @@ void GraphManager::ensure_condition_kernel_loaded() {
     }
   }
   QD_ERROR_IF(cudadevrt_path.empty(),
-              "Cannot find libcudadevrt.a — required for graph_do_while. "
-              "Install the CUDA toolkit and set CUDA_HOME.");
+              "Cannot find cudadevrt library — required for graph_do_while. "
+              "Install the CUDA toolkit and set CUDA_HOME or CUDA_PATH.");
 
   // CUlinkState handle for the JIT linker session that combines our PTX
   // with libcudadevrt.a to resolve the cudaGraphSetConditional extern.
