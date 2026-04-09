@@ -95,63 +95,7 @@ Solves `X @ L^T = B` in-place, replacing `B` with `X`. `L` (self) must be a lowe
 
 ## Full example: blocked Cholesky
 
-A simplified blocked Cholesky factorization using `Tile16x16`:
-
-```python
-from quadrants.lang.simt.tile16 import Tile16x16
-
-@qd.func
-def blocked_cholesky(H, tid, n_dofs, eps):
-    N_BLOCKS = (n_dofs + Tile16x16.SIZE - 1) // Tile16x16.SIZE
-    for kb in range(N_BLOCKS):
-        k0 = kb * Tile16x16.SIZE
-
-        # Load diagonal block, pad with identity if out of bounds
-        L_kk = Tile16x16()
-        if k0 + tid < n_dofs:
-            L_kk[:] = H[k0:k0+16, k0:k0+16]
-        else:
-            L_kk.eye_()
-
-        # Subtract contributions from previous blocks
-        for jb in range(kb):
-            j0 = jb * Tile16x16.SIZE
-            for t in range(Tile16x16.SIZE):
-                v = 0.0
-                if k0 + tid < n_dofs:
-                    v = H[k0 + tid, j0 + t]
-                L_kk -= qd.outer(v, v)
-
-        # Factorize diagonal block
-        L_kk.cholesky_(eps)
-
-        # Process off-diagonal blocks
-        for ib in range(kb + 1, N_BLOCKS):
-            i0 = ib * Tile16x16.SIZE
-
-            L_ik = Tile16x16()
-            if i0 + tid < n_dofs:
-                L_ik[:] = H[i0:i0+16, k0:k0+16]
-
-            for jb in range(kb):
-                j0 = jb * Tile16x16.SIZE
-                for t in range(Tile16x16.SIZE):
-                    v_own = 0.0
-                    v_diag = 0.0
-                    if i0 + tid < n_dofs:
-                        v_own = H[i0 + tid, j0 + t]
-                    if k0 + tid < n_dofs:
-                        v_diag = H[k0 + tid, j0 + t]
-                    L_ik -= qd.outer(v_own, v_diag)
-
-            L_kk.solve_triangular_(L_ik)
-
-            if i0 + tid < n_dofs:
-                H[i0:i0+16, k0:k0+16] = L_ik
-
-        if k0 + tid < n_dofs:
-            H[k0:k0+16, k0:k0+16] = L_kk
-```
+See the `cholesky_tile16` kernel in [`misc/demos/cholesky_blocked.py`](../../../misc/demos/cholesky_blocked.py) for a complete blocked Cholesky factorization using `Tile16x16`.
 
 ## Method reference
 

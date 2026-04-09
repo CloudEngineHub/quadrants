@@ -8,7 +8,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="viewport" content="width=device-width, initial-scale=1" />
 
-    <title>Tile16x16: register-resident 16x16 tiles &#8212; Quadrants 0.6.0 documentation</title>
+    <title>Tile16x16: register-resident 16x16 tiles &#8212; Quadrants 0.6.2 documentation</title>
   
   
   
@@ -43,7 +43,7 @@
   <link rel="preload" as="script" href="../_static/scripts/bootstrap.js?digest=7f76b32a3354e82990f2" />
 <link rel="preload" as="script" href="../_static/scripts/pydata-sphinx-theme.js?digest=7f76b32a3354e82990f2" />
 
-    <script src="../_static/documentation_options.js?v=8fa8b3e9"></script>
+    <script src="../_static/documentation_options.js?v=1c28bd9a"></script>
     <script src="../_static/doctools.js?v=9bcbadda"></script>
     <script src="../_static/sphinx_highlight.js?v=dc90522c"></script>
     <script src="../_static/clipboard.min.js?v=a7894cd8"></script>
@@ -63,7 +63,7 @@
     <link rel="prev" title="Numpy and Torch interop" href="interop.html" />
   <meta name="viewport" content="width=device-width, initial-scale=1"/>
   <meta name="docsearch:language" content="en"/>
-  <meta name="docsearch:version" content="0.6.0" />
+  <meta name="docsearch:version" content="0.6.2" />
   
     
     <script src="../_static/searchtools.js"></script>
@@ -129,7 +129,7 @@
   
   
   
-    <p class="title logo__title">Quadrants 0.6.0 documentation</p>
+    <p class="title logo__title">Quadrants 0.6.2 documentation</p>
   
 </a></div>
     
@@ -455,62 +455,7 @@
 </section>
 <section id="full-example-blocked-cholesky">
 <h2>Full example: blocked Cholesky<a class="headerlink" href="#full-example-blocked-cholesky" title="Link to this heading">#</a></h2>
-<p>A simplified blocked Cholesky factorization using <code class="docutils literal notranslate"><span class="pre">Tile16x16</span></code>:</p>
-<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">from</span><span class="w"> </span><span class="nn">quadrants.lang.simt.tile16</span><span class="w"> </span><span class="kn">import</span> <span class="n">Tile16x16</span>
-
-<span class="nd">@qd</span><span class="o">.</span><span class="n">func</span>
-<span class="k">def</span><span class="w"> </span><span class="nf">blocked_cholesky</span><span class="p">(</span><span class="n">H</span><span class="p">,</span> <span class="n">tid</span><span class="p">,</span> <span class="n">n_dofs</span><span class="p">,</span> <span class="n">eps</span><span class="p">):</span>
-    <span class="n">N_BLOCKS</span> <span class="o">=</span> <span class="p">(</span><span class="n">n_dofs</span> <span class="o">+</span> <span class="n">Tile16x16</span><span class="o">.</span><span class="n">SIZE</span> <span class="o">-</span> <span class="mi">1</span><span class="p">)</span> <span class="o">//</span> <span class="n">Tile16x16</span><span class="o">.</span><span class="n">SIZE</span>
-    <span class="k">for</span> <span class="n">kb</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">N_BLOCKS</span><span class="p">):</span>
-        <span class="n">k0</span> <span class="o">=</span> <span class="n">kb</span> <span class="o">*</span> <span class="n">Tile16x16</span><span class="o">.</span><span class="n">SIZE</span>
-
-        <span class="c1"># Load diagonal block, pad with identity if out of bounds</span>
-        <span class="n">L_kk</span> <span class="o">=</span> <span class="n">Tile16x16</span><span class="p">()</span>
-        <span class="k">if</span> <span class="n">k0</span> <span class="o">+</span> <span class="n">tid</span> <span class="o">&lt;</span> <span class="n">n_dofs</span><span class="p">:</span>
-            <span class="n">L_kk</span><span class="p">[:]</span> <span class="o">=</span> <span class="n">H</span><span class="p">[</span><span class="n">k0</span><span class="p">:</span><span class="n">k0</span><span class="o">+</span><span class="mi">16</span><span class="p">,</span> <span class="n">k0</span><span class="p">:</span><span class="n">k0</span><span class="o">+</span><span class="mi">16</span><span class="p">]</span>
-        <span class="k">else</span><span class="p">:</span>
-            <span class="n">L_kk</span><span class="o">.</span><span class="n">eye_</span><span class="p">()</span>
-
-        <span class="c1"># Subtract contributions from previous blocks</span>
-        <span class="k">for</span> <span class="n">jb</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">kb</span><span class="p">):</span>
-            <span class="n">j0</span> <span class="o">=</span> <span class="n">jb</span> <span class="o">*</span> <span class="n">Tile16x16</span><span class="o">.</span><span class="n">SIZE</span>
-            <span class="k">for</span> <span class="n">t</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">Tile16x16</span><span class="o">.</span><span class="n">SIZE</span><span class="p">):</span>
-                <span class="n">v</span> <span class="o">=</span> <span class="mf">0.0</span>
-                <span class="k">if</span> <span class="n">k0</span> <span class="o">+</span> <span class="n">tid</span> <span class="o">&lt;</span> <span class="n">n_dofs</span><span class="p">:</span>
-                    <span class="n">v</span> <span class="o">=</span> <span class="n">H</span><span class="p">[</span><span class="n">k0</span> <span class="o">+</span> <span class="n">tid</span><span class="p">,</span> <span class="n">j0</span> <span class="o">+</span> <span class="n">t</span><span class="p">]</span>
-                <span class="n">L_kk</span> <span class="o">-=</span> <span class="n">qd</span><span class="o">.</span><span class="n">outer</span><span class="p">(</span><span class="n">v</span><span class="p">,</span> <span class="n">v</span><span class="p">)</span>
-
-        <span class="c1"># Factorize diagonal block</span>
-        <span class="n">L_kk</span><span class="o">.</span><span class="n">cholesky_</span><span class="p">(</span><span class="n">eps</span><span class="p">)</span>
-
-        <span class="c1"># Process off-diagonal blocks</span>
-        <span class="k">for</span> <span class="n">ib</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">kb</span> <span class="o">+</span> <span class="mi">1</span><span class="p">,</span> <span class="n">N_BLOCKS</span><span class="p">):</span>
-            <span class="n">i0</span> <span class="o">=</span> <span class="n">ib</span> <span class="o">*</span> <span class="n">Tile16x16</span><span class="o">.</span><span class="n">SIZE</span>
-
-            <span class="n">L_ik</span> <span class="o">=</span> <span class="n">Tile16x16</span><span class="p">()</span>
-            <span class="k">if</span> <span class="n">i0</span> <span class="o">+</span> <span class="n">tid</span> <span class="o">&lt;</span> <span class="n">n_dofs</span><span class="p">:</span>
-                <span class="n">L_ik</span><span class="p">[:]</span> <span class="o">=</span> <span class="n">H</span><span class="p">[</span><span class="n">i0</span><span class="p">:</span><span class="n">i0</span><span class="o">+</span><span class="mi">16</span><span class="p">,</span> <span class="n">k0</span><span class="p">:</span><span class="n">k0</span><span class="o">+</span><span class="mi">16</span><span class="p">]</span>
-
-            <span class="k">for</span> <span class="n">jb</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">kb</span><span class="p">):</span>
-                <span class="n">j0</span> <span class="o">=</span> <span class="n">jb</span> <span class="o">*</span> <span class="n">Tile16x16</span><span class="o">.</span><span class="n">SIZE</span>
-                <span class="k">for</span> <span class="n">t</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">Tile16x16</span><span class="o">.</span><span class="n">SIZE</span><span class="p">):</span>
-                    <span class="n">v_own</span> <span class="o">=</span> <span class="mf">0.0</span>
-                    <span class="n">v_diag</span> <span class="o">=</span> <span class="mf">0.0</span>
-                    <span class="k">if</span> <span class="n">i0</span> <span class="o">+</span> <span class="n">tid</span> <span class="o">&lt;</span> <span class="n">n_dofs</span><span class="p">:</span>
-                        <span class="n">v_own</span> <span class="o">=</span> <span class="n">H</span><span class="p">[</span><span class="n">i0</span> <span class="o">+</span> <span class="n">tid</span><span class="p">,</span> <span class="n">j0</span> <span class="o">+</span> <span class="n">t</span><span class="p">]</span>
-                    <span class="k">if</span> <span class="n">k0</span> <span class="o">+</span> <span class="n">tid</span> <span class="o">&lt;</span> <span class="n">n_dofs</span><span class="p">:</span>
-                        <span class="n">v_diag</span> <span class="o">=</span> <span class="n">H</span><span class="p">[</span><span class="n">k0</span> <span class="o">+</span> <span class="n">tid</span><span class="p">,</span> <span class="n">j0</span> <span class="o">+</span> <span class="n">t</span><span class="p">]</span>
-                    <span class="n">L_ik</span> <span class="o">-=</span> <span class="n">qd</span><span class="o">.</span><span class="n">outer</span><span class="p">(</span><span class="n">v_own</span><span class="p">,</span> <span class="n">v_diag</span><span class="p">)</span>
-
-            <span class="n">L_kk</span><span class="o">.</span><span class="n">solve_triangular_</span><span class="p">(</span><span class="n">L_ik</span><span class="p">)</span>
-
-            <span class="k">if</span> <span class="n">i0</span> <span class="o">+</span> <span class="n">tid</span> <span class="o">&lt;</span> <span class="n">n_dofs</span><span class="p">:</span>
-                <span class="n">H</span><span class="p">[</span><span class="n">i0</span><span class="p">:</span><span class="n">i0</span><span class="o">+</span><span class="mi">16</span><span class="p">,</span> <span class="n">k0</span><span class="p">:</span><span class="n">k0</span><span class="o">+</span><span class="mi">16</span><span class="p">]</span> <span class="o">=</span> <span class="n">L_ik</span>
-
-        <span class="k">if</span> <span class="n">k0</span> <span class="o">+</span> <span class="n">tid</span> <span class="o">&lt;</span> <span class="n">n_dofs</span><span class="p">:</span>
-            <span class="n">H</span><span class="p">[</span><span class="n">k0</span><span class="p">:</span><span class="n">k0</span><span class="o">+</span><span class="mi">16</span><span class="p">,</span> <span class="n">k0</span><span class="p">:</span><span class="n">k0</span><span class="o">+</span><span class="mi">16</span><span class="p">]</span> <span class="o">=</span> <span class="n">L_kk</span>
-</pre></div>
-</div>
+<p>See the <code class="docutils literal notranslate"><span class="pre">cholesky_tile16</span></code> kernel in <a class="reference download internal" download="" href="../_downloads/10e91aecf2d7d697024a911dd28bc249/cholesky_blocked.py"><span class="xref download myst"><code class="docutils literal notranslate"><span class="pre">misc/demos/cholesky_blocked.py</span></code></span></a> for a complete blocked Cholesky factorization using <code class="docutils literal notranslate"><span class="pre">Tile16x16</span></code>.</p>
 </section>
 <section id="method-reference">
 <h2>Method reference<a class="headerlink" href="#method-reference" title="Link to this heading">#</a></h2>

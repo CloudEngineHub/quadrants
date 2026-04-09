@@ -27,7 +27,7 @@ quadrants.lang.simt.tile16
        t.eye_()                                     # set to identity matrix (in-place)
        v = arr[r0:r_end, col]                       # load column vector (per-thread scalar, 0 for out-of-range)
        v = arr[i0, r0:r_end, col]                   # load column vector from 3D array
-       t -= qd.outer(v, v)                          # symmetric rank-1 subtract
+       t -= qd.outer(v, v)                          # symmetric rank-1 subtract: t -= v @ v^T
        t -= qd.outer(a, b)                          # general rank-1 subtract: t -= a @ b^T
        t.cholesky_(eps)                             # in-place Cholesky factorization
        L.solve_triangular_(B)                       # triangular solve: X @ L^T = B, result in B
@@ -63,8 +63,8 @@ Module Contents
 
    Usage::
 
-       t -= qd.outer(a, b)   # equivalent to t.ger_sub(a, b)
-       t -= qd.outer(v, v)   # equivalent to t.syr_sub(v)
+       t -= qd.outer(a, b)   # equivalent to t._ger_sub(a, b)
+       t -= qd.outer(v, v)   # symmetric case (a == b)
 
 
 .. py:data:: Tile16x16
