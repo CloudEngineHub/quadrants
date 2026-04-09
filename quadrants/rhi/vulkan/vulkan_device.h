@@ -378,8 +378,6 @@ class VulkanPipeline : public Pipeline {
   std::unordered_map<uint32_t, VulkanResourceSet> set_templates_;
   std::vector<vkapi::IVkDescriptorSetLayout> set_layouts_;
   std::vector<VkShaderModule> shader_modules_;
-  std::vector<VkPipelineShaderStageRequiredSubgroupSizeCreateInfo>
-      subgroup_size_info_;
   vkapi::IVkPipeline pipeline_{VK_NULL_HANDLE};
   vkapi::IVkPipelineLayout pipeline_layout_{VK_NULL_HANDLE};
 };
@@ -572,7 +570,6 @@ struct VulkanCapabilities {
   bool surface{false};
   bool present{false};
   bool dynamic_rendering{false};
-  bool subgroup_size_control{false};
 };
 
 class QD_DLL_EXPORT VulkanDevice : public GraphicsDevice {

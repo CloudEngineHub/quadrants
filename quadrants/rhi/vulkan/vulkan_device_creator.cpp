@@ -608,9 +608,6 @@ void VulkanDeviceCreator::create_logical_device(bool manual_create) {
       enabled_extensions.push_back(ext.extensionName);
     } else if (name == VK_KHR_SHADER_CLOCK_EXTENSION_NAME) {
       enabled_extensions.push_back(ext.extensionName);
-    } else if (name == VK_EXT_SUBGROUP_SIZE_CONTROL_EXTENSION_NAME) {
-      ti_device_->vk_caps().subgroup_size_control = true;
-      enabled_extensions.push_back(ext.extensionName);
     } else if (std::find(params_.additional_device_extensions.begin(),
                          params_.additional_device_extensions.end(),
                          name) != params_.additional_device_extensions.end()) {
@@ -675,7 +672,6 @@ void VulkanDeviceCreator::create_logical_device(bool manual_create) {
         VK_SUBGROUP_FEATURE_BALLOT_BIT) {
       caps.set(DeviceCapability::spirv_has_subgroup_ballot, true);
     }
-
   }
 
   create_info.pEnabledFeatures = &device_features;
