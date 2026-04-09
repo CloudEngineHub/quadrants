@@ -7,7 +7,7 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>quadrants.lang.misc &#8212; Quadrants 0.5.3 documentation</title>
+    <title>quadrants.lang.misc &#8212; Quadrants 0.6.2 documentation</title>
   
   
   
@@ -42,7 +42,7 @@
   <link rel="preload" as="script" href="../../../_static/scripts/bootstrap.js?digest=7f76b32a3354e82990f2" />
 <link rel="preload" as="script" href="../../../_static/scripts/pydata-sphinx-theme.js?digest=7f76b32a3354e82990f2" />
 
-    <script src="../../../_static/documentation_options.js?v=2a2fe768"></script>
+    <script src="../../../_static/documentation_options.js?v=1c28bd9a"></script>
     <script src="../../../_static/doctools.js?v=9bcbadda"></script>
     <script src="../../../_static/sphinx_highlight.js?v=dc90522c"></script>
     <script src="../../../_static/clipboard.min.js?v=a7894cd8"></script>
@@ -60,7 +60,7 @@
     <link rel="search" title="Search" href="../../../search.html" />
   <meta name="viewport" content="width=device-width, initial-scale=1"/>
   <meta name="docsearch:language" content="en"/>
-  <meta name="docsearch:version" content="0.5.3" />
+  <meta name="docsearch:version" content="0.6.2" />
   
     
     <script src="../../../_static/searchtools.js"></script>
@@ -126,7 +126,7 @@
   
   
   
-    <p class="title logo__title">Quadrants 0.5.3 documentation</p>
+    <p class="title logo__title">Quadrants 0.6.2 documentation</p>
   
 </a></div>
     
@@ -1062,6 +1062,7 @@
     <span class="n">block_dim_adaptive</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>
     <span class="n">bit_vectorize</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span>
     <span class="n">name</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>
+    <span class="n">subgroup_size</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>
 <span class="p">):</span>
 <span class="w">    </span><span class="sd">&quot;&quot;&quot;Sets directives for the next loop</span>
 
@@ -1072,6 +1073,10 @@
 <span class="sd">        block_dim_adaptive (bool): Whether to allow backends set block_dim adaptively, enabled by default</span>
 <span class="sd">        bit_vectorize (bool): Whether to enable bit vectorization of struct fors on quant_arrays.</span>
 <span class="sd">        name (str): Optional name for this loop, used in GPU kernel names for profiling and debugging.</span>
+<span class="sd">        subgroup_size (int): Required subgroup (warp/wavefront/SIMD group) size.</span>
+<span class="sd">            On Vulkan, passed as ``requiredSubgroupSize`` (defaults to 32).</span>
+<span class="sd">            On CUDA/Metal/AMDGPU, validated against the hardware&#39;s fixed</span>
+<span class="sd">            warp/SIMD size and raises ``ValueError`` if it doesn&#39;t match.</span>
 
 <span class="sd">    Examples::</span>
 
@@ -1128,7 +1133,24 @@
         <span class="n">_bit_vectorize</span><span class="p">()</span>
 
     <span class="k">if</span> <span class="n">name</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
-        <span class="n">get_runtime</span><span class="p">()</span><span class="o">.</span><span class="n">compiling_callable</span><span class="o">.</span><span class="n">ast_builder</span><span class="p">()</span><span class="o">.</span><span class="n">set_loop_name</span><span class="p">(</span><span class="n">name</span><span class="p">)</span></div>
+        <span class="n">get_runtime</span><span class="p">()</span><span class="o">.</span><span class="n">compiling_callable</span><span class="o">.</span><span class="n">ast_builder</span><span class="p">()</span><span class="o">.</span><span class="n">set_loop_name</span><span class="p">(</span><span class="n">name</span><span class="p">)</span>
+
+    <span class="k">if</span> <span class="n">subgroup_size</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="n">arch</span> <span class="o">=</span> <span class="n">impl</span><span class="o">.</span><span class="n">current_cfg</span><span class="p">()</span><span class="o">.</span><span class="n">arch</span>
+        <span class="n">_valid_subgroup_sizes</span> <span class="o">=</span> <span class="p">{</span>
+            <span class="n">cuda</span><span class="p">:</span> <span class="p">{</span><span class="mi">32</span><span class="p">},</span>
+            <span class="n">metal</span><span class="p">:</span> <span class="p">{</span><span class="mi">32</span><span class="p">},</span>
+            <span class="n">amdgpu</span><span class="p">:</span> <span class="p">{</span><span class="mi">32</span><span class="p">,</span> <span class="mi">64</span><span class="p">},</span>
+        <span class="p">}</span>
+        <span class="k">if</span> <span class="n">arch</span> <span class="ow">in</span> <span class="n">_valid_subgroup_sizes</span><span class="p">:</span>
+            <span class="n">valid</span> <span class="o">=</span> <span class="n">_valid_subgroup_sizes</span><span class="p">[</span><span class="n">arch</span><span class="p">]</span>
+            <span class="k">if</span> <span class="n">subgroup_size</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">valid</span><span class="p">:</span>
+                <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span>
+                    <span class="sa">f</span><span class="s2">&quot;subgroup_size=</span><span class="si">{</span><span class="n">subgroup_size</span><span class="si">}</span><span class="s2"> is not valid for </span><span class="si">{</span><span class="n">arch</span><span class="si">}</span><span class="s2">. &quot;</span> <span class="sa">f</span><span class="s2">&quot;Supported: </span><span class="si">{</span><span class="nb">sorted</span><span class="p">(</span><span class="n">valid</span><span class="p">)</span><span class="si">}</span><span class="s2">&quot;</span>
+                <span class="p">)</span>
+        <span class="k">elif</span> <span class="n">arch</span> <span class="ow">in</span> <span class="p">(</span><span class="n">cpu</span><span class="p">,</span> <span class="n">x64</span><span class="p">,</span> <span class="n">arm64</span><span class="p">):</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s2">&quot;subgroup_size is not supported on CPU backends&quot;</span><span class="p">)</span>
+        <span class="n">get_runtime</span><span class="p">()</span><span class="o">.</span><span class="n">compiling_callable</span><span class="o">.</span><span class="n">ast_builder</span><span class="p">()</span><span class="o">.</span><span class="n">subgroup_size</span><span class="p">(</span><span class="n">subgroup_size</span><span class="p">)</span></div>
 
 
 
