@@ -349,25 +349,14 @@
                   
   <section id="module-quadrants.lang.simt.tile16">
 <span id="quadrants-lang-simt-tile16"></span><h1>quadrants.lang.simt.tile16<a class="headerlink" href="#module-quadrants.lang.simt.tile16" title="Link to this heading">#</a></h1>
-<p>Register-resident 16x16 tile operations using subgroup (warp) shuffles.</p>
+<p>Internal implementation of register-resident 16x16 tile operations.</p>
+<p>Everything in this module is private to keep the user-facing API simple.
+The public API will be added in later PRs.</p>
 <p>Each tile is a 16x16 matrix distributed across 16 threads in a subgroup,
 one row per thread, with each row stored in 16 scalar registers (r0-r15).
 Cross-thread communication uses warp shuffles — no shared memory needed.</p>
-<p>The thread’s lane index (tid) is obtained internally via subgroup.invocation_id(),
-so callers never need to pass it. Load/store methods take a row offset (row0);
-each thread accesses row = row0 + tid.</p>
-<p>Usage example (inside a &#64;qd.kernel or &#64;qd.func):</p>
-<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="kn">from</span><span class="w"> </span><span class="nn">quadrants.lang.simt.tile16</span><span class="w"> </span><span class="kn">import</span> <span class="n">_make_tile16x16</span>
-<span class="n">Tile</span> <span class="o">=</span> <span class="n">_make_tile16x16</span><span class="p">(</span><span class="n">qd</span><span class="o">.</span><span class="n">f32</span><span class="p">)</span>
-<span class="n">TILE</span> <span class="o">=</span> <span class="n">Tile</span><span class="o">.</span><span class="n">SIZE</span>
-<span class="n">t</span> <span class="o">=</span> <span class="n">Tile</span><span class="p">()</span>                                       <span class="c1"># zero-initialized tile</span>
-<span class="n">t</span><span class="o">.</span><span class="n">_load</span><span class="p">(</span><span class="n">arr</span><span class="p">,</span> <span class="n">row0</span><span class="p">,</span> <span class="n">col0</span><span class="p">,</span> <span class="n">col_stop</span><span class="p">,</span> <span class="n">row_stop</span><span class="p">)</span>     <span class="c1"># load from 2D array</span>
-<span class="n">t</span><span class="o">.</span><span class="n">_store</span><span class="p">(</span><span class="n">arr</span><span class="p">,</span> <span class="n">row0</span><span class="p">,</span> <span class="n">col0</span><span class="p">,</span> <span class="n">col_stop</span><span class="p">,</span> <span class="n">row_stop</span><span class="p">)</span>    <span class="c1"># store to 2D array</span>
-<span class="n">t</span><span class="o">.</span><span class="n">_load3d</span><span class="p">(</span><span class="n">arr</span><span class="p">,</span> <span class="n">i0</span><span class="p">,</span> <span class="n">row0</span><span class="p">,</span> <span class="n">col0</span><span class="p">,</span> <span class="n">col_stop</span><span class="p">,</span> <span class="n">row_stop</span><span class="p">)</span>  <span class="c1"># load from 3D array</span>
-<span class="n">t</span><span class="o">.</span><span class="n">_store3d</span><span class="p">(</span><span class="n">arr</span><span class="p">,</span> <span class="n">i0</span><span class="p">,</span> <span class="n">row0</span><span class="p">,</span> <span class="n">col0</span><span class="p">,</span> <span class="n">col_stop</span><span class="p">,</span> <span class="n">row_stop</span><span class="p">)</span> <span class="c1"># store to 3D array</span>
-<span class="n">t</span><span class="o">.</span><span class="n">eye_</span><span class="p">()</span>                                         <span class="c1"># set to identity matrix (in-place)</span>
-</pre></div>
-</div>
+<p>The thread’s lane index (tid) is obtained internally via
+<code class="docutils literal notranslate"><span class="pre">subgroup.invocation_id()</span></code>, so callers never need to pass it.</p>
 </section>
 
 
