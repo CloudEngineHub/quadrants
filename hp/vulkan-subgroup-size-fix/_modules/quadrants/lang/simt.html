@@ -320,8 +320,12 @@
 <span class="kn">from</span><span class="w"> </span><span class="nn">quadrants.lang.simt</span><span class="w"> </span><span class="kn">import</span> <span class="n">block</span><span class="p">,</span> <span class="n">grid</span><span class="p">,</span> <span class="n">subgroup</span><span class="p">,</span> <span class="n">warp</span>
 
 <span class="n">__all__</span> <span class="o">=</span> <span class="p">[</span>
-    <span class="s2">&quot;warp&quot;</span><span class="p">,</span> <span class="s2">&quot;subgroup&quot;</span><span class="p">,</span> <span class="s2">&quot;block&quot;</span><span class="p">,</span> <span class="s2">&quot;grid&quot;</span><span class="p">,</span>
-    <span class="s2">&quot;min_subgroup_size&quot;</span><span class="p">,</span> <span class="s2">&quot;max_subgroup_size&quot;</span><span class="p">,</span>
+    <span class="s2">&quot;warp&quot;</span><span class="p">,</span>
+    <span class="s2">&quot;subgroup&quot;</span><span class="p">,</span>
+    <span class="s2">&quot;block&quot;</span><span class="p">,</span>
+    <span class="s2">&quot;grid&quot;</span><span class="p">,</span>
+    <span class="s2">&quot;min_subgroup_size&quot;</span><span class="p">,</span>
+    <span class="s2">&quot;max_subgroup_size&quot;</span><span class="p">,</span>
 <span class="p">]</span>
 
 
@@ -329,7 +333,10 @@
 <a class="viewcode-back" href="../../../autoapi/quadrants/lang/simt/index.html#quadrants.lang.simt.min_subgroup_size">[docs]</a>
 <span class="k">def</span><span class="w"> </span><span class="nf">min_subgroup_size</span><span class="p">():</span>
 <span class="w">    </span><span class="sd">&quot;&quot;&quot;Return the minimum subgroup size supported by the current device.&quot;&quot;&quot;</span>
-    <span class="kn">from</span><span class="w"> </span><span class="nn">quadrants.lang.impl</span><span class="w"> </span><span class="kn">import</span> <span class="n">get_runtime</span>  <span class="c1"># pylint: disable=import-outside-toplevel</span>
+    <span class="kn">from</span><span class="w"> </span><span class="nn">quadrants.lang.impl</span><span class="w"> </span><span class="kn">import</span> <span class="p">(</span>  <span class="c1"># pylint: disable=import-outside-toplevel</span>
+        <span class="n">get_runtime</span><span class="p">,</span>
+    <span class="p">)</span>
+
     <span class="k">return</span> <span class="n">get_runtime</span><span class="p">()</span><span class="o">.</span><span class="n">prog</span><span class="o">.</span><span class="n">get_min_subgroup_size</span><span class="p">()</span></div>
 
 
@@ -338,7 +345,10 @@
 <a class="viewcode-back" href="../../../autoapi/quadrants/lang/simt/index.html#quadrants.lang.simt.max_subgroup_size">[docs]</a>
 <span class="k">def</span><span class="w"> </span><span class="nf">max_subgroup_size</span><span class="p">():</span>
 <span class="w">    </span><span class="sd">&quot;&quot;&quot;Return the maximum subgroup size supported by the current device.&quot;&quot;&quot;</span>
-    <span class="kn">from</span><span class="w"> </span><span class="nn">quadrants.lang.impl</span><span class="w"> </span><span class="kn">import</span> <span class="n">get_runtime</span>  <span class="c1"># pylint: disable=import-outside-toplevel</span>
+    <span class="kn">from</span><span class="w"> </span><span class="nn">quadrants.lang.impl</span><span class="w"> </span><span class="kn">import</span> <span class="p">(</span>  <span class="c1"># pylint: disable=import-outside-toplevel</span>
+        <span class="n">get_runtime</span><span class="p">,</span>
+    <span class="p">)</span>
+
     <span class="k">return</span> <span class="n">get_runtime</span><span class="p">()</span><span class="o">.</span><span class="n">prog</span><span class="o">.</span><span class="n">get_max_subgroup_size</span><span class="p">()</span></div>
 
 </pre></div>
