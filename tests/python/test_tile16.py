@@ -299,27 +299,30 @@ def test_tile16_make_caching():
     assert c is d
 
 
-def _make_spd(seed: int = 42):
+def _make_spd(np_dtype=np.float32, seed: int = 42):
     """Return a well-conditioned 16x16 symmetric positive-definite matrix."""
     rng = np.random.RandomState(seed)
     B = rng.randn(_TILE, _TILE).astype(np.float64)
-    return (B @ B.T + _TILE * np.eye(_TILE)).astype(np.float32)
+    return (B @ B.T + _TILE * np.eye(_TILE)).astype(np_dtype)
 
 
+@pytest.mark.parametrize("qd_dtype", _QD_DTYPES)
 @test_utils.test(arch=qd.gpu)
-def test_tile16_ger_sub():
-    Tile = _make_tile16x16(qd.f32)
-    mat = qd.ndarray(qd.f32, (_TILE, _TILE))
-    vec_a = qd.ndarray(qd.f32, (_TILE,))
-    vec_b = qd.ndarray(qd.f32, (_TILE,))
-    out = qd.ndarray(qd.f32, (_TILE, _TILE))
+def test_tile16_ger_sub(qd_dtype):
+    test_utils.skip_if_f64_unsupported(qd_dtype)
+    np_dtype = _NP_DTYPES[qd_dtype]
+    Tile = _make_tile16x16(qd_dtype)
+    mat = qd.ndarray(qd_dtype, (_TILE, _TILE))
+    vec_a = qd.ndarray(qd_dtype, (_TILE,))
+    vec_b = qd.ndarray(qd_dtype, (_TILE,))
+    out = qd.ndarray(qd_dtype, (_TILE, _TILE))
 
     @qd.kernel
     def k1(
-        mat_arr: qd.types.NDArray[qd.f32, 2],
-        a_arr: qd.types.NDArray[qd.f32, 1],
-        b_arr: qd.types.NDArray[qd.f32, 1],
-        out_arr: qd.types.NDArray[qd.f32, 2],
+        mat_arr: qd.types.NDArray[qd_dtype, 2],
+        a_arr: qd.types.NDArray[qd_dtype, 1],
+        b_arr: qd.types.NDArray[qd_dtype, 1],
+        out_arr: qd.types.NDArray[qd_dtype, 2],
     ):
         qd.loop_config(block_dim=_TILE)
         for _ in range(_TILE):
@@ -331,37 +334,61 @@ def test_tile16_ger_sub():
             t._ger_sub(a_val, b_val)
             t._store(out_arr, 0, _TILE, 0, _TILE)
 
-    M = np.arange(_TILE * _TILE, dtype=np.float32).reshape(_TILE, _TILE)
-    a = np.arange(_TILE, dtype=np.float32) + 1.0
-    b = np.arange(_TILE, dtype=np.float32) + 2.0
+    M = np.arange(_TILE * _TILE, dtype=np_dtype).reshape(_TILE, _TILE)
+    a = np.arange(_TILE, dtype=np_dtype) + 1.0
+    b = np.arange(_TILE, dtype=np_dtype) + 2.0
     mat.from_numpy(M)
     vec_a.from_numpy(a)
     vec_b.from_numpy(b)
     k1(mat, vec_a, vec_b, out)
 
     expected = M - np.outer(a, b)
-    np.testing.assert_allclose(out.to_numpy(), expected, atol=1e-5)
+    atol = 1e-10 if qd_dtype == qd.f64 else 1e-5
+    np.testing.assert_allclose(out.to_numpy(), expected, atol=atol)
 
 
+@pytest.mark.parametrize("dst_delta", [0, 3, 16])
+@pytest.mark.parametrize("src_offset", [0, 5, 32])
+@pytest.mark.parametrize("qd_dtype", _QD_DTYPES)
 @test_utils.test(arch=qd.gpu)
-def test_tile16_cholesky():
-    Tile = _make_tile16x16(qd.f32)
-    src = qd.ndarray(qd.f32, (_TILE, _TILE))
-    dst = qd.ndarray(qd.f32, (_TILE, _TILE))
+def test_tile16_cholesky(qd_dtype, src_offset, dst_delta):
+    test_utils.skip_if_f64_unsupported(qd_dtype)
+    np_dtype = _NP_DTYPES[qd_dtype]
+    GRID = 64
+    Tile = _make_tile16x16(qd_dtype)
+    src = qd.ndarray(qd_dtype, (GRID, GRID))
+    dst = qd.ndarray(qd_dtype, (GRID, GRID))
+
+    dst_offset = src_offset + dst_delta
+    src_row_end = src_offset + _TILE
+    dst_row_end = dst_offset + _TILE
 
     @qd.kernel
-    def k1(src_arr: qd.types.NDArray[qd.f32, 2], dst_arr: qd.types.NDArray[qd.f32, 2]):
+    def k1(src_arr: qd.types.NDArray[qd_dtype, 2], dst_arr: qd.types.NDArray[qd_dtype, 2]):
         qd.loop_config(block_dim=_TILE)
         for _ in range(_TILE):
             t = Tile()
-            t._load(src_arr, 0, _TILE, 0, _TILE)
-            t.cholesky_(qd.f32(1e-6))
-            t._store(dst_arr, 0, _TILE, 0, _TILE)
+            t._load(src_arr, src_offset, src_row_end, src_offset, src_row_end)
+            if qd.static(qd_dtype == qd.f64):
+                t.cholesky_(qd.f64(1e-12))
+            else:
+                t.cholesky_(qd.f32(1e-6))
+            t._store(dst_arr, dst_offset, dst_row_end, dst_offset, dst_row_end)
 
-    A = _make_spd()
-    src.from_numpy(A)
+    A = _make_spd(np_dtype)
+    src_np = np.zeros((GRID, GRID), dtype=np_dtype)
+    src_np[src_offset : src_offset + _TILE, src_offset : src_offset + _TILE] = A
+    src.from_numpy(src_np)
+    dst.from_numpy(np.full((GRID, GRID), -1.0, dtype=np_dtype))
     k1(src, dst)
 
-    L_gpu = np.tril(dst.to_numpy())
-    L_ref = scipy.linalg.cholesky(A.astype(np.float64), lower=True).astype(np.float32)
-    np.testing.assert_allclose(L_gpu, L_ref, atol=1e-5)
+    result = dst.to_numpy()
+    L_gpu = np.tril(result[dst_offset : dst_offset + _TILE, dst_offset : dst_offset + _TILE])
+    L_ref = scipy.linalg.cholesky(A.astype(np.float64), lower=True).astype(np_dtype)
+    atol = 1e-10 if qd_dtype == qd.f64 else 1e-5
+    np.testing.assert_allclose(L_gpu, L_ref, atol=atol)
+    untouched = np.full((GRID, GRID), -1.0, dtype=np_dtype)
+    untouched[dst_offset : dst_offset + _TILE, dst_offset : dst_offset + _TILE] = result[
+        dst_offset : dst_offset + _TILE, dst_offset : dst_offset + _TILE
+    ]
+    np.testing.assert_allclose(result, untouched)
