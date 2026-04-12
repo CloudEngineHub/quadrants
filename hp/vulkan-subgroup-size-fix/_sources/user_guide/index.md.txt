@@ -38,6 +38,7 @@ interop
 
 graph
 perf_dispatch
+subgroup_size
 ```
 
 ```{toctree}
@@ -50,4 +51,12 @@ python_backend
 debug
 quirks
 troubleshooting
+```
+
+```{toctree}
+:caption: Internal
+:maxdepth: 1
+:titlesonly:
+
+building_cudagraph_conditional_fatbin
 ```
