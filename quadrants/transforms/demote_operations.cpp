@@ -45,9 +45,9 @@ class DemoteOperations : public BasicStmtVisitor {
         auto _ = builder.get_if_guard(if_stmt, true);
         auto current_result = builder.create_local_load(result);
         auto new_result = builder.create_mul(current_result, current_a);
-        // Propagate `qd.precise(...)` onto the synthesized mul chain: otherwise demote_operations runs
-        // before alg_simp / codegen and the mul-chain expansion of `x**n` silently drops the IEEE-strict
-        // tag the user wrote on the original pow stmt.
+        // Propagate `qd.precise(...)` onto the synthesized mul chain: otherwise demote_operations runs before alg_simp
+        // / codegen and the mul-chain expansion of `x**n` silently drops the IEEE-strict tag the user wrote on the
+        // original pow stmt.
         new_result->precise = precise;
         builder.create_local_store(result, new_result);
       }
@@ -170,9 +170,9 @@ class DemoteOperations : public BasicStmtVisitor {
 
   std::unique_ptr<Stmt> demote_ffloor(BinaryOpStmt *stmt, Stmt *lhs, Stmt *rhs) {
     auto div = Stmt::make_typed<BinaryOpStmt>(BinaryOpType::div, lhs, rhs);
-    // Propagate `qd.precise(...)` onto the synthesized FP div / floor: otherwise demote_operations
-    // replaces the precise floordiv with untagged stmts before alg_simp / codegen see it, and the
-    // IEEE-strict tag is silently lost for `qd.precise(a // b)` on FP operands.
+    // Propagate `qd.precise(...)` onto the synthesized FP div / floor: otherwise demote_operations replaces the precise
+    // floordiv with untagged stmts before alg_simp / codegen see it, and the IEEE-strict tag is silently lost for
+    // `qd.precise(a // b)` on FP operands.
     div->precise = stmt->precise;
     auto floor = Stmt::make_typed<UnaryOpStmt>(UnaryOpType::floor, div.get());
     floor->precise = stmt->precise;

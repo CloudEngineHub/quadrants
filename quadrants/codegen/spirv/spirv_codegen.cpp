@@ -838,10 +838,10 @@ void TaskCodegen::visit(UnaryOpStmt *stmt) {
     }
   } else if (stmt->op_type == UnaryOpType::inv) {
     if (is_real(dst_dt)) {
-      // Forward `stmt->precise` explicitly: the post-hoc `maybe_no_contraction(val, stmt->precise)`
-      // below happens to decorate the same SPIR-V value ID, so the OpFDiv is already tagged, but
-      // relying on that is fragile - if anyone adds an early return before the decorator runs, the
-      // tag is silently lost. Passing it at creation time makes the intent robust.
+      // Forward `stmt->precise` explicitly: the post-hoc `maybe_no_contraction(val, stmt->precise)` below happens to
+      // decorate the same SPIR-V value ID, so the OpFDiv is already tagged, but relying on that is fragile - if anyone
+      // adds an early return before the decorator runs, the tag is silently lost. Passing it at creation time makes the
+      // intent robust.
       val = ir_->div(ir_->float_immediate_number(dst_type, 1), operand_val, stmt->precise);
     } else {
       QD_NOT_IMPLEMENTED
@@ -889,13 +889,12 @@ void TaskCodegen::visit(UnaryOpStmt *stmt) {
   else {
     QD_NOT_IMPLEMENTED
   }
-  // For FP-producing unary ops, decorate the result with `NoContraction` when `precise` is set. This is
-  // meaningful on actual arithmetic instructions (`OpFNegate` from `neg`, `OpFDiv` synthesized by `inv`)
-  // where SPIRV-Cross maps it to MSL's `precise` qualifier. For transcendentals emitted via
-  // `OpExtInst GLSL.std.450 Sin/Cos/Log/Sqrt/...`, the SPIR-V spec scopes `NoContraction` to arithmetic
-  // instructions so most consumers will ignore it - there is no standard SPIR-V mechanism to force
-  // correctly-rounded transcendentals, so on those paths we rely on the driver's default (non-fast-math)
-  // stdlib being accurate enough. The decoration is kept as best-effort future-proofing.
+  // For FP-producing unary ops, decorate the result with `NoContraction` when `precise` is set. This is meaningful on
+  // actual arithmetic instructions (`OpFNegate` from `neg`, `OpFDiv` synthesized by `inv`) where SPIRV-Cross maps it to
+  // MSL's `precise` qualifier. For transcendentals emitted via `OpExtInst GLSL.std.450 Sin/Cos/Log/Sqrt/...`, the
+  // SPIR-V spec scopes `NoContraction` to arithmetic instructions so most consumers will ignore it - there is no
+  // standard SPIR-V mechanism to force correctly-rounded transcendentals, so on those paths we rely on the driver's
+  // default (non-fast-math) stdlib being accurate enough. The decoration is kept as best-effort future-proofing.
   if (stmt->precise && is_real(stmt->element_type())) {
     ir_->maybe_no_contraction(val, /*precise=*/true);
   }
@@ -1166,13 +1165,12 @@ void TaskCodegen::visit(BinaryOpStmt *bin) {
   else {
     QD_NOT_IMPLEMENTED;
   }
-  // Mirror the post-hoc block in visit(UnaryOpStmt*): FP binary transcendentals (atan2, pow) go
-  // through `FLOAT_BINARY_OP_TO_SPIRV_FLOAT_FUNC` which calls `ir_->call_glsl450(...)` without any
-  // `maybe_no_contraction` plumbing, so `qd.precise(qd.atan2(y, x))` and `qd.precise(x ** y)` on
-  // SPIR-V backends would otherwise silently get no decoration - inconsistent with the best-effort
-  // coverage applied to unary transcendentals. The SPIR-V spec scopes `NoContraction` to
-  // arithmetic instructions and most consumers ignore it on `OpExtInst` anyway, so the decoration
-  // is best-effort future-proofing, but it should be applied uniformly.
+  // Mirror the post-hoc block in visit(UnaryOpStmt*): FP binary transcendentals (atan2, pow) go through
+  // `FLOAT_BINARY_OP_TO_SPIRV_FLOAT_FUNC` which calls `ir_->call_glsl450(...)` without any `maybe_no_contraction`
+  // plumbing, so `qd.precise(qd.atan2(y, x))` and `qd.precise(x ** y)` on SPIR-V backends would otherwise silently get
+  // no decoration - inconsistent with the best-effort coverage applied to unary transcendentals. The SPIR-V spec scopes
+  // `NoContraction` to arithmetic instructions and most consumers ignore it on `OpExtInst` anyway, so the decoration is
+  // best-effort future-proofing, but it should be applied uniformly.
   if (bin->precise && is_real(bin->element_type())) {
     ir_->maybe_no_contraction(bin_value, /*precise=*/true);
   }

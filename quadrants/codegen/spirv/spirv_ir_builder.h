@@ -408,18 +408,17 @@ class IRBuilder {
   // Expressions
   // For FP operands, when `precise` is true, the result is decorated with `NoContraction` so downstream shader
   // compilers (including MoltenVK's SPIRV-Cross -> MSL translation, which maps it to MSL's `precise` qualifier)
-  // preserve source-order arithmetic. Without this, compensated-arithmetic algorithms like Dekker / Kahan 2Sum
-  // get folded away under fast-math. Integer ops ignore `precise`.
+  // preserve source-order arithmetic. Without this, compensated-arithmetic algorithms like Dekker / Kahan 2Sum get
+  // folded away under fast-math. Integer ops ignore `precise`.
   Value add(Value a, Value b, bool precise = false);
   Value sub(Value a, Value b, bool precise = false);
   Value mul(Value a, Value b, bool precise = false);
   Value div(Value a, Value b, bool precise = false);
   Value mod(Value a, Value b, bool precise = false);
 
-  // Decorate `v` with `NoContraction` when `precise` is true. Helper used by the FP arithmetic builders.
-  // Defined inline so the `precise=false` branch folds away at every arithmetic call site (otherwise
-  // every add / sub / mul / div on FP types would pay a function-call + branch even when the op is
-  // not tagged).
+  // Decorate `v` with `NoContraction` when `precise` is true. Helper used by the FP arithmetic builders. Defined inline
+  // so the `precise=false` branch folds away at every arithmetic call site (otherwise every add / sub / mul / div on FP
+  // types would pay a function-call + branch even when the op is not tagged).
   void maybe_no_contraction(Value v, bool precise) {
     if (precise) {
       this->decorate(spv::OpDecorate, v, spv::DecorationNoContraction);

@@ -220,9 +220,9 @@ void TaskCodeGenLLVM::emit_extra_unary(UnaryOpStmt *stmt) {
 #undef UNARY_STD
   if (stmt->ret_type->is_primitive(PrimitiveTypeID::f16)) {
     // Convert back to f16. The following FPTrunc is not an FPMathOperator, so the post-hoc
-    // `disable_fast_math(llvm_val[stmt])` in visit(UnaryOpStmt*) would be a no-op on it and leave
-    // the underlying FP op still carrying `afn` / `reassoc` / ... Clear FMF here on the actual
-    // FP call/intrinsic before its handle is overwritten by the FPTrunc.
+    // `disable_fast_math(llvm_val[stmt])` in visit(UnaryOpStmt*) would be a no-op on it and leave the underlying FP op
+    // still carrying `afn` / `reassoc` / ... Clear FMF here on the actual FP call/intrinsic before its handle is
+    // overwritten by the FPTrunc.
     if (stmt->precise) {
       disable_fast_math(llvm_val[stmt]);
     }
@@ -471,9 +471,9 @@ void TaskCodeGenLLVM::visit(UnaryOpStmt *stmt) {
     llvm::Function *sqrt_fn =
         llvm::Intrinsic::getOrInsertDeclaration(module.get(), llvm::Intrinsic::sqrt, input->getType());
     auto intermediate = builder->CreateCall(sqrt_fn, input, "sqrt");
-    // The intermediate sqrt is a separate FPMathOperator from the enclosing FDiv; the post-hoc
-    // disable_fast_math() call at the end of visit(UnaryOpStmt*) only sees the FDiv. Clear FMF on the
-    // sqrt here so `afn` cannot substitute an approximate rsqrt+refine for the user's precise sqrt.
+    // The intermediate sqrt is a separate FPMathOperator from the enclosing FDiv; the post-hoc disable_fast_math() call
+    // at the end of visit(UnaryOpStmt*) only sees the FDiv. Clear FMF on the sqrt here so `afn` cannot substitute an
+    // approximate rsqrt+refine for the user's precise sqrt.
     if (stmt->precise) {
       disable_fast_math(intermediate);
     }
@@ -771,10 +771,10 @@ void TaskCodeGenLLVM::visit(BinaryOpStmt *stmt) {
       QD_NOT_IMPLEMENTED
     }
 
-    // Convert back to f16 if applicable. Clear FMF on the actual FP op *before* the FPTrunc
-    // overwrites its handle: FPTrunc is a type-conversion instruction, not an FPMathOperator, so the
-    // post-hoc `disable_fast_math(llvm_val[stmt])` below would be a no-op on it and leave the
-    // underlying atan2 / pow / ... call still carrying `afn` / `reassoc` / ...
+    // Convert back to f16 if applicable. Clear FMF on the actual FP op *before* the FPTrunc overwrites its handle:
+    // FPTrunc is a type-conversion instruction, not an FPMathOperator, so the post-hoc
+    // `disable_fast_math(llvm_val[stmt])` below would be a no-op on it and leave the underlying atan2 / pow / ...
+    // call still carrying `afn` / `reassoc` / ...
     if (stmt->ret_type->is_primitive(PrimitiveTypeID::f16)) {
       if (stmt->precise) {
         disable_fast_math(llvm_val[stmt]);

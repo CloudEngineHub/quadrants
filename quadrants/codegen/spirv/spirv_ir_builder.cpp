@@ -672,9 +672,8 @@ Value IRBuilder::popcnt(Value x) {
   return make_value(spv::OpBitCount, x.stype, x);
 }
 
-// NOTE: `maybe_no_contraction` is defined inline in spirv_ir_builder.h so the `precise=false` branch
-// folds away at the many FP arithmetic call sites that invoke it unconditionally. See the header for
-// the body and rationale.
+// NOTE: `maybe_no_contraction` is defined inline in spirv_ir_builder.h so the `precise=false` branch folds away at the
+// many FP arithmetic call sites that invoke it unconditionally. See the header for the body and rationale.
 
 #define DEFINE_BUILDER_BINARY_USIGN_OP(_OpName, _Op)         \
   Value IRBuilder::_OpName(Value a, Value b, bool precise) { \
