@@ -18,9 +18,8 @@ class AlgSimp : public BasicStmtVisitor {
       auto cast = Stmt::make_typed<UnaryOpStmt>(UnaryOpType::cast_value, a);
       cast->cast_type = stmt->ret_type;
       cast->ret_type = stmt->ret_type;
-      // Propagate the user's `qd.precise(...)` tag: a cast chain inside a precise op (e.g. the `f64
-      // -> f32` cast on `a` for `qd.precise(f32_var ** 2.0)`) must stay IEEE-strict so codegen's FMF
-      // clear / NoContraction reaches it.
+      // Propagate the user's `qd.precise(...)` tag: a cast chain inside a precise op (e.g. the `f64 -> f32` cast on `a`
+      // for `qd.precise(f32_var ** 2.0)`) must stay IEEE-strict so codegen's FMF clear / NoContraction reaches it.
       cast->precise = precise;
       a = cast.get();
       modifier.insert_before(stmt, std::move(cast));
@@ -189,8 +188,8 @@ class AlgSimp : public BasicStmtVisitor {
     cast_to_result_type(a, stmt, stmt->precise);
     auto result = Stmt::make_typed<UnaryOpStmt>(UnaryOpType::sqrt, a);
     result->ret_type = a->ret_type;
-    // `a ** 0.5 -> sqrt(a)` is IEEE-equivalent, but the synthesized sqrt must carry `precise` so
-    // codegen clears FMF on it; otherwise `qd.precise(x ** 0.5)` silently gets `afn`-approximated.
+    // `a ** 0.5 -> sqrt(a)` is IEEE-equivalent, but the synthesized sqrt must carry `precise` so codegen clears FMF on
+    // it; otherwise `qd.precise(x ** 0.5)` silently gets `afn`-approximated.
     result->precise = stmt->precise;
     stmt->replace_usages_with(result.get());
     modifier.insert_before(stmt, std::move(result));
@@ -230,8 +229,8 @@ class AlgSimp : public BasicStmtVisitor {
         else {
           auto new_result = Stmt::make_typed<BinaryOpStmt>(BinaryOpType::mul, result, a_power_of_2);
           new_result->ret_type = a->ret_type;
-          // Propagate `qd.precise(...)`: the mul chain is IEEE-equivalent to `pow(a, n)`, but every
-          // mul must carry the tag so codegen clears FMF on them.
+          // Propagate `qd.precise(...)`: the mul chain is IEEE-equivalent to `pow(a, n)`, but every mul must carry the
+          // tag so codegen clears FMF on them.
           new_result->precise = stmt->precise;
           result = new_result.get();
           modifier.insert_before(stmt, std::move(new_result));
@@ -278,11 +277,10 @@ class AlgSimp : public BasicStmtVisitor {
     cast_to_result_type(one, stmt, stmt->precise);
     auto new_exponent = Stmt::make_typed<UnaryOpStmt>(UnaryOpType::neg, stmt->rhs);
     new_exponent->ret_type = stmt->rhs->ret_type;
-    // `a ** -n -> 1 / (a ** n)` is IEEE-equivalent, but the synthesized neg / pow / div must carry
-    // `precise` so the subsequent `a ** n -> mul chain` rewrite (exponent_n_optimize) and codegen
-    // see the IEEE-strict tag. `neg` on the integer exponent is tagged for completeness - the flag
-    // has no effect on integer ops but keeps the chain self-consistent for future FP ternary-style
-    // exponents.
+    // `a ** -n -> 1 / (a ** n)` is IEEE-equivalent, but the synthesized neg / pow / div must carry `precise` so the
+    // subsequent `a ** n -> mul chain` rewrite (exponent_n_optimize) and codegen see the IEEE-strict tag. `neg` on the
+    // integer exponent is tagged for completeness - the flag has no effect on integer ops but keeps the chain
+    // self-consistent for future FP ternary-style exponents.
     new_exponent->precise = stmt->precise;
     auto a_to_n = Stmt::make_typed<BinaryOpStmt>(BinaryOpType::pow, stmt->lhs, new_exponent.get());
     a_to_n->ret_type = stmt->ret_type;
@@ -392,12 +390,12 @@ class AlgSimp : public BasicStmtVisitor {
       auto a = stmt->lhs;
       if (alg_is_two(lhs))
         a = stmt->rhs;
-      cast_to_result_type(a, stmt);
+      cast_to_result_type(a, stmt, stmt->precise);
       auto sum = Stmt::make_typed<BinaryOpStmt>(BinaryOpType::add, a, a);
       sum->ret_type = a->ret_type;
       sum->dbg_info = stmt->dbg_info;
-      // `2 * a` and `a + a` are IEEE-equivalent, but the synthesized add must carry `precise` so the
-      // downstream FMF clear / NoContraction plumbing still sees the user's opt-in tag.
+      // `2 * a` and `a + a` are IEEE-equivalent, but the synthesized add must carry `precise` so the downstream FMF
+      // clear / NoContraction plumbing still sees the user's opt-in tag.
       sum->precise = stmt->precise;
       stmt->replace_usages_with(sum.get());
       modifier.insert_before(stmt, std::move(sum));
@@ -466,9 +464,8 @@ class AlgSimp : public BasicStmtVisitor {
                stmt->op_type == BinaryOpType::bit_or || stmt->op_type == BinaryOpType::bit_xor) {
       const bool precise_fp_add = stmt->precise && stmt->op_type == BinaryOpType::add;
       if (alg_is_zero(rhs) && !precise_fp_add) {
-        // a +-|^ 0 -> a. Skipped only for `precise` FP adds: `(-0.0) + 0.0` yields `+0.0` under IEEE.
-        // `a - 0 -> a` is IEEE-exact for every `a` and `bit_or`/`bit_xor` are integer ops, so they
-        // stay unconditional.
+        // a +-|^ 0 -> a. Skipped only for `precise` FP adds: `(-0.0) + 0.0` yields `+0.0` under IEEE. `a - 0 -> a` is
+        // IEEE-exact for every `a` and `bit_or`/`bit_xor` are integer ops, so they stay unconditional.
         stmt->replace_usages_with(stmt->lhs);
         modifier.erase(stmt);
       } else if (stmt->op_type != BinaryOpType::sub && alg_is_zero(lhs) && !precise_fp_add) {
@@ -486,9 +483,9 @@ class AlgSimp : public BasicStmtVisitor {
         replace_with_zero(stmt);
       }
     } else if (stmt->op_type == BinaryOpType::pow) {
-      // Each exponent_* helper propagates `stmt->precise` onto its synthesized stmts (sqrt for ** 0.5,
-      // the mul chain for ** n, and neg/pow/div for ** -n), so `qd.precise(x ** n)` keeps the fast
-      // rewritten form AND the IEEE-strict tag that reaches codegen's FMF clear / NoContraction.
+      // Each exponent_* helper propagates `stmt->precise` onto its synthesized stmts (sqrt for ** 0.5, the mul chain
+      // for ** n, and neg/pow/div for ** -n), so `qd.precise(x ** n)` keeps the fast rewritten form AND the
+      // IEEE-strict tag that reaches codegen's FMF clear / NoContraction.
       if (exponent_one_optimize(stmt)) {
         // a ** 1 -> a
       } else if (exponent_zero_optimize(stmt)) {
