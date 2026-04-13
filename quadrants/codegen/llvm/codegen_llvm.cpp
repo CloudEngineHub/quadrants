@@ -22,6 +22,27 @@
 
 namespace quadrants::lang {
 
+namespace {
+
+// Clear every fast-math flag on the FP instruction backing `v`, so LLVM cannot reassociate, contract, or
+// substitute approximations (e.g. sqrt -> rsqrt+refine, sin -> libm fast variant). No-op if `v` is not an
+// FPMathOperator. Note: `setFastMathFlags(FastMathFlags{})` only OR's in flags on this LLVM version, so
+// each flag has to be cleared individually.
+void disable_fast_math(llvm::Value *v) {
+  auto *inst = llvm::dyn_cast<llvm::Instruction>(v);
+  if (!inst || !llvm::isa<llvm::FPMathOperator>(inst))
+    return;
+  inst->setHasAllowReassoc(false);
+  inst->setHasNoNaNs(false);
+  inst->setHasNoInfs(false);
+  inst->setHasNoSignedZeros(false);
+  inst->setHasAllowReciprocal(false);
+  inst->setHasAllowContract(false);
+  inst->setHasApproxFunc(false);
+}
+
+}  // namespace
+
 // TODO: sort function definitions to match declaration order in header
 
 // TODO(k-ye): Hide FunctionCreationGuard inside cpp file
@@ -472,21 +493,8 @@ void TaskCodeGenLLVM::visit(UnaryOpStmt *stmt) {
   }
 #undef UNARY_INTRINSIC
 
-  // qd.precise(...) marks this op as IEEE-strict: clear every fast-math flag (inherited from the module-level
-  // `fast_math` setting via the IRBuilder default) so LLVM cannot substitute approximate variants (e.g.
-  // sqrt -> rsqrt+refine, sin -> libm fast variant) or otherwise simplify this instruction.
   if (stmt->precise) {
-    if (auto *inst = llvm::dyn_cast<llvm::Instruction>(llvm_val[stmt])) {
-      if (llvm::isa<llvm::FPMathOperator>(inst)) {
-        inst->setHasAllowReassoc(false);
-        inst->setHasNoNaNs(false);
-        inst->setHasNoInfs(false);
-        inst->setHasNoSignedZeros(false);
-        inst->setHasAllowReciprocal(false);
-        inst->setHasAllowContract(false);
-        inst->setHasApproxFunc(false);
-      }
-    }
+    disable_fast_math(llvm_val[stmt]);
   }
 }
 
@@ -765,22 +773,8 @@ void TaskCodeGenLLVM::visit(BinaryOpStmt *stmt) {
     }
   }
 
-  // qd.precise(...) marks this op as IEEE-strict: clear every fast-math flag (inherited from the module-level
-  // `fast_math` setting via the IRBuilder default) so LLVM can't reassociate, contract, or otherwise simplify
-  // this instruction. Note: `setFastMathFlags(empty)` only OR's in flags on this LLVM version, so we have to
-  // clear each individual flag.
   if (stmt->precise) {
-    if (auto *inst = llvm::dyn_cast<llvm::Instruction>(llvm_val[stmt])) {
-      if (llvm::isa<llvm::FPMathOperator>(inst)) {
-        inst->setHasAllowReassoc(false);
-        inst->setHasNoNaNs(false);
-        inst->setHasNoInfs(false);
-        inst->setHasNoSignedZeros(false);
-        inst->setHasAllowReciprocal(false);
-        inst->setHasAllowContract(false);
-        inst->setHasApproxFunc(false);
-      }
-    }
+    disable_fast_math(llvm_val[stmt]);
   }
 }
 
