@@ -109,7 +109,9 @@ Solves `X @ L^T = B` in-place, replacing `B` with `X`. `L` must be a lower-trian
 
 ## Kernel structure
 
-Each tile operation uses 16 lanes of a subgroup. Set `block_dim=Tile.SIZE` so that each thread block is one 16-thread group:
+### Block size
+
+Set `block_dim=Tile.SIZE` so that each thread block contains exactly 16 threads — one per tile row:
 
 ```python
 N = Tile.SIZE
@@ -123,6 +125,10 @@ def my_kernel(A: qd.types.NDArray[qd.f32, 3]):
         t.cholesky_(1e-6)
         A[i, 0:N, 0:N] = t
 ```
+
+### Subgroup size
+
+Tile operations communicate between threads using `qd.simt.subgroup.shuffle`. The hardware subgroup (warp) size is typically larger than 16 (e.g. 32 on NVIDIA). Quadrants handles this internally — tile operations only use the first 16 lanes, and the remaining lanes are idle.
 
 ## f64 support
 
