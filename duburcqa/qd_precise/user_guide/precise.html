@@ -513,7 +513,7 @@
 <h2>Caveats<a class="headerlink" href="#caveats" title="Link to this heading">#</a></h2>
 <ul class="simple">
 <li><p><code class="docutils literal notranslate"><span class="pre">qd.precise</span></code> is a scalar primitive. Passing a <code class="docutils literal notranslate"><span class="pre">Vector</span></code> / <code class="docutils literal notranslate"><span class="pre">Matrix</span></code> will raise. Apply it to individual components instead, or refactor your expression to use scalar ops inside.</p></li>
-<li><p>The tag is a property of the expression value, not the use site. If you alias a subexpression and then wrap one alias, both uses get IEEE semantics.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">qd.precise</span></code> does not mutate its input. It returns a fresh expression subtree with every reachable FP op tagged; the original expression is unchanged. Reusing the original elsewhere is safe and never inherits the tag.</p></li>
 </ul>
 </section>
 </section>

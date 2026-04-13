@@ -96,15 +96,19 @@ Module Contents
 
    .. rubric:: Notes
 
-   * Tagging is in-place on the underlying ``Expression`` nodes
-     (which are shared via ``shared_ptr``). If you alias a
-     subexpression and then wrap one alias in ``qd.precise``, the
-     tag travels with the value - both uses get IEEE semantics.
+   * ``qd.precise`` does NOT mutate the input expression. It returns
+     a fresh subtree that mirrors the input's structure, with every
+     reachable Binary / Unary / Ternary node cloned and the new
+     Binary / Unary nodes tagged as ``precise``. Non-walked nodes
+     (loads, constants, ``qd.func`` calls, ndarray accesses, ...)
+     are shared with the input by reference. The practical upshot:
+     reusing the original (pre-``precise``) expression value
+     elsewhere is safe - it will NOT pick up the tag.
 
    :param obj: A scalar Quadrants expression (typically a chain of FP ops).
 
-   :returns: The same expression, with every reachable binary and unary FP op
-             tagged as ``precise``. Constants and non-FP ops are unaffected.
+   :returns: A fresh expression subtree with every reachable binary and unary
+             FP op tagged as ``precise``. The original ``obj`` is unchanged.
 
    Example::
 

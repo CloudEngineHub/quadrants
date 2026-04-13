@@ -438,17 +438,21 @@
 <span class="sd">    separately if needed.</span>
 
 <span class="sd">    Notes:</span>
-<span class="sd">        * Tagging is in-place on the underlying ``Expression`` nodes</span>
-<span class="sd">          (which are shared via ``shared_ptr``). If you alias a</span>
-<span class="sd">          subexpression and then wrap one alias in ``qd.precise``, the</span>
-<span class="sd">          tag travels with the value - both uses get IEEE semantics.</span>
+<span class="sd">        * ``qd.precise`` does NOT mutate the input expression. It returns</span>
+<span class="sd">          a fresh subtree that mirrors the input&#39;s structure, with every</span>
+<span class="sd">          reachable Binary / Unary / Ternary node cloned and the new</span>
+<span class="sd">          Binary / Unary nodes tagged as ``precise``. Non-walked nodes</span>
+<span class="sd">          (loads, constants, ``qd.func`` calls, ndarray accesses, ...)</span>
+<span class="sd">          are shared with the input by reference. The practical upshot:</span>
+<span class="sd">          reusing the original (pre-``precise``) expression value</span>
+<span class="sd">          elsewhere is safe - it will NOT pick up the tag.</span>
 
 <span class="sd">    Args:</span>
 <span class="sd">        obj: A scalar Quadrants expression (typically a chain of FP ops).</span>
 
 <span class="sd">    Returns:</span>
-<span class="sd">        The same expression, with every reachable binary and unary FP op</span>
-<span class="sd">        tagged as ``precise``. Constants and non-FP ops are unaffected.</span>
+<span class="sd">        A fresh expression subtree with every reachable binary and unary</span>
+<span class="sd">        FP op tagged as ``precise``. The original ``obj`` is unchanged.</span>
 
 <span class="sd">    Example::</span>
 

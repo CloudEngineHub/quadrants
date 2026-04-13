@@ -513,18 +513,22 @@ a <code class="docutils literal notranslate"><span class="pre">qd.func</span></c
 separately if needed.</p>
 <p class="rubric">Notes</p>
 <ul class="simple">
-<li><p>Tagging is in-place on the underlying <code class="docutils literal notranslate"><span class="pre">Expression</span></code> nodes
-(which are shared via <code class="docutils literal notranslate"><span class="pre">shared_ptr</span></code>). If you alias a
-subexpression and then wrap one alias in <code class="docutils literal notranslate"><span class="pre">qd.precise</span></code>, the
-tag travels with the value - both uses get IEEE semantics.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">qd.precise</span></code> does NOT mutate the input expression. It returns
+a fresh subtree that mirrors the input’s structure, with every
+reachable Binary / Unary / Ternary node cloned and the new
+Binary / Unary nodes tagged as <code class="docutils literal notranslate"><span class="pre">precise</span></code>. Non-walked nodes
+(loads, constants, <code class="docutils literal notranslate"><span class="pre">qd.func</span></code> calls, ndarray accesses, …)
+are shared with the input by reference. The practical upshot:
+reusing the original (pre-<code class="docutils literal notranslate"><span class="pre">precise</span></code>) expression value
+elsewhere is safe - it will NOT pick up the tag.</p></li>
 </ul>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters<span class="colon">:</span></dt>
 <dd class="field-odd"><p><strong>obj</strong> – A scalar Quadrants expression (typically a chain of FP ops).</p>
 </dd>
 <dt class="field-even">Returns<span class="colon">:</span></dt>
-<dd class="field-even"><p>The same expression, with every reachable binary and unary FP op
-tagged as <code class="docutils literal notranslate"><span class="pre">precise</span></code>. Constants and non-FP ops are unaffected.</p>
+<dd class="field-even"><p>A fresh expression subtree with every reachable binary and unary
+FP op tagged as <code class="docutils literal notranslate"><span class="pre">precise</span></code>. The original <code class="docutils literal notranslate"><span class="pre">obj</span></code> is unchanged.</p>
 </dd>
 </dl>
 <p>Example:</p>
