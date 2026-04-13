@@ -451,6 +451,13 @@ def test_tile16_trsm(qd_dtype):
     np.testing.assert_allclose(dst.to_numpy(), X_ref, atol=atol)
 
 
+@test_utils.test(arch=qd.gpu)
+def test_tile16_solve_triangular_upper_raises():
+    Tile = _make_tile16x16(qd.f32)
+    with pytest.raises(TypeError, match="only lower=True"):
+        Tile().solve_triangular_(Tile(), lower=False)
+
+
 # =============================================================================
 # Slice-syntax tests (PR 3: arr[r0:r1, c0:c1])
 # =============================================================================
