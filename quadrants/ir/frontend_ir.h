@@ -372,8 +372,7 @@ class UnaryOpExpression : public Expression {
   UnaryOpType type;
   Expr operand;
   DataType cast_type;
-  // Set by `qd.precise(...)` to mark the resulting UnaryOpStmt as IEEE-strict regardless of the module-level
-  // `fast_math` setting. Mirrors MSL/HLSL `precise`.
+  // Set by `qd.precise(...)`; see quadrants::lang::precise() in ir/expr.h for the canonical contract.
   bool precise{false};
 
   UnaryOpExpression(UnaryOpType type, const Expr &operand, const DebugInfo &dbg_info = DebugInfo())
@@ -398,8 +397,7 @@ class BinaryOpExpression : public Expression {
  public:
   BinaryOpType type;
   Expr lhs, rhs;
-  // Set by `qd.precise(...)` to mark the resulting BinaryOpStmt as IEEE-strict regardless of the module-level
-  // `fast_math` setting. Mirrors MSL/HLSL `precise`.
+  // Set by `qd.precise(...)`; see quadrants::lang::precise() in ir/expr.h for the canonical contract.
   bool precise{false};
 
   BinaryOpExpression(const BinaryOpType &type, const Expr &lhs, const Expr &rhs) : type(type), lhs(lhs), rhs(rhs) {

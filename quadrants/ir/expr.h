@@ -125,10 +125,15 @@ Expr bit_cast(const Expr &input) {
   return quadrants::lang::bit_cast(input, get_data_type<T>());
 }
 
-// Recursively tag every BinaryOp and UnaryOp expression in `input`'s subtree as `precise` (IEEE-strict; no
-// reassociation, contraction, or algebraic simplification), regardless of module-level `fast_math`. Recursion
-// descends through BinaryOp / UnaryOp / TernaryOp wrappers and stops at any other kind (loads, constants,
-// qd.func calls, ndarray accesses, ...). Mirrors MSL/HLSL `precise`.
+// Canonical definition of `precise` semantics. The `precise` bool field on UnaryOp{Expression,Stmt} and
+// BinaryOp{Expression,Stmt} is a cross-reference to this contract.
+//
+// Recursively tag every BinaryOp and UnaryOp expression in `input`'s subtree as `precise`: IEEE-strict
+// evaluation in source order, with no reassociation, FMA contraction, approximate-transcendental
+// substitution, or algebraic simplification, regardless of the module-level `fast_math` setting. Mirrors
+// MSL/HLSL `precise`. Recursion descends through BinaryOp / UnaryOp / TernaryOp wrappers and stops at
+// any other expression kind (loads, constants, qd.func calls, ndarray accesses, ...). The tag is
+// propagated from Expression to Stmt by each class's `flatten()`.
 Expr precise(const Expr &input);
 
 // like Expr::Expr, but allows to explicitly specify the type
