@@ -122,53 +122,51 @@ def test_qd_precise_protects_fast_math():
     ), f"qd.precise Dekker sum no more accurate than naive f32: ds_err={ds_err:.2e}, naive_err={naive_err:.2e}"
 
 
+@pytest.mark.parametrize("op_name", ["sin", "cos", "log", "sqrt"])
 @test_utils.test(default_fp=qd.f32, fast_math=True)
-def test_qd_precise_unary_rounding():
-    """`qd.precise(qd.sin/cos/log/sqrt(x))` must produce the correctly-rounded f32
-    result on every backend, even with module-level `fast_math=True`.
+def test_qd_precise_unary_rounding(op_name):
+    """`qd.precise(qd.<op>(x))` must produce the correctly-rounded f32 result on every
+    backend, even with module-level `fast_math=True`.
 
-    This exercises the unary precise path end-to-end: AST tagging -> IR
-    propagation -> codegen honoring the tag (LLVM FMF clear, SPIR-V
-    `NoContraction` decoration, or CUDA libdevice selection, depending
-    on the backend). We verify correctness against numpy's
-    correctly-rounded f32 reference; the naive (non-precise) variant is
-    deliberately not part of this test, because on most backends
-    `fast_math=True` happens to give correctly-rounded transcendentals
-    anyway and a comparison against it would be uninformative. `sqrt`
-    is included because LLVM FMF's `afn` can substitute `rsqrt+refine`
-    which is ~2-3 ULP - the precise tag must defeat that substitution.
+    This exercises the unary precise path end-to-end: AST tagging -> IR propagation -> codegen
+    honoring the tag (LLVM FMF clear, SPIR-V `NoContraction` decoration, or CUDA libdevice
+    selection, depending on the backend). We verify correctness against numpy's correctly-rounded
+    f32 reference; the naive (non-precise) variant is deliberately not part of this test, because
+    on most backends `fast_math=True` happens to give correctly-rounded transcendentals anyway
+    and a comparison against it would be uninformative.
+
+    `sqrt` is included because LLVM FMF's `afn` can substitute `rsqrt+refine` which is ~2-3 ULP -
+    the precise tag must defeat that substitution. Parametrized per op so each failure reports the
+    specific function that regressed instead of a batched max-ULP over all four.
     """
+    qd_op = getattr(qd, op_name)
+    np_op = getattr(np, op_name)
 
     @qd.kernel
-    def k(x: qd.types.ndarray(qd.f32, ndim=1), out: qd.types.ndarray(qd.f32, ndim=2)):
+    def k(x: qd.types.ndarray(qd.f32, ndim=1), out: qd.types.ndarray(qd.f32, ndim=1)):
         for i in range(x.shape[0]):
-            out[i, 0] = qd.precise(qd.sin(x[i]))
-            out[i, 1] = qd.precise(qd.cos(x[i]))
-            out[i, 2] = qd.precise(qd.log(x[i]))
-            out[i, 3] = qd.precise(qd.sqrt(x[i]))
+            out[i] = qd.precise(qd_op(x[i]))
 
-    # Inputs span both the central range and values where some backends'
-    # fast-math approximations are known to degrade.
+    # Inputs span both the central range and values where some backends' fast-math approximations
+    # are known to degrade.
     xs = np.array([0.5, 1.5, 2.5, 4.0, 7.0, 10.0, 25.0, 50.0], dtype=np.float32)
     in_arr = qd.ndarray(dtype=qd.f32, shape=(len(xs),))
     in_arr.from_numpy(xs)
-    out = qd.ndarray(dtype=qd.f32, shape=(len(xs), 4))
+    out = qd.ndarray(dtype=qd.f32, shape=(len(xs),))
     k(in_arr, out)
     res = out.to_numpy()
 
     # Correctly-rounded f32 reference, computed in f64 then narrowed.
-    xs64 = xs.astype(np.float64)
-    ref = np.stack([np.sin(xs64), np.cos(xs64), np.log(xs64), np.sqrt(xs64)], axis=1).astype(np.float32)
+    ref = np_op(xs.astype(np.float64)).astype(np.float32)
 
-    # Within 2 ULP of the correctly-rounded f32 value: tight enough to catch
-    # backends that silently substitute fast-math variants, generous enough
-    # to absorb single-ULP rounding noise across implementations.
+    # Within 2 ULP of the correctly-rounded f32 value: tight enough to catch backends that silently
+    # substitute fast-math variants, generous enough to absorb single-ULP rounding noise across
+    # implementations.
     ulp = np.spacing(np.maximum(np.abs(ref), np.float32(1.0)))
-    err_in_ulp = np.abs(res - ref) / ulp
-    max_ulp = float(err_in_ulp.max())
+    max_ulp = float(np.max(np.abs(res - ref) / ulp))
     assert max_ulp <= 2.0, (
-        f"qd.precise(unary) deviated from the correctly-rounded f32 reference by {max_ulp:.2f} ULP. "
-        f"The unary precise tag is not reaching the codegen for at least one of sin/cos/log/sqrt."
+        f"qd.precise(qd.{op_name}(x)) deviated from the correctly-rounded f32 reference by "
+        f"{max_ulp:.2f} ULP. The precise tag for `{op_name}` is not reaching codegen."
     )
 
 
