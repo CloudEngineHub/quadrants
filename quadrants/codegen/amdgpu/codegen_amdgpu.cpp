@@ -408,6 +408,13 @@ class TaskCodeGenAMDGPU : public TaskCodeGenLLVM {
         auto sitofp_lhs_ = builder->CreateSIToFP(lhs, llvm::Type::getDoubleTy(*llvm_context));
         auto sitofp_rhs_ = builder->CreateSIToFP(rhs, llvm::Type::getDoubleTy(*llvm_context));
         auto ret_ = call("__ocml_pow_f64", {sitofp_lhs_, sitofp_rhs_});
+        // FPToSI is not an FPMathOperator, so the post-hoc `disable_fast_math(llvm_val[stmt])` below would be a no-op
+        // on it and leave the `__ocml_pow_f64` CallInst still carrying the IRBuilder's `afn` / `reassoc` / ... Clear
+        // FMF here on the actual call before its handle is overwritten by the FPToSI. Mirrors the f16 FPTrunc guards
+        // in `codegen_llvm.cpp` and `codegen_cuda.cpp::emit_extra_unary`.
+        if (stmt->precise) {
+          disable_fast_math(ret_);
+        }
         llvm_val[stmt] = builder->CreateFPToSI(ret_, llvm::Type::getInt32Ty(*llvm_context));
       } else {
         QD_NOT_IMPLEMENTED
