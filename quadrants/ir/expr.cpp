@@ -54,12 +54,11 @@ Expr bit_cast(const Expr &input, DataType dt) {
 
 namespace {
 
-// Bottom-up clone of every BinaryOp / UnaryOp / TernaryOp expression reachable from `cur`, tagging
-// the fresh Binary / Unary nodes `precise`. Non-walked kinds (loads, constants, qd.func calls,
-// ndarray accesses, ...) carry no `precise` field and are passed through by reference - aliasing
-// them is safe. TernaryOp nodes are cloned structurally so the walk can recurse into their branches,
-// but the TernaryOp itself does not carry a `precise` flag (the only ternary today is `select`, a
-// control-flow-shaped conditional move, not FP arithmetic; see also the matching comment in expr.h
+// Bottom-up clone of every BinaryOp / UnaryOp / TernaryOp expression reachable from `cur`, tagging the fresh Binary /
+// Unary nodes `precise`. Non-walked kinds (loads, constants, qd.func calls, ndarray accesses, ...) carry no `precise`
+// field and are passed through by reference - aliasing them is safe. TernaryOp nodes are cloned structurally so the
+// walk can recurse into their branches, but the TernaryOp itself does not carry a `precise` flag (the only ternary
+// today is `select`, a control-flow-shaped conditional move, not FP arithmetic; see also the matching comment in expr.h
 // and the `precise` fields in frontend_ir.h / statements.h).
 Expr clone_and_tag_precise(const Expr &cur) {
   if (auto bin = cur.cast<BinaryOpExpression>()) {
@@ -100,12 +99,11 @@ Expr clone_and_tag_precise(const Expr &cur) {
 }  // namespace
 
 Expr precise(const Expr &input) {
-  // Return a fresh Expression subtree with every reachable BinaryOp and UnaryOp tagged `precise`.
-  // The user's original subtree is untouched: no in-place mutation, so aliasing a subexpression
-  // (`ab = a + b; x = qd.precise(ab); y = ab * 2`) does not retroactively tag the other alias.
-  // Non-walked kinds (loads, constants, qd.func calls, ndarray accesses, ...) are passed through
-  // by reference; they carry no `precise` field, so sharing them is safe. See expr.h for the full
-  // canonical contract.
+  // Return a fresh Expression subtree with every reachable BinaryOp and UnaryOp tagged `precise`. The user's original
+  // subtree is untouched: no in-place mutation, so aliasing a subexpression
+  // (`ab = a + b; x = qd.precise(ab); y = ab * 2`) does not retroactively tag the other alias. Non-walked kinds (loads,
+  // constants, qd.func calls, ndarray accesses, ...) are passed through by reference; they carry no `precise` field, so
+  // sharing them is safe. See expr.h for the full canonical contract.
   return clone_and_tag_precise(input);
 }
 
