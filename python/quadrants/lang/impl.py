@@ -228,9 +228,10 @@ def subscript(ast_builder, value, *_indices, skip_reordered=False):
 
             if isinstance(value, Struct):
                 # pylint: disable-next=import-outside-toplevel
-                from quadrants.lang.simt._tile16 import _TileRefProxy  # noqa: I001
+                from quadrants.lang.simt._tile16 import _TileRefProxy, _tile16_cache  # noqa: I001
 
-                return _TileRefProxy(value)
+                if any(isinstance(value, t) for t in _tile16_cache.values()):
+                    return _TileRefProxy(value)
         if len(_indices) == 1:
             _indices = _indices[0]
         return value.__getitem__(_indices)
