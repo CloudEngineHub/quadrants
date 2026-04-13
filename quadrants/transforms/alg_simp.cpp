@@ -377,6 +377,9 @@ class AlgSimp : public BasicStmtVisitor {
       auto sum = Stmt::make<BinaryOpStmt>(BinaryOpType::add, a, a);
       sum->ret_type = a->ret_type;
       sum->dbg_info = stmt->dbg_info;
+      // `2 * a` and `a + a` are IEEE-equivalent, but the synthesized add must carry `precise` so the
+      // downstream FMF clear / NoContraction plumbing still sees the user's opt-in tag.
+      static_cast<BinaryOpStmt *>(sum.get())->precise = stmt->precise;
       stmt->replace_usages_with(sum.get());
       modifier.insert_before(stmt, std::move(sum));
       modifier.erase(stmt);
@@ -442,12 +445,15 @@ class AlgSimp : public BasicStmtVisitor {
       optimize_division(stmt);
     } else if (stmt->op_type == BinaryOpType::add || stmt->op_type == BinaryOpType::sub ||
                stmt->op_type == BinaryOpType::bit_or || stmt->op_type == BinaryOpType::bit_xor) {
-      if (alg_is_zero(rhs) && !stmt->precise) {
-        // a +-|^ 0 -> a. Skipped when `stmt->precise` is set: `(-0.0) + 0.0` yields `+0.0` under IEEE.
+      const bool precise_fp_add = stmt->precise && stmt->op_type == BinaryOpType::add;
+      if (alg_is_zero(rhs) && !precise_fp_add) {
+        // a +-|^ 0 -> a. Skipped only for `precise` FP adds: `(-0.0) + 0.0` yields `+0.0` under IEEE.
+        // `a - 0 -> a` is IEEE-exact for every `a` and `bit_or`/`bit_xor` are integer ops, so they
+        // stay unconditional.
         stmt->replace_usages_with(stmt->lhs);
         modifier.erase(stmt);
-      } else if (stmt->op_type != BinaryOpType::sub && alg_is_zero(lhs) && !stmt->precise) {
-        // 0 +|^ a -> a. Skipped when `stmt->precise` is set (same signed-zero reasoning).
+      } else if (stmt->op_type != BinaryOpType::sub && alg_is_zero(lhs) && !precise_fp_add) {
+        // 0 +|^ a -> a. Same reasoning.
         stmt->replace_usages_with(stmt->rhs);
         modifier.erase(stmt);
       } else if (stmt->op_type == BinaryOpType::bit_or && irpass::analysis::same_value(stmt->lhs, stmt->rhs)) {
