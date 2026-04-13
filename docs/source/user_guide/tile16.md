@@ -84,13 +84,15 @@ Each thread provides its element(s) of the vector(s). The outer product is compu
 Column vectors can be loaded from arrays using slice syntax:
 
 ```python
-t -= qd.outer(arr[row0:row0+16, col], arr[row0:row0+16, col])
+v = arr[row0:row0+16, col]
+t -= qd.outer(v, v)
 ```
 
 Each thread loads one element from the column. Out-of-range threads get zero. This also works with 3D arrays:
 
 ```python
-t -= qd.outer(arr[batch, row0:row0+16, col], arr[batch, row0:row0+16, col])
+v = arr[batch, row0:row0+16, col]
+t -= qd.outer(v, v)
 ```
 
 ## Cholesky factorization
