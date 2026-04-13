@@ -47,15 +47,42 @@ def outer(a, b):
     return _OuterProduct(a, b)
 
 
-class _TileSliceProxy:
+class _DeferredProxyMixin:
+    """Raises clear errors if a deferred tile proxy is accidentally used as a value."""
+
+    _proxy_description = "Tile proxy"
+
+    def _misuse(self, op="used"):
+        raise TypeError(f"{self._proxy_description} was {op}, but it is only valid in tile operations (tile[:] = ..., ... = tile, qd.outer(...))")
+
+    def __add__(self, other):
+        self._misuse("added")
+
+    def __radd__(self, other):
+        self._misuse("added")
+
+    def __sub__(self, other):
+        self._misuse("subtracted")
+
+    def __mul__(self, other):
+        self._misuse("multiplied")
+
+    def __getitem__(self, key):
+        self._misuse("subscripted")
+
+    def __repr__(self):
+        return f"<{self._proxy_description} — not a value; use with tile[:] = ... or qd.outer(...)>"
+
+
+class _TileSliceProxy(_DeferredProxyMixin):
     """Deferred 2D/3D array slice for tile load/store.
 
-    Created by subscripting a Field or ndarray with 2D slices, e.g.
-    ``arr[k0:k0+16, k0:k0+16]``.  Not a quadrants expression -- only valid
-    as the RHS of a tile assignment (load) or as the LHS target (store).
+    Created by subscripting a Field or ndarray with 2D slices, e.g. ``arr[k0:k0+16, k0:k0+16]``.
+    Not a quadrants expression — only valid as the RHS of a tile assignment (load) or as the LHS target (store).
     """
 
     _is_deferred = True
+    _proxy_description = "Array slice proxy (arr[r0:r1, c0:c1])"
 
     def __init__(self, arr, row_start, row_stop, col_start, col_stop, batch_idx=None):
         self.arr = arr
@@ -73,7 +100,7 @@ class _TileSliceProxy:
             tile._store(self.arr, self.row_start, self.row_stop, self.col_start, self.col_stop)
 
 
-class _VecSliceProxy:
+class _VecSliceProxy(_DeferredProxyMixin):
     """Deferred column-vector load from a 2D/3D array.
 
     Created by ``arr[r0:r_end, col]`` or ``arr[batch, r0:r_end, col]``.
@@ -82,6 +109,7 @@ class _VecSliceProxy:
     """
 
     _is_deferred = True
+    _proxy_description = "Vec slice proxy (arr[r0:r1, col])"
 
     def __init__(self, arr, row_start, row_stop, col, batch_idx=None):
         self.arr = arr

@@ -256,6 +256,11 @@ def subscript(ast_builder, value, *_indices, skip_reordered=False):
     indices_expr_group = None
     if has_slice:
         if isinstance(value, (Field, AnyArray, SharedArray)):
+            # pylint: disable-next=import-outside-toplevel
+            from quadrants.lang.simt._tile16 import _tile16_cache  # noqa: I001
+
+            if not _tile16_cache:
+                raise QuadrantsSyntaxError(f"The type {type(value)} do not support index of slice type")
             slice_indices = [i for i in indices if isinstance(i, slice)]
             non_slice_indices = [i for i in indices if not isinstance(i, slice)]
             if len(slice_indices) == 2:
