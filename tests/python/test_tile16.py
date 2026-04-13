@@ -684,6 +684,33 @@ def test_outer_composition_raises():
         _ = p2 + p1
 
 
+def test_tile_slice_proxy_misuse_errors():
+    """Accidentally using a tile slice proxy as a value gives a clear error."""
+    from quadrants.lang.simt._tile16 import _TileSliceProxy, _VecSliceProxy
+
+    tile_proxy = _TileSliceProxy(None, 0, 16, 0, 16)
+    vec_proxy = _VecSliceProxy(None, 0, 16, 0)
+
+    with pytest.raises(TypeError, match="only valid in tile operations"):
+        _ = tile_proxy + 1
+    with pytest.raises(TypeError, match="only valid in tile operations"):
+        _ = 1 + tile_proxy
+    with pytest.raises(TypeError, match="only valid in tile operations"):
+        _ = tile_proxy - 1
+    with pytest.raises(TypeError, match="only valid in tile operations"):
+        _ = tile_proxy * 2
+    with pytest.raises(TypeError, match="only valid in tile operations"):
+        _ = tile_proxy[0]
+
+    with pytest.raises(TypeError, match="only valid in tile operations"):
+        _ = vec_proxy + 1
+    with pytest.raises(TypeError, match="only valid in tile operations"):
+        _ = vec_proxy[0]
+
+    assert "not a value" in repr(tile_proxy)
+    assert "not a value" in repr(vec_proxy)
+
+
 @test_utils.test(arch=qd.gpu)
 def test_tile16_load_negative_row_raises():
     Tile = _make_tile16x16(qd.f32)
