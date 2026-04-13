@@ -420,11 +420,12 @@
 <span class="k">def</span><span class="w"> </span><span class="nf">precise</span><span class="p">(</span><span class="n">obj</span><span class="p">):</span>
 <span class="w">    </span><span class="sd">&quot;&quot;&quot;Mark a floating-point expression as IEEE-strict.</span>
 
-<span class="sd">    Every binary FP op inside ``obj`` is evaluated in source order with no</span>
-<span class="sd">    reassociation, no FMA contraction, and no algebraic simplification,</span>
-<span class="sd">    regardless of the module-level :attr:`fast_math` setting. This is the</span>
-<span class="sd">    moral equivalent of MSL&#39;s / HLSL&#39;s ``precise`` keyword and lets you</span>
-<span class="sd">    keep ``fast_math=True`` globally while protecting compensated-arithmetic</span>
+<span class="sd">    Every binary and unary FP op inside ``obj`` is evaluated in source</span>
+<span class="sd">    order with no reassociation, no FMA contraction, no approximate</span>
+<span class="sd">    transcendental substitution, and no algebraic simplification,</span>
+<span class="sd">    regardless of the module-level :attr:`fast_math` setting. This is</span>
+<span class="sd">    equivalent to MSL&#39;s / HLSL&#39;s ``precise`` keyword and lets you keep</span>
+<span class="sd">    ``fast_math=True`` globally while protecting compensated-arithmetic</span>
 <span class="sd">    blocks (Dekker / Kahan 2Sum, Veltkamp split, etc.) from being folded</span>
 <span class="sd">    away.</span>
 
@@ -446,8 +447,8 @@
 <span class="sd">        obj: A scalar Quadrants expression (typically a chain of FP ops).</span>
 
 <span class="sd">    Returns:</span>
-<span class="sd">        The same expression, with every reachable binary op tagged as</span>
-<span class="sd">        ``precise``. Constants and non-FP ops are unaffected.</span>
+<span class="sd">        The same expression, with every reachable binary and unary FP op</span>
+<span class="sd">        tagged as ``precise``. Constants and non-FP ops are unaffected.</span>
 
 <span class="sd">    Example::</span>
 
@@ -1983,7 +1984,6 @@
     <span class="s2">&quot;bit_cast&quot;</span><span class="p">,</span>
     <span class="s2">&quot;bit_shr&quot;</span><span class="p">,</span>
     <span class="s2">&quot;cast&quot;</span><span class="p">,</span>
-    <span class="s2">&quot;precise&quot;</span><span class="p">,</span>
     <span class="s2">&quot;ceil&quot;</span><span class="p">,</span>
     <span class="s2">&quot;cos&quot;</span><span class="p">,</span>
     <span class="s2">&quot;exp&quot;</span><span class="p">,</span>
@@ -2004,6 +2004,7 @@
     <span class="s2">&quot;select&quot;</span><span class="p">,</span>
     <span class="s2">&quot;abs&quot;</span><span class="p">,</span>
     <span class="s2">&quot;pow&quot;</span><span class="p">,</span>
+    <span class="s2">&quot;precise&quot;</span><span class="p">,</span>
 <span class="p">]</span>
 </pre></div>
 
