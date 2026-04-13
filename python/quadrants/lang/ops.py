@@ -98,8 +98,9 @@ def cast(obj, dtype):
 def precise(obj):
     """Mark a floating-point expression as IEEE-strict.
 
-    Every binary FP op inside ``obj`` is evaluated in source order with no
-    reassociation, no FMA contraction, and no algebraic simplification,
+    Every binary and unary FP op inside ``obj`` is evaluated in source
+    order with no reassociation, no FMA contraction, no approximate
+    transcendental substitution, and no algebraic simplification,
     regardless of the module-level :attr:`fast_math` setting. This is the
     moral equivalent of MSL's / HLSL's ``precise`` keyword and lets you
     keep ``fast_math=True`` globally while protecting compensated-arithmetic
@@ -124,8 +125,8 @@ def precise(obj):
         obj: A scalar Quadrants expression (typically a chain of FP ops).
 
     Returns:
-        The same expression, with every reachable binary op tagged as
-        ``precise``. Constants and non-FP ops are unaffected.
+        The same expression, with every reachable binary and unary FP op
+        tagged as ``precise``. Constants and non-FP ops are unaffected.
 
     Example::
 
