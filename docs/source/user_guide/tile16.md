@@ -37,25 +37,25 @@ t = Tile.eye()         # 16x16 identity
 
 Load/store transfers data between a tile and device memory arrays using slice syntax. Each thread accesses row `row0 + tid`, where `tid` is the thread's subgroup lane index (obtained internally via `subgroup.invocation_id()`).
 
-### 2D arrays
+### Slice syntax
 
 ```python
-t = Tile.zeros()
-t[:] = arr[row0:row0+16, col0:col0+16]    # load
-arr[row0:row0+16, col0:col0+16] = t       # store
+t[:] = arr[row0:row1, col0:col1]    # load from 2D array
+arr[row0:row1, col0:col1] = t       # store to 2D array
+
+t[:] = arr[batch, row0:row1, col0:col1]    # load from 3D array
+arr[batch, row0:row1, col0:col1] = t       # store to 3D array
 ```
 
-### 3D arrays
+### Slice value rules
 
-For arrays with a leading batch dimension (e.g. `H[batch, row, col]`):
+- **Start indices are required.** `arr[:16, :16]` is not allowed; write `arr[0:16, 0:16]`.
+- **Stop indices are optional.** If omitted, they default to `start + 16`. So `arr[row0:, col0:]` is equivalent to `arr[row0:row0+16, col0:col0+16]`.
+- **Row range** `[row0, row1)`: thread `tid` accesses row `row0 + tid`. Threads where `row0 + tid >= row1` are skipped. Additionally, rows beyond the array's shape are skipped. Typically `row1 = row0 + 16`, but smaller ranges work for partial tiles.
+- **Column range** `[col0, col1)`: each active thread loads/stores columns `col0` through `min(col1, arr.shape[-1]) - 1`. Tile columns beyond this range are left as zero (load) or skipped (store). At most 16 columns are accessed (tile registers `r0`–`r15` map to `col0`, `col0+1`, …, `col0+15`).
+- **Batch index** (3D only): a scalar integer indexing the leading dimension.
 
-```python
-t = Tile.zeros()
-t[:] = arr[batch, row0:row0+16, col0:col0+16]    # load
-arr[batch, row0:row0+16, col0:col0+16] = t       # store
-```
-
-The load/store automatically clamps to the array's shape, so out-of-bounds columns are left as zero (load) or skipped (store).
+### Notes
 
 The `[:]` on the load LHS is required — it distinguishes an in-place tile load from a variable rebinding. The store side does not need `[:]` because the array subscript on the LHS already triggers the correct assignment path.
 
@@ -84,16 +84,12 @@ Each thread provides its element(s) of the vector(s). The outer product is compu
 Column vectors can be loaded from arrays using slice syntax:
 
 ```python
-v = arr[row0:row0+16, col]
+v = arr[row0:row1, col]          # 2D: one element per thread
+v = arr[batch, row0:row1, col]   # 3D: same, with batch index
 t -= qd.outer(v, v)
 ```
 
-Each thread loads one element from the column. Out-of-range threads get zero. This also works with 3D arrays:
-
-```python
-v = arr[batch, row0:row0+16, col]
-t -= qd.outer(v, v)
-```
+The row slice follows the same rules as tile slices: start is required, stop defaults to `start + 16` if omitted. `col` is a scalar column index. Each thread loads `arr[row0 + tid, col]`; threads where `row0 + tid >= row1` get zero.
 
 ## Cholesky factorization
 
