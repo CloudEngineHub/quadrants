@@ -8,6 +8,7 @@ Dekker / Kahan 2Sum: the compensation term `(a - aa) + (b - bb)` is the
 """
 
 import numpy as np
+import pytest
 
 import quadrants as qd
 
@@ -169,3 +170,58 @@ def test_qd_precise_unary_rounding():
         f"qd.precise(unary) deviated from the correctly-rounded f32 reference by {max_ulp:.2f} ULP. "
         f"The unary precise tag is not reaching the codegen for at least one of sin/cos/log/sqrt."
     )
+
+
+@test_utils.test(default_fp=qd.f32)
+def test_qd_precise_rejects_quadrants_classes():
+    """`qd.precise` is a scalar primitive. Wrapping a `Vector` or `Matrix` must raise so that users who
+    intended the scalar form get a clear error instead of a silent no-op.
+    """
+    with pytest.raises(ValueError, match="Quadrants classes"):
+        qd.precise(qd.Vector([1.0, 2.0]))
+    with pytest.raises(ValueError, match="Quadrants classes"):
+        qd.precise(qd.Matrix([[1.0, 2.0], [3.0, 4.0]]))
+
+
+@test_utils.test(default_fp=qd.f32, fast_math=True)
+def test_qd_precise_recurses_through_select():
+    """The walker must descend through `qd.select` (TernaryOp) so inner binary ops get tagged.
+
+    Observable via the signed-zero rule: alg_simp rewrites `x + 0.0 -> x` unconditionally unless the add
+    is tagged `precise`. When the add lives inside a `qd.select(...)` wrapped by `qd.precise`, the walker
+    must reach it for the rewrite to be skipped -- at which point IEEE arithmetic delivers
+    `(-0.0) + 0.0 = +0.0`. Without the tag, alg_simp strips the add and `-0.0` survives.
+    """
+
+    @qd.kernel
+    def k(x: qd.types.ndarray(qd.f32, ndim=1), out: qd.types.ndarray(qd.f32, ndim=1)):
+        # `x[0]` is a runtime load, so neither operand reduces to a compile-time constant and the
+        # ConstantFold pass cannot pre-compute the add. alg_simp's `a + 0 -> a` still matches.
+        zero = qd.f32(0.0)
+        # Without qd.precise wrap, alg_simp strips the add, leaving `x[0]` itself: bit pattern 0x80000000.
+        out[0] = qd.select(qd.i32(1), x[0] + zero, zero)
+        # With qd.precise wrap, the walker must recurse through the select and tag the inner add;
+        # alg_simp then skips the fold, and IEEE `(-0.0) + 0.0` yields `+0.0`: bit pattern 0x00000000.
+        out[1] = qd.precise(qd.select(qd.i32(1), x[0] + zero, zero))
+
+    x_in = qd.ndarray(dtype=qd.f32, shape=(1,))
+    x_in.from_numpy(np.array([-0.0], dtype=np.float32))
+    out = qd.ndarray(dtype=qd.f32, shape=(2,))
+    k(x_in, out)
+    naive_bits, precise_bits = (int(v.view(np.uint32)) for v in out.to_numpy())
+    assert naive_bits == 0x80000000, (
+        f"Expected alg_simp to strip the unprotected `-0.0 + 0.0`, leaving bit pattern 0x80000000, "
+        f"got 0x{naive_bits:08x}."
+    )
+    assert precise_bits == 0x00000000, (
+        f"Expected `qd.precise(select(..., -0.0 + 0.0, ...))` to recurse through the select, tag the inner "
+        f"add, and let IEEE collapse `-0.0 + 0.0` to `+0.0` (bit pattern 0x00000000); got 0x{precise_bits:08x}. "
+        f"The walker may not be descending through TernaryOp."
+    )
+
+
+# NOTE: a behavioral test for the `pow` precise-bail (alg_simp.cpp:463) is deliberately omitted. The
+# rewrites `a**1 -> a`, `a**0 -> 1`, `a**0.5 -> sqrt(a)`, and `a**n -> (a*a)...` are all IEEE-equivalent to
+# the original `pow()` call on the inputs exposed by any plain-pytest kernel, so there is no observable
+# difference between `qd.precise(x ** n)` and `x ** n` at runtime today. The gate remains valuable as
+# future-proofing (keeps the synthesized mul/div/sqrt chain tagged consistently with what the user wrote).
