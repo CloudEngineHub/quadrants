@@ -155,8 +155,7 @@ class UnaryOpStmt : public Stmt {
   UnaryOpType op_type;
   Stmt *operand;
   DataType cast_type;
-  // When true, this op must be evaluated in source order with IEEE semantics (no contraction, no approximate
-  // implementations) regardless of the module-level `fast_math` setting. Mirrors MSL/HLSL `precise`.
+  // Set by `qd.precise(...)`; see quadrants::lang::precise() in ir/expr.h for the canonical contract.
   bool precise{false};
 
   UnaryOpStmt(UnaryOpType op_type, Stmt *operand, const DebugInfo &dbg_info = DebugInfo());
@@ -251,8 +250,7 @@ class BinaryOpStmt : public Stmt {
   BinaryOpType op_type;
   Stmt *lhs, *rhs;
   bool is_bit_vectorized;  // TODO: remove this field
-  // When true, this op must be evaluated in source order with IEEE semantics (no reassociation, no contraction,
-  // no algebraic folds), regardless of the module-level `fast_math` setting. Mirrors MSL/HLSL `precise`.
+  // Set by `qd.precise(...)`; see quadrants::lang::precise() in ir/expr.h for the canonical contract.
   bool precise{false};
 
   BinaryOpStmt(BinaryOpType op_type,
