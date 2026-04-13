@@ -101,9 +101,9 @@ def precise(obj):
     Every binary and unary FP op inside ``obj`` is evaluated in source
     order with no reassociation, no FMA contraction, no approximate
     transcendental substitution, and no algebraic simplification,
-    regardless of the module-level :attr:`fast_math` setting. This is the
-    moral equivalent of MSL's / HLSL's ``precise`` keyword and lets you
-    keep ``fast_math=True`` globally while protecting compensated-arithmetic
+    regardless of the module-level :attr:`fast_math` setting. This is
+    equivalent to MSL's / HLSL's ``precise`` keyword and lets you keep
+    ``fast_math=True`` globally while protecting compensated-arithmetic
     blocks (Dekker / Kahan 2Sum, Veltkamp split, etc.) from being folded
     away.
 
@@ -1562,7 +1562,6 @@ __all__ = [
     "bit_cast",
     "bit_shr",
     "cast",
-    "precise",
     "ceil",
     "cos",
     "exp",
@@ -1583,4 +1582,5 @@ __all__ = [
     "select",
     "abs",
     "pow",
+    "precise",
 ]

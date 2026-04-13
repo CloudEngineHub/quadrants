@@ -31,8 +31,10 @@ Any expression value can be wrapped. The wrapper returns the same expression wit
 
 `qd.precise` walks the wrapped expression tree and tags:
 
-- Every `BinaryOp` (`+`, `-`, `*`, `/`, `%`, comparisons, bit ops on FP types)
+- Every `BinaryOp` (`+`, `-`, `*`, `/`, `%`, FP comparisons)
 - Every `UnaryOp` (`neg`, `sqrt`, `sin`, `cos`, `log`, `exp`, `rsqrt`, casts, bit_cast, ...)
+
+Bitwise operations (`bit_and`, `bit_or`, `bit_xor`, `bit_shl`, `bit_sar`) are integer-domain; the walker tags them for completeness but the flag has no effect on integer IR.
 
 The walker descends through `BinaryOp`, `UnaryOp`, and `TernaryOp` (e.g. `qd.select`) nodes, so wrapping a composite expression protects the inner ops too:
 
