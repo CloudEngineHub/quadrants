@@ -413,10 +413,10 @@ def _make_tile16x16_class(dtype):
                     if k > j:
                         my_col = self._get_col(j)
                         Lkj = qd.simt.subgroup.shuffle(my_col, qd.u32(k))
-                        dot += Lkj * my_col
+                        dot += Lkj * my_col  # type: ignore[reportOperatorIssue]
 
-                if tid > k:
-                    new_val = (self._get_col(k) - dot) / diag_k
+                if tid > k:  # type: ignore[reportOperatorIssue]
+                    new_val = (self._get_col(k) - dot) / diag_k  # type: ignore[reportOperatorIssue]
                     self._set_col(k, new_val)
 
     # StructType.__call__ already defaults missing args to 0, so Tile()
