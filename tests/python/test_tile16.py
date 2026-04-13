@@ -599,9 +599,91 @@ def test_tile16_vec_proxy_ger_sub_2d():
     np.testing.assert_allclose(out.to_numpy(), expected, atol=1e-5)
 
 
+@test_utils.test(arch=qd.gpu)
+def test_tile16_outer_symmetric_same_variable():
+    """t -= qd.outer(v, v) with the same variable for both args."""
+    Tile = _make_tile16x16(qd.f32)
+    mat = qd.ndarray(qd.f32, (_TILE, _TILE))
+    vecs = qd.ndarray(qd.f32, (_TILE, 1))
+    out = qd.ndarray(qd.f32, (_TILE, _TILE))
+
+    @qd.kernel
+    def k1(
+        mat_arr: qd.types.NDArray[qd.f32, 2],
+        vecs_arr: qd.types.NDArray[qd.f32, 2],
+        out_arr: qd.types.NDArray[qd.f32, 2],
+    ):
+        qd.loop_config(block_dim=_TILE)
+        for _ in range(_TILE):
+            t = Tile()
+            t[:] = mat_arr[0:_TILE, 0:_TILE]
+            v = vecs_arr[0:_TILE, 0]
+            t -= outer(v, v)
+            out_arr[0:_TILE, 0:_TILE] = t
+
+    M = np.arange(_TILE * _TILE, dtype=np.float32).reshape(_TILE, _TILE)
+    a = np.arange(_TILE, dtype=np.float32) + 1.0
+    mat.from_numpy(M)
+    vecs.from_numpy(a.reshape(-1, 1))
+    k1(mat, vecs, out)
+
+    expected = M - np.outer(a, a)
+    np.testing.assert_allclose(out.to_numpy(), expected, atol=1e-5)
+
+
+@test_utils.test(arch=qd.gpu)
+def test_tile16_vec_proxy_ger_sub_3d():
+    """Column vector load from a 3D array: v = arr[batch, r0:r1, col]."""
+    Tile = _make_tile16x16(qd.f32)
+    NBATCH = 2
+    mat = qd.ndarray(qd.f32, (_TILE, _TILE))
+    vecs = qd.ndarray(qd.f32, (NBATCH, _TILE, 2))
+    out = qd.ndarray(qd.f32, (_TILE, _TILE))
+
+    @qd.kernel
+    def k1(
+        mat_arr: qd.types.NDArray[qd.f32, 2],
+        vecs_arr: qd.types.NDArray[qd.f32, 3],
+        out_arr: qd.types.NDArray[qd.f32, 2],
+    ):
+        qd.loop_config(block_dim=_TILE)
+        for _ in range(_TILE):
+            t = Tile()
+            t[:] = mat_arr[0:_TILE, 0:_TILE]
+            a = vecs_arr[1, 0:_TILE, 0]
+            b = vecs_arr[1, 0:_TILE, 1]
+            t -= outer(a, b)
+            out_arr[0:_TILE, 0:_TILE] = t
+
+    M = np.arange(_TILE * _TILE, dtype=np.float32).reshape(_TILE, _TILE)
+    a = np.arange(_TILE, dtype=np.float32) + 1.0
+    b = np.arange(_TILE, dtype=np.float32) + 2.0
+    vecs_np = np.zeros((NBATCH, _TILE, 2), dtype=np.float32)
+    vecs_np[1, :, 0] = a
+    vecs_np[1, :, 1] = b
+    mat.from_numpy(M)
+    vecs.from_numpy(vecs_np)
+    k1(mat, vecs, out)
+
+    expected = M - np.outer(a, b)
+    np.testing.assert_allclose(out.to_numpy(), expected, atol=1e-5)
+
+
 # =============================================================================
 # Error-raising tests
 # =============================================================================
+
+
+def test_outer_composition_raises():
+    """qd.outer(a, b) + qd.outer(c, d) must raise TypeError."""
+    from quadrants.lang.simt._tile16 import _OuterProduct
+
+    p1 = _OuterProduct(1, 2)
+    p2 = _OuterProduct(3, 4)
+    with pytest.raises(TypeError, match="does not support composition"):
+        _ = p1 + p2
+    with pytest.raises(TypeError, match="does not support composition"):
+        _ = p2 + p1
 
 
 @test_utils.test(arch=qd.gpu)
