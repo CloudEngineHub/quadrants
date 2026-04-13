@@ -1,17 +1,16 @@
 # pyright: reportInvalidTypeForm=false
 
 """
-Internal implementation of register-resident 16x16 tile operations.
-
-Everything in this module is private to keep the user-facing API simple.
-The public API will be added in later PRs.
+Register-resident 16x16 tile operations.
 
 Each tile is a 16x16 matrix distributed across 16 threads in a subgroup,
 one row per thread, with each row stored in 16 scalar registers (r0-r15).
-Cross-thread communication uses warp shuffles -- no shared memory needed.
+Cross-thread communication uses subgroup shuffles -- no shared memory needed.
 
 The thread's lane index (tid) is obtained internally via
 ``subgroup.invocation_id()``, so callers never need to pass it.
+
+See docs/source/user_guide/tile16.md for usage documentation.
 """
 
 import quadrants as qd

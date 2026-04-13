@@ -692,8 +692,6 @@ class ASTTransformer(Builder):
                         violation = False
                     if violation and node.value.ptr in [qd_math, math, np]:
                         violation = False
-                    if violation and getattr(node.value.ptr, "_quadrants_internal", False):
-                        violation = False
                     if violation and _is_quadrants_internal_file(ctx.file):
                         violation = False
                     if violation:
