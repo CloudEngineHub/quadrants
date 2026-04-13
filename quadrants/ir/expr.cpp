@@ -52,38 +52,61 @@ Expr bit_cast(const Expr &input, DataType dt) {
   return Expr::make<UnaryOpExpression>(UnaryOpType::cast_bits, input, dt);
 }
 
-Expr precise(const Expr &input) {
-  // Walk the subtree; tag every BinaryOpExpression we find. We also recurse through UnaryOpExpression and
-  // TernaryOpExpression so users can write things like `qd.precise(qd.bit_cast(a + b, qd.f32))` or
-  // `qd.precise(qd.select(c, a + b, x - y))` and still have the inner FP ops tagged. Recursion stops at
-  // any other Expression kind (loads, constants, qd.func calls, etc.) - semantics inside e.g. a qd.func
-  // body are governed by that body's own ops. A worklist keeps stack depth bounded since deep AST chains
-  // in scientific code aren't rare.
-  std::vector<Expr> stack{input};
-  while (!stack.empty()) {
-    Expr cur = std::move(stack.back());
-    stack.pop_back();
-    if (auto bin = cur.cast<BinaryOpExpression>()) {
-      bin->precise = true;
-      stack.push_back(bin->lhs);
-      stack.push_back(bin->rhs);
-    } else if (auto un = cur.cast<UnaryOpExpression>()) {
-      un->precise = true;
-      stack.push_back(un->operand);
-    } else if (auto tri = cur.cast<TernaryOpExpression>()) {
-      // Intentional: TernaryOpExpression is not itself tagged. The only ternary op today is `select`
-      // (a control-flow-shaped conditional move, not FP arithmetic), so there is nothing for codegen
-      // to strip FMF / NoContraction from on the ternary node. Correctness relies on the inner
-      // Binary/Unary ops in the branches carrying their own `precise` tag, which they will because
-      // we recurse into op1/op2/op3 below. As a consequence, the offline cache key generator does not
-      // emit `precise` for ternary nodes - which is fine since the ternary's children distinguish
-      // themselves via their own keys.
-      stack.push_back(tri->op1);
-      stack.push_back(tri->op2);
-      stack.push_back(tri->op3);
-    }
+namespace {
+
+// Bottom-up clone of every BinaryOp / UnaryOp / TernaryOp expression reachable from `cur`, tagging
+// the fresh Binary / Unary nodes `precise`. Non-walked kinds (loads, constants, qd.func calls,
+// ndarray accesses, ...) carry no `precise` field and are passed through by reference - aliasing
+// them is safe. TernaryOp nodes are cloned structurally so the walk can recurse into their branches,
+// but the TernaryOp itself does not carry a `precise` flag (the only ternary today is `select`, a
+// control-flow-shaped conditional move, not FP arithmetic; see also the matching comment in expr.h
+// and the `precise` fields in frontend_ir.h / statements.h).
+Expr clone_and_tag_precise(const Expr &cur) {
+  if (auto bin = cur.cast<BinaryOpExpression>()) {
+    Expr new_lhs = clone_and_tag_precise(bin->lhs);
+    Expr new_rhs = clone_and_tag_precise(bin->rhs);
+    Expr out = Expr::make<BinaryOpExpression>(bin->type, new_lhs, new_rhs);
+    auto new_bin = out.cast<BinaryOpExpression>();
+    new_bin->precise = true;
+    new_bin->dbg_info = bin->dbg_info;
+    new_bin->attributes = bin->attributes;
+    new_bin->ret_type = bin->ret_type;
+    return out;
   }
-  return input;
+  if (auto un = cur.cast<UnaryOpExpression>()) {
+    Expr new_operand = clone_and_tag_precise(un->operand);
+    Expr out = un->is_cast() ? Expr::make<UnaryOpExpression>(un->type, new_operand, un->cast_type, un->dbg_info)
+                             : Expr::make<UnaryOpExpression>(un->type, new_operand, un->dbg_info);
+    auto new_un = out.cast<UnaryOpExpression>();
+    new_un->precise = true;
+    new_un->attributes = un->attributes;
+    new_un->ret_type = un->ret_type;
+    return out;
+  }
+  if (auto tri = cur.cast<TernaryOpExpression>()) {
+    Expr new_op1 = clone_and_tag_precise(tri->op1);
+    Expr new_op2 = clone_and_tag_precise(tri->op2);
+    Expr new_op3 = clone_and_tag_precise(tri->op3);
+    Expr out = Expr::make<TernaryOpExpression>(tri->type, new_op1, new_op2, new_op3);
+    auto new_tri = out.cast<TernaryOpExpression>();
+    new_tri->dbg_info = tri->dbg_info;
+    new_tri->attributes = tri->attributes;
+    new_tri->ret_type = tri->ret_type;
+    return out;
+  }
+  return cur;
+}
+
+}  // namespace
+
+Expr precise(const Expr &input) {
+  // Return a fresh Expression subtree with every reachable BinaryOp and UnaryOp tagged `precise`.
+  // The user's original subtree is untouched: no in-place mutation, so aliasing a subexpression
+  // (`ab = a + b; x = qd.precise(ab); y = ab * 2`) does not retroactively tag the other alias.
+  // Non-walked kinds (loads, constants, qd.func calls, ndarray accesses, ...) are passed through
+  // by reference; they carry no `precise` field, so sharing them is safe. See expr.h for the full
+  // canonical contract.
+  return clone_and_tag_precise(input);
 }
 
 Expr &Expr::operator=(const Expr &o) {

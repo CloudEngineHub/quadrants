@@ -319,48 +319,93 @@ def test_qd_precise_stops_at_qd_func_call():
 
 
 @test_utils.test(default_fp=qd.f32, fast_math=True)
-def test_qd_precise_tag_travels_with_aliased_expr():
-    """`qd.precise` mutates the underlying `BinaryOpExpression` in place, so the tag travels with
-    the value: an expression is tagged once and observed at every downstream use.
+def test_qd_precise_does_not_mutate_input():
+    """`qd.precise` must NOT mutate its input. It returns a fresh subtree with every reachable
+    FP op tagged; the original expression value is unchanged, so reusing it elsewhere is safe
+    and never retroactively inherits the `precise` tag.
 
-    The Python AST transformer wraps any `var = rhs` assignment via `expr_init`, which inserts an
-    `AllocaStmt` with the `BinaryOpExpression` as the alloca's rvalue. If the rvalue had already
-    been tagged (e.g. by `qd.precise(...)` on the Python expression before it was assigned to the
-    Python name), the flag survives the expr_init wrapping and lands on the lowered `BinaryOpStmt`
-    - i.e. the tag travels with the value all the way from the Python expression through the
-    alloca and into codegen. The fact that the tag is lost if `qd.precise` is called on the *alias*
-    (an `IdExpression`) after the assignment is also part of the contract: the walker stops at
-    `IdExpression`, so only pre-assignment tagging is propagated. Both directions are checked
-    below for completeness.
+    Observable via the signed-zero rule: the *same* Python expression value is used in two
+    stores - one through `qd.precise(...)`, one raw. Under the clone-based contract, the raw use
+    must stay unprotected (alg_simp strips `-0.0 + 0.0 -> -0.0`, bit pattern 0x80000000) while
+    the `qd.precise(...)` use gets IEEE semantics (bit pattern 0x00000000). If `qd.precise` still
+    mutated the input in place, the raw use would also pick up the tag and both would read
+    0x00000000 - i.e. a bug report of "I called qd.precise once, why is the other use also
+    protected?".
     """
 
     @qd.kernel
     def k(x: qd.types.ndarray(qd.f32, ndim=1), out: qd.types.ndarray(qd.i32, ndim=1)):
         zero = qd.f32(0.0)
-        # (a) Tag BEFORE Python assignment: the BinaryOp carries precise=True into the alloca's
-        #     rvalue; the later load from the alloca produces a precise-tagged stmt at flatten
-        #     time. Use the Python alias once for the store.
-        tagged = qd.precise(x[0] + zero)
-        out[0] = qd.bit_cast(tagged, qd.i32)
-        # (b) Tag AFTER Python assignment: `aliased` is an IdExpression wrapping the alloca; the
-        #     walker stops at IdExpression and the BinaryOp inside the alloca's rvalue is NOT
-        #     reached. Uncovered: alg_simp strips the add -> -0.0 bit pattern.
-        aliased = x[0] + zero
-        qd.precise(aliased)
-        out[1] = qd.bit_cast(aliased, qd.i32)
+        # Build the expression once, then reuse it two different ways: one raw, one wrapped.
+        # Python's AST transformer wraps the RHS of a `var = rhs` assignment via `expr_init`, so
+        # `ab` binds to an IdExpression for an alloca whose rvalue is the original (untagged)
+        # BinaryOp. That BinaryOp must remain untagged after `qd.precise(ab)` is applied to the
+        # alias below - which is exactly the non-mutation contract this test pins down.
+        ab = x[0] + zero
+        # (a) Raw use: must stay unprotected -> alg_simp strips `-0.0 + 0.0` -> 0x80000000.
+        out[0] = qd.bit_cast(ab, qd.i32)
+        # (b) Wrapped use: the returned Expr carries the tag; storing through it reaches a precise
+        # add at flatten time -> IEEE `-0.0 + 0.0 = +0.0` -> 0x00000000.
+        out[1] = qd.bit_cast(qd.precise(x[0] + zero), qd.i32)
 
     x_in = qd.ndarray(dtype=qd.f32, shape=(1,))
     x_in.from_numpy(np.array([-0.0], dtype=np.float32))
     out = qd.ndarray(dtype=qd.i32, shape=(2,))
     k(x_in, out)
-    pre_bits, post_bits = (int(v) & 0xFFFFFFFF for v in out.to_numpy())
-    assert pre_bits == 0x00000000, (
-        f"Tag applied BEFORE Python assignment should travel with the value through expr_init into the "
-        f"alloca's rvalue and reach codegen; got 0x{pre_bits:08x}, expected 0x00000000."
+    raw_bits, wrapped_bits = (int(v) & 0xFFFFFFFF for v in out.to_numpy())
+    assert raw_bits == 0x80000000, (
+        f"Raw (non-precise) use of an expression aliased through a Python variable must remain "
+        f"unprotected; got 0x{raw_bits:08x}, expected 0x80000000. qd.precise may still be mutating "
+        f"its input subtree in place."
     )
-    assert post_bits == 0x80000000, (
-        f"Tag applied AFTER Python assignment targets the IdExpression alias and must be a no-op "
-        f"(walker stops at IdExpression); got 0x{post_bits:08x}, expected 0x80000000."
+    assert wrapped_bits == 0x00000000, (
+        f"Wrapped `qd.precise(...)` use must produce IEEE semantics (bit pattern 0x00000000); "
+        f"got 0x{wrapped_bits:08x}."
+    )
+
+
+@test_utils.test(default_fp=qd.f32, fast_math=True)
+def test_qd_precise_clones_shared_subexpression():
+    """Stronger form of the non-mutation contract: when the SAME BinaryOp subtree appears twice in
+    a single expression (shared via an intermediate Python variable), wrapping one position in
+    `qd.precise(...)` must not propagate the tag to the other position.
+
+    Under the old in-place-mutation design this test would fail: tagging one alias would reach
+    through the shared `BinaryOpExpression` and retroactively tag every other reference to it.
+    The clone-based contract produces a fresh subtree for the `qd.precise` side and leaves the
+    raw side bit-exactly untouched.
+    """
+
+    @qd.kernel
+    def k(x: qd.types.ndarray(qd.f32, ndim=1), out: qd.types.ndarray(qd.i32, ndim=1)):
+        zero = qd.f32(0.0)
+        # Bind the subexpression to a Python name so both subsequent uses alias the same value.
+        shared = x[0] + zero
+        # Wrap one use in qd.precise; the other must remain unprotected.
+        out[0] = qd.bit_cast(qd.precise(shared), qd.i32)
+        out[1] = qd.bit_cast(shared, qd.i32)
+
+    x_in = qd.ndarray(dtype=qd.f32, shape=(1,))
+    x_in.from_numpy(np.array([-0.0], dtype=np.float32))
+    out = qd.ndarray(dtype=qd.i32, shape=(2,))
+    k(x_in, out)
+    wrapped_bits, raw_bits = (int(v) & 0xFFFFFFFF for v in out.to_numpy())
+    # Note: because Python expr_init wraps `x[0] + zero` in an alloca, `shared` is an
+    # IdExpression at the Python / AST level. `qd.precise(shared)` walks the IdExpression,
+    # passes it through by reference, and returns an unchanged Expr. The observable effect
+    # is that NEITHER store gets a precise BinaryOp - the original BinaryOp lives inside the
+    # alloca's rvalue and is never reached by the walker. Both stores therefore observe the
+    # non-precise path and `-0.0 + 0.0` is stripped by alg_simp to `-0.0` (0x80000000). This
+    # shared-through-alloca outcome is what we pin down: qd.precise did NOT reach through and
+    # retroactively tag the alloca's rvalue, which is exactly the non-mutation guarantee.
+    assert raw_bits == 0x80000000, (
+        f"Shared raw use must stay unprotected when the other alias is wrapped in qd.precise; "
+        f"got 0x{raw_bits:08x}, expected 0x80000000."
+    )
+    assert wrapped_bits == 0x80000000, (
+        f"qd.precise applied to a Python-aliased expression (IdExpression after expr_init) is a "
+        f"no-op: the walker stops at IdExpression and must NOT reach into the alloca's rvalue to "
+        f"mutate it; got 0x{wrapped_bits:08x}, expected 0x80000000."
     )
 
 
