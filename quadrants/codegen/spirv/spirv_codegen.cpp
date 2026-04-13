@@ -1171,6 +1171,15 @@ void TaskCodegen::visit(BinaryOpStmt *bin) {
   // no decoration - inconsistent with the best-effort coverage applied to unary transcendentals. The SPIR-V spec scopes
   // `NoContraction` to arithmetic instructions and most consumers ignore it on `OpExtInst` anyway, so the decoration is
   // best-effort future-proofing, but it should be applied uniformly.
+  //
+  // Note on the arithmetic path (add/sub/mul/div/mod/truediv): the `ir_->{add,sub,mul,div,mod}(... bin->precise)`
+  // call above already decorates the arithmetic SPIR-V instruction (OpFAdd/OpFSub/...) at creation time via the
+  // `precise` parameter threaded into the helper. The intervening `bin_value = ir_->cast(dst_type, bin_value)` then
+  // rebinds `bin_value` to the FConvert, so the post-hoc `maybe_no_contraction(bin_value, true)` below decorates the
+  // FConvert - which is silently no-op per spec (NoContraction is scoped to arithmetic, not type conversion). The two
+  // layers are therefore complementary, not redundant: arithmetic instructions are covered at creation time, and the
+  // post-hoc pass is hygiene that also catches the non-arithmetic extinst transcendentals. Do not "simplify" by
+  // dropping either layer.
   if (bin->precise && is_real(bin->element_type())) {
     ir_->maybe_no_contraction(bin_value, /*precise=*/true);
   }
