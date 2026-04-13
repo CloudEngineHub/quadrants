@@ -4,7 +4,7 @@ import scipy.linalg
 
 import quadrants as qd
 from quadrants.lang.exception import QuadrantsSyntaxError
-from quadrants.lang.simt._tile16 import _TILE, _make_tile16x16, outer
+from quadrants.lang.simt._tile16 import _TILE, _make_tile16x16
 
 from tests import test_utils
 
@@ -553,7 +553,7 @@ def test_tile16_slice_ger_sub_via_outer():
             tid = qd.i32(qd.simt.subgroup.invocation_id())
             a_val = a_arr[tid]
             b_val = b_arr[tid]
-            t -= outer(a_val, b_val)
+            t -= qd.outer(a_val, b_val)
             out_arr[0:_TILE, 0:_TILE] = t
 
     M = np.arange(_TILE * _TILE, dtype=np.float32).reshape(_TILE, _TILE)
@@ -585,7 +585,7 @@ def test_tile16_vec_proxy_ger_sub_2d():
         for _ in range(_TILE):
             t = Tile()
             t[:] = mat_arr[0:_TILE, 0:_TILE]
-            t -= outer(vecs_arr[0:_TILE, 0], vecs_arr[0:_TILE, 1])
+            t -= qd.outer(vecs_arr[0:_TILE, 0], vecs_arr[0:_TILE, 1])
             out_arr[0:_TILE, 0:_TILE] = t
 
     M = np.arange(_TILE * _TILE, dtype=np.float32).reshape(_TILE, _TILE)
@@ -618,7 +618,7 @@ def test_tile16_outer_symmetric_same_variable():
             t = Tile()
             t[:] = mat_arr[0:_TILE, 0:_TILE]
             v = vecs_arr[0:_TILE, 0]
-            t -= outer(v, v)
+            t -= qd.outer(v, v)
             out_arr[0:_TILE, 0:_TILE] = t
 
     M = np.arange(_TILE * _TILE, dtype=np.float32).reshape(_TILE, _TILE)
@@ -652,7 +652,7 @@ def test_tile16_vec_proxy_ger_sub_3d():
             t[:] = mat_arr[0:_TILE, 0:_TILE]
             a = vecs_arr[1, 0:_TILE, 0]
             b = vecs_arr[1, 0:_TILE, 1]
-            t -= outer(a, b)
+            t -= qd.outer(a, b)
             out_arr[0:_TILE, 0:_TILE] = t
 
     M = np.arange(_TILE * _TILE, dtype=np.float32).reshape(_TILE, _TILE)
@@ -676,10 +676,8 @@ def test_tile16_vec_proxy_ger_sub_3d():
 
 def test_outer_composition_raises():
     """qd.outer(a, b) + qd.outer(c, d) must raise TypeError."""
-    from quadrants.lang.simt._tile16 import _OuterProduct
-
-    p1 = _OuterProduct(1, 2)
-    p2 = _OuterProduct(3, 4)
+    p1 = qd.outer(1, 2)
+    p2 = qd.outer(3, 4)
     with pytest.raises(TypeError, match="does not support composition"):
         _ = p1 + p2
     with pytest.raises(TypeError, match="does not support composition"):
