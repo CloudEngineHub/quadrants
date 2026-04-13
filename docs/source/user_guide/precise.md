@@ -110,4 +110,4 @@ Without the `qd.precise` wrappers, under `fast_math=True` the compiler recognize
 ## Caveats
 
 - `qd.precise` is a scalar primitive. Passing a `Vector` / `Matrix` will raise. Apply it to individual components instead, or refactor your expression to use scalar ops inside.
-- The tag is a property of the expression value, not the use site. If you alias a subexpression and then wrap one alias, both uses get IEEE semantics.
+- `qd.precise` does not mutate its input. It returns a fresh expression subtree with every reachable FP op tagged; the original expression is unchanged. Reusing the original elsewhere is safe and never inherits the tag.
