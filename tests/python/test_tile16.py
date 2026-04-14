@@ -1397,14 +1397,13 @@ def test_proxy_default_dtype_survives_reinit(tensor_type):
 @test_utils.test(arch=qd.gpu)
 def test_tile16_size_constant_in_kernel():
     """Tile.SIZE must be accessible inside a kernel without purity violations."""
-    Tile = _make_tile16x16(qd.f32)
     out = qd.ndarray(qd.i32, (1,))
 
     @qd.kernel
     def k1(result: qd.types.NDArray[qd.i32, 1]):
         qd.loop_config(block_dim=_TILE)
         for _ in range(_TILE):
-            result[0] = Tile.SIZE
+            result[0] = qd.simt.Tile16x16.SIZE
 
     k1(out)
     assert out.to_numpy()[0] == 16
@@ -1435,7 +1434,6 @@ def test_tile16_solve_triangular_upper_raises():
 def test_tile16_slice_load_store_roundtrip(qd_dtype):
     test_utils.skip_if_f64_unsupported(qd_dtype)
     np_dtype = _NP_DTYPES[qd_dtype]
-    Tile = _make_tile16x16(qd_dtype)
     src = qd.ndarray(qd_dtype, (_TILE, _TILE))
     dst = qd.ndarray(qd_dtype, (_TILE, _TILE))
 
@@ -1443,7 +1441,7 @@ def test_tile16_slice_load_store_roundtrip(qd_dtype):
     def k1(src_arr: qd.types.NDArray[qd_dtype, 2], dst_arr: qd.types.NDArray[qd_dtype, 2]):
         qd.loop_config(block_dim=_TILE)
         for _ in range(_TILE):
-            t = Tile()
+            t = qd.simt.Tile16x16.zeros(dtype=qd_dtype)
             t[:] = src_arr[0:_TILE, 0:_TILE]
             dst_arr[0:_TILE, 0:_TILE] = t
 
@@ -1458,7 +1456,6 @@ def test_tile16_slice_load_store_roundtrip(qd_dtype):
 def test_tile16_slice_partial_cols(qd_dtype):
     test_utils.skip_if_f64_unsupported(qd_dtype)
     np_dtype = _NP_DTYPES[qd_dtype]
-    Tile = _make_tile16x16(qd_dtype)
     NCOLS = 7
     src = qd.ndarray(qd_dtype, (_TILE, _TILE))
     dst = qd.ndarray(qd_dtype, (_TILE, _TILE))
@@ -1467,7 +1464,7 @@ def test_tile16_slice_partial_cols(qd_dtype):
     def k1(src_arr: qd.types.NDArray[qd_dtype, 2], dst_arr: qd.types.NDArray[qd_dtype, 2]):
         qd.loop_config(block_dim=_TILE)
         for _ in range(_TILE):
-            t = Tile()
+            t = qd.simt.Tile16x16.zeros(dtype=qd_dtype)
             t[:] = src_arr[0:_TILE, 0:NCOLS]
             dst_arr[0:_TILE, 0:NCOLS] = t
 
@@ -1487,7 +1484,6 @@ def test_tile16_slice_partial_cols(qd_dtype):
 def test_tile16_slice_3d_batch(qd_dtype):
     test_utils.skip_if_f64_unsupported(qd_dtype)
     np_dtype = _NP_DTYPES[qd_dtype]
-    Tile = _make_tile16x16(qd_dtype)
     NBATCH = 3
     src = qd.ndarray(qd_dtype, (NBATCH, _TILE, _TILE))
     dst = qd.ndarray(qd_dtype, (NBATCH, _TILE, _TILE))
@@ -1497,7 +1493,7 @@ def test_tile16_slice_3d_batch(qd_dtype):
         qd.loop_config(block_dim=_TILE)
         for _ in range(_TILE):
             for b in range(NBATCH):
-                t = Tile()
+                t = qd.simt.Tile16x16.zeros(dtype=qd_dtype)
                 t[:] = src_arr[b, 0:_TILE, 0:_TILE]
                 dst_arr[b, 0:_TILE, 0:_TILE] = t
 
@@ -1512,7 +1508,6 @@ def test_tile16_slice_3d_batch(qd_dtype):
 def test_tile16_slice_ger_sub_via_outer(qd_dtype):
     test_utils.skip_if_f64_unsupported(qd_dtype)
     np_dtype = _NP_DTYPES[qd_dtype]
-    Tile = _make_tile16x16(qd_dtype)
     mat = qd.ndarray(qd_dtype, (_TILE, _TILE))
     vec_a = qd.ndarray(qd_dtype, (_TILE,))
     vec_b = qd.ndarray(qd_dtype, (_TILE,))
@@ -1527,7 +1522,7 @@ def test_tile16_slice_ger_sub_via_outer(qd_dtype):
     ):
         qd.loop_config(block_dim=_TILE)
         for _ in range(_TILE):
-            t = Tile()
+            t = qd.simt.Tile16x16.zeros(dtype=qd_dtype)
             t[:] = mat_arr[0:_TILE, 0:_TILE]
             tid = qd.i32(qd.simt.subgroup.invocation_id())
             a_val = a_arr[tid]
@@ -1551,7 +1546,6 @@ def test_tile16_slice_ger_sub_via_outer(qd_dtype):
 @test_utils.test(arch=qd.gpu)
 def test_tile16_outer_symmetric_same_variable():
     """t -= qd.outer(v, v) with the same variable for both args."""
-    Tile = _make_tile16x16(qd.f32)
     mat = qd.ndarray(qd.f32, (_TILE, _TILE))
     vecs = qd.ndarray(qd.f32, (_TILE, 1))
     out = qd.ndarray(qd.f32, (_TILE, _TILE))
@@ -1564,7 +1558,7 @@ def test_tile16_outer_symmetric_same_variable():
     ):
         qd.loop_config(block_dim=_TILE)
         for _ in range(_TILE):
-            t = Tile()
+            t = qd.simt.Tile16x16.zeros(dtype=qd.f32)
             t[:] = mat_arr[0:_TILE, 0:_TILE]
             v = vecs_arr[0:_TILE, 0]
             t -= qd.outer(v, v)
@@ -1583,7 +1577,6 @@ def test_tile16_outer_symmetric_same_variable():
 @test_utils.test(arch=qd.gpu)
 def test_tile16_vec_proxy_ger_sub_3d():
     """Column vector load from a 3D array: v = arr[batch, r0:r1, col]."""
-    Tile = _make_tile16x16(qd.f32)
     NBATCH = 2
     mat = qd.ndarray(qd.f32, (_TILE, _TILE))
     vecs = qd.ndarray(qd.f32, (NBATCH, _TILE, 2))
@@ -1597,7 +1590,7 @@ def test_tile16_vec_proxy_ger_sub_3d():
     ):
         qd.loop_config(block_dim=_TILE)
         for _ in range(_TILE):
-            t = Tile()
+            t = qd.simt.Tile16x16.zeros(dtype=qd.f32)
             t[:] = mat_arr[0:_TILE, 0:_TILE]
             a = vecs_arr[1, 0:_TILE, 0]
             b = vecs_arr[1, 0:_TILE, 1]
@@ -1658,7 +1651,6 @@ def test_tile_slice_proxy_misuse_errors():
 
 @test_utils.test(arch=qd.gpu)
 def test_tile16_load_missing_stop_raises():
-    Tile = _make_tile16x16(qd.f32)
     src = qd.ndarray(qd.f32, (_TILE, _TILE))
     dst = qd.ndarray(qd.f32, (_TILE, _TILE))
 
@@ -1666,7 +1658,7 @@ def test_tile16_load_missing_stop_raises():
     def k1(s: qd.types.NDArray[qd.f32, 2], d: qd.types.NDArray[qd.f32, 2]):
         qd.loop_config(block_dim=_TILE)
         for _ in range(_TILE):
-            t = Tile()
+            t = qd.simt.Tile16x16.zeros(dtype=qd.f32)
             t[:] = s[0:, 0:_TILE]
             d[0:_TILE, 0:_TILE] = t
 
@@ -1676,7 +1668,6 @@ def test_tile16_load_missing_stop_raises():
 
 @test_utils.test(arch=qd.gpu)
 def test_tile16_store_missing_stop_raises():
-    Tile = _make_tile16x16(qd.f32)
     src = qd.ndarray(qd.f32, (_TILE, _TILE))
     dst = qd.ndarray(qd.f32, (_TILE, _TILE))
 
@@ -1684,7 +1675,7 @@ def test_tile16_store_missing_stop_raises():
     def k1(s: qd.types.NDArray[qd.f32, 2], d: qd.types.NDArray[qd.f32, 2]):
         qd.loop_config(block_dim=_TILE)
         for _ in range(_TILE):
-            t = Tile()
+            t = qd.simt.Tile16x16.zeros(dtype=qd.f32)
             t[:] = s[0:_TILE, 0:_TILE]
             d[0:, 0:_TILE] = t
 
@@ -1695,14 +1686,13 @@ def test_tile16_store_missing_stop_raises():
 @test_utils.test(arch=qd.gpu)
 def test_tile16_slice_wrong_index_order_raises():
     """arr[r:r2, col, batch] must be rejected (batch must come first)."""
-    Tile = _make_tile16x16(qd.f32)
     src = qd.ndarray(qd.f32, (3, _TILE, 2))
 
     @qd.kernel
     def k1(s: qd.types.NDArray[qd.f32, 3]):
         qd.loop_config(block_dim=_TILE)
         for _ in range(_TILE):
-            t = Tile()
+            t = qd.simt.Tile16x16.zeros(dtype=qd.f32)
             v = s[0:_TILE, 0, 1]
             t -= qd.outer(v, v)
 
@@ -1713,7 +1703,6 @@ def test_tile16_slice_wrong_index_order_raises():
 @test_utils.test(arch=qd.gpu)
 def test_tile16_slice_extra_indices_raises():
     """arr[a, b, r:r2, c:c2] must be rejected (too many non-slice indices)."""
-    Tile = _make_tile16x16(qd.f32)
     src = qd.ndarray(qd.f32, (_TILE, _TILE))
     dst = qd.ndarray(qd.f32, (_TILE, _TILE))
 
@@ -1721,7 +1710,7 @@ def test_tile16_slice_extra_indices_raises():
     def k1(s: qd.types.NDArray[qd.f32, 2], d: qd.types.NDArray[qd.f32, 2]):
         qd.loop_config(block_dim=_TILE)
         for _ in range(_TILE):
-            t = Tile()
+            t = qd.simt.Tile16x16.zeros(dtype=qd.f32)
             t[:] = s[0, 0, 0:_TILE, 0:_TILE]
             d[0:_TILE, 0:_TILE] = t
 
@@ -1732,7 +1721,6 @@ def test_tile16_slice_extra_indices_raises():
 @test_utils.test(arch=qd.gpu)
 def test_tile16_outer_product_intermediate_variable():
     """qd.outer(a, b) assigned to a variable before -= must work."""
-    Tile = _make_tile16x16(qd.f32)
     mat = qd.ndarray(qd.f32, (_TILE, _TILE))
     out = qd.ndarray(qd.f32, (_TILE, _TILE))
 
@@ -1743,7 +1731,7 @@ def test_tile16_outer_product_intermediate_variable():
     ):
         qd.loop_config(block_dim=_TILE)
         for _ in range(_TILE):
-            t = Tile()
+            t = qd.simt.Tile16x16.zeros(dtype=qd.f32)
             t[:] = mat_arr[0:_TILE, 0:_TILE]
             tid = qd.i32(qd.simt.subgroup.invocation_id())
             a_val = qd.f32(tid + 1)
@@ -1765,7 +1753,6 @@ def test_tile16_outer_product_intermediate_variable():
 @test_utils.test(arch=qd.gpu)
 def test_tile16_load_without_slice_rebinds():
     """Omitting [:] on the LHS rebinds the variable to a proxy, not a tile."""
-    Tile = _make_tile16x16(qd.f32)
     src = qd.ndarray(qd.f32, (_TILE, _TILE))
     dst = qd.ndarray(qd.f32, (_TILE, _TILE))
 
@@ -1773,7 +1760,7 @@ def test_tile16_load_without_slice_rebinds():
     def k1(s: qd.types.NDArray[qd.f32, 2], d: qd.types.NDArray[qd.f32, 2]):
         qd.loop_config(block_dim=_TILE)
         for _ in range(_TILE):
-            t = Tile()
+            t = qd.simt.Tile16x16.zeros(dtype=qd.f32)
             t = s[0:_TILE, 0:_TILE]
             d[0:_TILE, 0:_TILE] = t
 
@@ -1786,14 +1773,13 @@ def test_tile16_load_without_slice_rebinds():
 @test_utils.test(arch=qd.gpu)
 def test_tile16_augassign_add_outer_raises():
     """t += qd.outer(a, b) must raise TypeError (only -= is supported)."""
-    Tile = _make_tile16x16(qd.f32)
     src = qd.ndarray(qd.f32, (_TILE, _TILE))
 
     @qd.kernel
     def k1(s: qd.types.NDArray[qd.f32, 2]):
         qd.loop_config(block_dim=_TILE)
         for _ in range(_TILE):
-            t = Tile()
+            t = qd.simt.Tile16x16.zeros(dtype=qd.f32)
             t[:] = s[0:_TILE, 0:_TILE]
             tid = qd.f32(qd.simt.subgroup.invocation_id())
             t += qd.outer(tid, tid)
@@ -1805,14 +1791,13 @@ def test_tile16_augassign_add_outer_raises():
 @test_utils.test(arch=qd.gpu)
 def test_tile16_augassign_non_outer_raises():
     """t -= <scalar> must raise TypeError (only outer products allowed)."""
-    Tile = _make_tile16x16(qd.f32)
     src = qd.ndarray(qd.f32, (_TILE, _TILE))
 
     @qd.kernel
     def k1(s: qd.types.NDArray[qd.f32, 2]):
         qd.loop_config(block_dim=_TILE)
         for _ in range(_TILE):
-            t = Tile()
+            t = qd.simt.Tile16x16.zeros(dtype=qd.f32)
             t[:] = s[0:_TILE, 0:_TILE]
             t -= qd.f32(1.0)
 
@@ -1823,7 +1808,6 @@ def test_tile16_augassign_non_outer_raises():
 @test_utils.test(arch=qd.gpu)
 def test_tile16_vec_slice_missing_stop_raises():
     """arr[0:, col] must be rejected (vec slice missing stop)."""
-    Tile = _make_tile16x16(qd.f32)
     src = qd.ndarray(qd.f32, (_TILE, 2))
     dst = qd.ndarray(qd.f32, (_TILE, _TILE))
 
@@ -1831,7 +1815,7 @@ def test_tile16_vec_slice_missing_stop_raises():
     def k1(s: qd.types.NDArray[qd.f32, 2], d: qd.types.NDArray[qd.f32, 2]):
         qd.loop_config(block_dim=_TILE)
         for _ in range(_TILE):
-            t = Tile()
+            t = qd.simt.Tile16x16.zeros(dtype=qd.f32)
             v = s[0:, 0]
             t -= qd.outer(v, v)
             d[0:_TILE, 0:_TILE] = t
@@ -1843,7 +1827,6 @@ def test_tile16_vec_slice_missing_stop_raises():
 @test_utils.test(arch=qd.gpu)
 def test_tile16_vec_slice_missing_start_raises():
     """arr[:16, col] must be rejected (vec slice missing start)."""
-    Tile = _make_tile16x16(qd.f32)
     src = qd.ndarray(qd.f32, (_TILE, 2))
     dst = qd.ndarray(qd.f32, (_TILE, _TILE))
 
@@ -1851,7 +1834,7 @@ def test_tile16_vec_slice_missing_start_raises():
     def k1(s: qd.types.NDArray[qd.f32, 2], d: qd.types.NDArray[qd.f32, 2]):
         qd.loop_config(block_dim=_TILE)
         for _ in range(_TILE):
-            t = Tile()
+            t = qd.simt.Tile16x16.zeros(dtype=qd.f32)
             v = s[:_TILE, 0]
             t -= qd.outer(v, v)
             d[0:_TILE, 0:_TILE] = t
