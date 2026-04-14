@@ -119,7 +119,7 @@ def expr_init(rhs):
         return rhs
     if hasattr(rhs, "_data_oriented"):
         return rhs
-    if hasattr(rhs, "_is_deferred"):
+    if hasattr(rhs, "_qd_is_deferred"):
         return rhs
     return Expr(
         compiling_callable.ast_builder().expr_var(

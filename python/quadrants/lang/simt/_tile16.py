@@ -81,7 +81,7 @@ class _TileSliceProxy(_DeferredProxyMixin):
     Not a quadrants expression — only valid as the RHS of a tile assignment (load) or as the LHS target (store).
     """
 
-    _is_deferred = True
+    _qd_is_deferred = True
     _proxy_description = "Array slice proxy (arr[r0:r1, c0:c1])"
 
     def __init__(self, arr, row_start, row_stop, col_start, col_stop, batch_idx=None):
@@ -108,7 +108,7 @@ class _VecSliceProxy(_DeferredProxyMixin):
     Only valid as an argument to ``qd.outer()`` in tile augmented assignment.
     """
 
-    _is_deferred = True
+    _qd_is_deferred = True
     _proxy_description = "Vec slice proxy (arr[r0:r1, col])"
 
     def __init__(self, arr, row_start, row_stop, col, batch_idx=None):
@@ -126,7 +126,7 @@ class _TileRefProxy:
     distinguish in-place tile loads from variable rebinding.
     """
 
-    _is_deferred = True
+    _qd_is_deferred = True
 
     def __init__(self, tile):
         self.tile = tile
