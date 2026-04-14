@@ -27,6 +27,8 @@ class _OuterProduct:
     RHS of ``tile -= qd.outer(a, b)``.
     """
 
+    _qd_is_deferred = True
+
     def __init__(self, a: Any, b: Any) -> None:
         self.a = a
         self.b = b
@@ -412,7 +414,9 @@ def _make_tile16x16_class(dtype):
         def solve_triangular_(self, B: Any, lower: bool = True) -> None:
             """Triangular solve: X @ self^T = B, storing result X in B in-place.
 
-            self must be lower-triangular (e.g. from cholesky_()).
+            self must be lower-triangular and non-singular (all diagonal
+            elements non-zero). Passing a singular matrix causes division
+            by zero, producing inf/NaN without warning.
             Only lower=True is supported.
             """
             if not lower:

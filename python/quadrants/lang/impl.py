@@ -262,40 +262,45 @@ def subscript(ast_builder, value, *_indices, skip_reordered=False):
 
             if not _tile16_cache:
                 raise QuadrantsSyntaxError(f"The type {type(value)} do not support index of slice type")
-            slice_indices = [i for i in indices if isinstance(i, slice)]
-            non_slice_indices = [i for i in indices if not isinstance(i, slice)]
-            if len(slice_indices) == 2:
+
+            def _check_slice(s, name):
+                if s.start is None or s.stop is None:
+                    raise QuadrantsSyntaxError(f"Tile16x16 {name} slice: both start and stop indices are required")
+
+            is_slice = [isinstance(i, slice) for i in indices]
+
+            # arr[r:r2, c:c2]
+            if is_slice == [True, True]:
                 # pylint: disable-next=import-outside-toplevel
                 from quadrants.lang.simt._tile16 import _TileSliceProxy  # noqa: I001
 
-                row_slice, col_slice = slice_indices
-                if (
-                    row_slice.start is None
-                    or row_slice.stop is None
-                    or col_slice.start is None
-                    or col_slice.stop is None
-                ):
-                    raise QuadrantsSyntaxError("Tile16x16 slice: both start and stop indices are required")
-                batch_idx = non_slice_indices[0] if non_slice_indices else None
+                _check_slice(indices[0], "row")
+                _check_slice(indices[1], "col")
+                return _TileSliceProxy(value, indices[0].start, indices[0].stop, indices[1].start, indices[1].stop)
+            # arr[batch, r:r2, c:c2]
+            if is_slice == [False, True, True]:
+                # pylint: disable-next=import-outside-toplevel
+                from quadrants.lang.simt._tile16 import _TileSliceProxy  # noqa: I001
+
+                _check_slice(indices[1], "row")
+                _check_slice(indices[2], "col")
                 return _TileSliceProxy(
-                    value, row_slice.start, row_slice.stop, col_slice.start, col_slice.stop, batch_idx
+                    value, indices[1].start, indices[1].stop, indices[2].start, indices[2].stop, indices[0]
                 )
-            if len(slice_indices) == 1:
+            # arr[r:r2, col]
+            if is_slice == [True, False]:
                 # pylint: disable-next=import-outside-toplevel
                 from quadrants.lang.simt._tile16 import _VecSliceProxy  # noqa: I001
 
-                row_slice = slice_indices[0]
-                if row_slice.start is None or row_slice.stop is None:
-                    raise QuadrantsSyntaxError("Vec slice: both start and stop indices are required")
-                if len(non_slice_indices) == 1:
-                    col = non_slice_indices[0]
-                    batch_idx = None
-                elif len(non_slice_indices) == 2:
-                    batch_idx = non_slice_indices[0]
-                    col = non_slice_indices[1]
-                else:
-                    raise QuadrantsSyntaxError("Vec slice: expected arr[r0:r_end, col] or arr[batch, r0:r_end, col]")
-                return _VecSliceProxy(value, row_slice.start, row_slice.stop, col, batch_idx)
+                _check_slice(indices[0], "row")
+                return _VecSliceProxy(value, indices[0].start, indices[0].stop, indices[1])
+            # arr[batch, r:r2, col]
+            if is_slice == [False, True, False]:
+                # pylint: disable-next=import-outside-toplevel
+                from quadrants.lang.simt._tile16 import _VecSliceProxy  # noqa: I001
+
+                _check_slice(indices[1], "row")
+                return _VecSliceProxy(value, indices[1].start, indices[1].stop, indices[2], indices[0])
         if not (isinstance(value, Expr) and value.is_tensor()):
             raise QuadrantsSyntaxError(f"The type {type(value)} do not support index of slice type")
     else:
