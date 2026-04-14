@@ -49,6 +49,7 @@ from quadrants.lang.mesh import (
     element_type_name,
 )
 from quadrants.lang.simt.block import SharedArray
+from quadrants.lang.simt.tile_slicing import try_tile_ref, try_tile_slice
 from quadrants.lang.snode import SNode
 from quadrants.lang.struct import Struct, StructField, _IntermediateStruct
 from quadrants.lang.util import (
@@ -222,9 +223,6 @@ def subscript(ast_builder, value, *_indices, skip_reordered=False):
             raise Exception(
                 "Cannot subscript NdarrayType. Did you access a global py dataclass inadvertently?", value, type(value)
             )
-        # pylint: disable-next=import-outside-toplevel
-        from quadrants.lang.simt.tile_slicing import try_tile_ref
-
         matched, proxy = try_tile_ref(value, _indices)
         if matched:
             return proxy
@@ -253,9 +251,6 @@ def subscript(ast_builder, value, *_indices, skip_reordered=False):
     indices_expr_group = None
     if has_slice:
         if isinstance(value, (Field, AnyArray, SharedArray)):
-            # pylint: disable-next=import-outside-toplevel
-            from quadrants.lang.simt.tile_slicing import try_tile_slice
-
             matched, proxy = try_tile_slice(value, indices)
             if matched:
                 return proxy

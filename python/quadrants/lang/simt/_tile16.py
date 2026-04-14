@@ -151,11 +151,13 @@ class _TileRefProxy:
 _tile16_cache = {}
 
 
-def _make_tile16x16(dtype=qd.f32):
+def _make_tile16x16(dtype=None):
     """Create a Tile16x16 dataclass whose registers use the given scalar dtype (qd.f32 or qd.f64).
 
     Returns a qd.dataclass type with 16 fields (r0-r15), zeros/eye factories, and _load/_store/_eye_ methods.
     """
+    if dtype is None:
+        dtype = qd.f32
     if dtype in _tile16_cache:
         return _tile16_cache[dtype]
     cls = _make_tile16x16_class(dtype)

@@ -4,7 +4,12 @@ import scipy.linalg
 
 import quadrants as qd
 from quadrants.lang.exception import QuadrantsSyntaxError
-from quadrants.lang.simt._tile16 import _TILE, _make_tile16x16
+from quadrants.lang.simt._tile16 import (
+    _TILE,
+    _make_tile16x16,
+    _TileSliceProxy,
+    _VecSliceProxy,
+)
 
 from tests import test_utils
 
@@ -703,8 +708,6 @@ def test_outer_composition_raises():
 
 def test_tile_slice_proxy_misuse_errors():
     """Accidentally using a tile slice proxy as a value gives a clear error."""
-    from quadrants.lang.simt._tile16 import _TileSliceProxy, _VecSliceProxy
-
     tile_proxy = _TileSliceProxy(None, 0, 16, 0, 16)
     vec_proxy = _VecSliceProxy(None, 0, 16, 0)
 
