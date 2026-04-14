@@ -222,16 +222,12 @@ def subscript(ast_builder, value, *_indices, skip_reordered=False):
             raise Exception(
                 "Cannot subscript NdarrayType. Did you access a global py dataclass inadvertently?", value, type(value)
             )
-        if len(_indices) == 1 and isinstance(_indices[0], slice) and _indices[0] == slice(None):
-            # pylint: disable-next=import-outside-toplevel,reimported,redefined-outer-name
-            from quadrants.lang.struct import Struct  # noqa: I001
+        # pylint: disable-next=import-outside-toplevel
+        from quadrants.lang.simt.tile_slicing import _SENTINEL, try_tile_ref
 
-            if isinstance(value, Struct):
-                # pylint: disable-next=import-outside-toplevel
-                from quadrants.lang.simt._tile16 import _TileRefProxy, _tile16_cache  # noqa: I001
-
-                if any(isinstance(value, t) for t in _tile16_cache.values()):
-                    return _TileRefProxy(value)
+        result = try_tile_ref(value, _indices)
+        if result is not _SENTINEL:
+            return result
         if len(_indices) == 1:
             _indices = _indices[0]
         return value.__getitem__(_indices)
@@ -258,49 +254,11 @@ def subscript(ast_builder, value, *_indices, skip_reordered=False):
     if has_slice:
         if isinstance(value, (Field, AnyArray, SharedArray)):
             # pylint: disable-next=import-outside-toplevel
-            from quadrants.lang.simt._tile16 import _tile16_cache  # noqa: I001
+            from quadrants.lang.simt.tile_slicing import _SENTINEL, try_tile_slice
 
-            if not _tile16_cache:
-                raise QuadrantsSyntaxError(f"The type {type(value)} do not support index of slice type")
-
-            def _check_slice(s, name):
-                if s.start is None or s.stop is None:
-                    raise QuadrantsSyntaxError(f"Tile16x16 {name} slice: both start and stop indices are required")
-
-            is_slice = [isinstance(i, slice) for i in indices]
-
-            # arr[r:r2, c:c2]
-            if is_slice == [True, True]:
-                # pylint: disable-next=import-outside-toplevel
-                from quadrants.lang.simt._tile16 import _TileSliceProxy  # noqa: I001
-
-                _check_slice(indices[0], "row")
-                _check_slice(indices[1], "col")
-                return _TileSliceProxy(value, indices[0].start, indices[0].stop, indices[1].start, indices[1].stop)
-            # arr[batch, r:r2, c:c2]
-            if is_slice == [False, True, True]:
-                # pylint: disable-next=import-outside-toplevel
-                from quadrants.lang.simt._tile16 import _TileSliceProxy  # noqa: I001
-
-                _check_slice(indices[1], "row")
-                _check_slice(indices[2], "col")
-                return _TileSliceProxy(
-                    value, indices[1].start, indices[1].stop, indices[2].start, indices[2].stop, indices[0]
-                )
-            # arr[r:r2, col]
-            if is_slice == [True, False]:
-                # pylint: disable-next=import-outside-toplevel
-                from quadrants.lang.simt._tile16 import _VecSliceProxy  # noqa: I001
-
-                _check_slice(indices[0], "row")
-                return _VecSliceProxy(value, indices[0].start, indices[0].stop, indices[1])
-            # arr[batch, r:r2, col]
-            if is_slice == [False, True, False]:
-                # pylint: disable-next=import-outside-toplevel
-                from quadrants.lang.simt._tile16 import _VecSliceProxy  # noqa: I001
-
-                _check_slice(indices[1], "row")
-                return _VecSliceProxy(value, indices[1].start, indices[1].stop, indices[2], indices[0])
+            result = try_tile_slice(value, indices)
+            if result is not _SENTINEL:
+                return result
         if not (isinstance(value, Expr) and value.is_tensor()):
             raise QuadrantsSyntaxError(f"The type {type(value)} do not support index of slice type")
     else:
