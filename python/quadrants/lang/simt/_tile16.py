@@ -278,7 +278,10 @@ def _make_tile16x16_class(dtype):
             """
             tid = qd.simt.subgroup.invocation_id()
             for j in range(_TILE):
-                self._set_col(j, 1.0 if tid == j else 0.0)
+                self._set_col(j, 0.0)
+            for j in range(_TILE):
+                if tid == j:
+                    self._set_col(j, 1.0)
 
         @qd.func
         def _get_col(self, k):
