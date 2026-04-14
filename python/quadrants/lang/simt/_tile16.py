@@ -184,79 +184,79 @@ def _make_tile16x16_class(dtype):
         r15: dtype
 
         @qd.func
-        def _load(self, arr: qd.template(), row_start, row_end, col_start, col_end):
-            """Load from a 2D array within [row_start, row_end) x [col_start, col_end).
+        def _load(self, arr: qd.template(), row_start, row_stop, col_start, col_stop):
+            """Load from a 2D array within [row_start, row_stop) x [col_start, col_stop).
 
-            Each thread loads arr[row_start + tid, col_start:col_end].
-            Threads where row_start + tid >= row_end skip the load (tile row unchanged).
+            Each thread loads arr[row_start + tid, col_start:col_stop].
+            Threads where row_start + tid >= row_stop skip the load (tile row unchanged).
             """
-            arr_row_end = arr.shape[0]
-            if arr_row_end < row_end:
-                row_end = arr_row_end
+            arr_row_stop = arr.shape[0]
+            if arr_row_stop < row_stop:
+                row_stop = arr_row_stop
             row = row_start + qd.simt.subgroup.invocation_id()
-            if row < row_end:
-                arr_col_end = arr.shape[1]
-                if arr_col_end < col_end:
-                    col_end = arr_col_end
+            if row < row_stop:
+                arr_col_stop = arr.shape[1]
+                if arr_col_stop < col_stop:
+                    col_stop = arr_col_stop
                 for j in range(_TILE):
-                    if col_start + j < col_end:
+                    if col_start + j < col_stop:
                         self._set_col(j, arr[row, col_start + j])
 
         @qd.func
-        def _load3d(self, arr: qd.template(), batch, row_start, row_end, col_start, col_end):
-            """Load from a 3D array within [row_start, row_end) x [col_start, col_end).
+        def _load3d(self, arr: qd.template(), batch, row_start, row_stop, col_start, col_stop):
+            """Load from a 3D array within [row_start, row_stop) x [col_start, col_stop).
 
-            Each thread loads arr[batch, row_start+tid, col_start:col_end].
-            Threads where row_start + tid >= row_end skip the load (tile row unchanged).
+            Each thread loads arr[batch, row_start+tid, col_start:col_stop].
+            Threads where row_start + tid >= row_stop skip the load (tile row unchanged).
             """
-            arr_row_end = arr.shape[1]
-            if arr_row_end < row_end:
-                row_end = arr_row_end
+            arr_row_stop = arr.shape[1]
+            if arr_row_stop < row_stop:
+                row_stop = arr_row_stop
             row = row_start + qd.simt.subgroup.invocation_id()
-            if row < row_end:
-                arr_col_end = arr.shape[2]
-                if arr_col_end < col_end:
-                    col_end = arr_col_end
+            if row < row_stop:
+                arr_col_stop = arr.shape[2]
+                if arr_col_stop < col_stop:
+                    col_stop = arr_col_stop
                 for j in range(_TILE):
-                    if col_start + j < col_end:
+                    if col_start + j < col_stop:
                         self._set_col(j, arr[batch, row, col_start + j])
 
         @qd.func
-        def _store(self, arr: qd.template(), row_start, row_end, col_start, col_end):
-            """Store to a 2D array within [row_start, row_end) x [col_start, col_end).
+        def _store(self, arr: qd.template(), row_start, row_stop, col_start, col_stop):
+            """Store to a 2D array within [row_start, row_stop) x [col_start, col_stop).
 
-            Each thread stores to arr[row_start + tid, col_start:col_end].
-            Threads where row_start + tid >= row_end skip the store.
+            Each thread stores to arr[row_start + tid, col_start:col_stop].
+            Threads where row_start + tid >= row_stop skip the store.
             """
-            arr_row_end = arr.shape[0]
-            if arr_row_end < row_end:
-                row_end = arr_row_end
+            arr_row_stop = arr.shape[0]
+            if arr_row_stop < row_stop:
+                row_stop = arr_row_stop
             row = row_start + qd.simt.subgroup.invocation_id()
-            if row < row_end:
-                arr_col_end = arr.shape[1]
-                if arr_col_end < col_end:
-                    col_end = arr_col_end
+            if row < row_stop:
+                arr_col_stop = arr.shape[1]
+                if arr_col_stop < col_stop:
+                    col_stop = arr_col_stop
                 for j in range(_TILE):
-                    if col_start + j < col_end:
+                    if col_start + j < col_stop:
                         arr[row, col_start + j] = self._get_col(j)
 
         @qd.func
-        def _store3d(self, arr: qd.template(), batch, row_start, row_end, col_start, col_end):
-            """Store to a 3D array within [row_start, row_end) x [col_start, col_end).
+        def _store3d(self, arr: qd.template(), batch, row_start, row_stop, col_start, col_stop):
+            """Store to a 3D array within [row_start, row_stop) x [col_start, col_stop).
 
-            Each thread stores to arr[batch, row_start+tid, col_start:col_end].
-            Threads where row_start + tid >= row_end skip the store.
+            Each thread stores to arr[batch, row_start+tid, col_start:col_stop].
+            Threads where row_start + tid >= row_stop skip the store.
             """
-            arr_row_end = arr.shape[1]
-            if arr_row_end < row_end:
-                row_end = arr_row_end
+            arr_row_stop = arr.shape[1]
+            if arr_row_stop < row_stop:
+                row_stop = arr_row_stop
             row = row_start + qd.simt.subgroup.invocation_id()
-            if row < row_end:
-                arr_col_end = arr.shape[2]
-                if arr_col_end < col_end:
-                    col_end = arr_col_end
+            if row < row_stop:
+                arr_col_stop = arr.shape[2]
+                if arr_col_stop < col_stop:
+                    col_stop = arr_col_stop
                 for j in range(_TILE):
-                    if col_start + j < col_end:
+                    if col_start + j < col_stop:
                         arr[batch, row, col_start + j] = self._get_col(j)
 
         @qd.func
@@ -416,9 +416,9 @@ def _make_tile16x16_class(dtype):
         @qd.func
         def _resolve_vec2d(self, arr: qd.template(), row_start, row_stop, col):
             tid = qd.i32(qd.simt.subgroup.invocation_id())
-            arr_row_end = arr.shape[0]
-            if arr_row_end < row_stop:
-                row_stop = arr_row_end
+            arr_row_stop = arr.shape[0]
+            if arr_row_stop < row_stop:
+                row_stop = arr_row_stop
             v = dtype(0.0)
             if row_start + tid < row_stop:
                 v = arr[row_start + tid, col]
@@ -427,9 +427,9 @@ def _make_tile16x16_class(dtype):
         @qd.func
         def _resolve_vec3d(self, arr: qd.template(), batch, row_start, row_stop, col):
             tid = qd.i32(qd.simt.subgroup.invocation_id())
-            arr_row_end = arr.shape[1]
-            if arr_row_end < row_stop:
-                row_stop = arr_row_end
+            arr_row_stop = arr.shape[1]
+            if arr_row_stop < row_stop:
+                row_stop = arr_row_stop
             v = dtype(0.0)
             if row_start + tid < row_stop:
                 v = arr[batch, row_start + tid, col]
