@@ -209,7 +209,7 @@ def _make_tile16x16_class(dtype):
                 arr_col_stop = arr.shape[1]
                 if arr_col_stop < col_stop:
                     col_stop = arr_col_stop
-                for j in range(_TILE):
+                for j in qd.static(range(_TILE)):
                     if col_start + j < col_stop:
                         self._set_col(j, arr[row, col_start + j])
 
@@ -228,7 +228,7 @@ def _make_tile16x16_class(dtype):
                 arr_col_stop = arr.shape[2]
                 if arr_col_stop < col_stop:
                     col_stop = arr_col_stop
-                for j in range(_TILE):
+                for j in qd.static(range(_TILE)):
                     if col_start + j < col_stop:
                         self._set_col(j, arr[batch, row, col_start + j])
 
@@ -247,7 +247,7 @@ def _make_tile16x16_class(dtype):
                 arr_col_stop = arr.shape[1]
                 if arr_col_stop < col_stop:
                     col_stop = arr_col_stop
-                for j in range(_TILE):
+                for j in qd.static(range(_TILE)):
                     if col_start + j < col_stop:
                         arr[row, col_start + j] = self._get_col(j)
 
@@ -266,7 +266,7 @@ def _make_tile16x16_class(dtype):
                 arr_col_stop = arr.shape[2]
                 if arr_col_stop < col_stop:
                     col_stop = arr_col_stop
-                for j in range(_TILE):
+                for j in qd.static(range(_TILE)):
                     if col_start + j < col_stop:
                         arr[batch, row, col_start + j] = self._get_col(j)
 
@@ -277,11 +277,8 @@ def _make_tile16x16_class(dtype):
             Each thread sets its diagonal element to 1.0 and all others to 0.0.
             """
             tid = qd.simt.subgroup.invocation_id()
-            for j in range(_TILE):
-                self._set_col(j, 0.0)
-            for j in range(_TILE):
-                if tid == j:
-                    self._set_col(j, 1.0)
+            for j in qd.static(range(_TILE)):
+                self._set_col(j, 1.0 if tid == j else 0.0)
 
         @qd.func
         def _get_col(self, k):
@@ -360,7 +357,7 @@ def _make_tile16x16_class(dtype):
         @qd.func
         def _ger_sub(self, a, b):
             """General rank-1 subtract in-place: self -= a @ b^T."""
-            for j in range(_TILE):
+            for j in qd.static(range(_TILE)):
                 bc = qd.simt.subgroup.shuffle(b, qd.u32(j))
                 self._set_col(j, self._get_col(j) - a * bc)
 
