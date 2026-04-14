@@ -3,14 +3,11 @@
 """
 Register-resident 16x16 tile operations.
 
-Each tile is a 16x16 matrix distributed across 16 threads in a subgroup,
-one row per thread, with each row stored in 16 scalar registers (r0-r15).
-Cross-thread communication uses subgroup shuffles -- no shared memory needed.
+Each tile is a 16x16 matrix distributed across 16 threads in a subgroup, one row per thread, with each row stored
+in 16 scalar registers (r0-r15).  Cross-thread communication uses subgroup shuffles -- no shared memory needed.
 
-The thread's lane index (tid) is obtained internally via
-``subgroup.invocation_id()``, so callers never need to pass it.
-
-See docs/source/user_guide/tile16.md for usage documentation.
+The thread's lane index (tid) is obtained internally via ``subgroup.invocation_id()``, so callers never need to
+pass it.  See docs/source/user_guide/tile16.md for usage documentation.
 """
 
 from typing import Any, NoReturn
@@ -23,8 +20,7 @@ _TILE = 16
 class _OuterProduct:
     """Deferred outer product proxy for use with augmented assignment on Tile16x16.
 
-    Created by qd.outer(a, b). Not a quadrants expression -- only valid as the
-    RHS of ``tile -= qd.outer(a, b)``.
+    Created by qd.outer(a, b). Not a quadrants expression -- only valid as the RHS of ``tile -= qd.outer(a, b)``.
     """
 
     _qd_is_deferred = True
@@ -83,10 +79,8 @@ class _DeferredProxyMixin:
 class _TileSliceProxy(_DeferredProxyMixin):
     """Deferred 2D/3D array slice for tile load/store.
 
-    Created by subscripting a Field or ndarray with 2D slices,
-    e.g. ``arr[row_start:row_stop, col_start:col_stop]``.
-    Not a quadrants expression -- only valid as the RHS of a tile
-    assignment (load) or as the LHS target (store).
+    Created by subscripting a Field or ndarray with 2D slices, e.g. ``arr[row_start:row_stop, col_start:col_stop]``.
+    Not a quadrants expression -- only valid as the RHS of a tile assignment (load) or as the LHS target (store).
     """
 
     _qd_is_deferred = True
@@ -132,8 +126,8 @@ class _VecSliceProxy(_DeferredProxyMixin):
 class _TileRefProxy:
     """Proxy returned by tile[:] for the LHS of a load assignment.
 
-    Enables ``tile[:] = arr[r:r+16, c:n]``.  The ``[:]`` is required to
-    distinguish in-place tile loads from variable rebinding.
+    Enables ``tile[:] = arr[r:r+16, c:n]``.  The ``[:]`` is required to distinguish in-place tile loads from
+    variable rebinding.
     """
 
     _qd_is_deferred = True
@@ -160,8 +154,7 @@ _tile16_cache = {}
 def _make_tile16x16(dtype=qd.f32):
     """Create a Tile16x16 dataclass whose registers use the given scalar dtype (qd.f32 or qd.f64).
 
-    Returns a qd.dataclass type with 16 fields (r0-r15), zeros/eye factories, and
-    _load/_store/_eye_ methods.
+    Returns a qd.dataclass type with 16 fields (r0-r15), zeros/eye factories, and _load/_store/_eye_ methods.
     """
     if dtype in _tile16_cache:
         return _tile16_cache[dtype]
@@ -172,10 +165,8 @@ def _make_tile16x16(dtype=qd.f32):
 
 def _make_tile16x16_class(dtype):
     class _Tile16x16:
-        """A 16x16 tile distributed one row per subgroup thread, held in 16 scalar registers.
-
-        All fields default to 0.0 when omitted: ``Tile16x16()`` creates a zero tile.
-        """
+        """A 16x16 tile distributed one row per subgroup thread, held in 16 scalar registers.  All fields default to
+        0.0 when omitted: ``Tile16x16()`` creates a zero tile."""
 
         r0: dtype
         r1: dtype
@@ -198,8 +189,8 @@ def _make_tile16x16_class(dtype):
         def _load(self, arr: qd.template(), row_start, row_stop, col_start, col_stop):
             """Load from a 2D array within [row_start, row_stop) x [col_start, col_stop).
 
-            Each thread loads arr[row_start + tid, col_start:col_stop].
-            Threads where row_start + tid >= row_stop skip the load (tile row unchanged).
+            Each thread loads arr[row_start + tid, col_start:col_stop].  Threads where row_start + tid >= row_stop
+            skip the load (tile row unchanged).
             """
             arr_row_stop = arr.shape[0]
             if arr_row_stop < row_stop:
@@ -217,8 +208,8 @@ def _make_tile16x16_class(dtype):
         def _load3d(self, arr: qd.template(), batch, row_start, row_stop, col_start, col_stop):
             """Load from a 3D array within [row_start, row_stop) x [col_start, col_stop).
 
-            Each thread loads arr[batch, row_start+tid, col_start:col_stop].
-            Threads where row_start + tid >= row_stop skip the load (tile row unchanged).
+            Each thread loads arr[batch, row_start+tid, col_start:col_stop].  Threads where row_start + tid >=
+            row_stop skip the load (tile row unchanged).
             """
             arr_row_stop = arr.shape[1]
             if arr_row_stop < row_stop:
@@ -236,8 +227,8 @@ def _make_tile16x16_class(dtype):
         def _store(self, arr: qd.template(), row_start, row_stop, col_start, col_stop):
             """Store to a 2D array within [row_start, row_stop) x [col_start, col_stop).
 
-            Each thread stores to arr[row_start + tid, col_start:col_stop].
-            Threads where row_start + tid >= row_stop skip the store.
+            Each thread stores to arr[row_start + tid, col_start:col_stop].  Threads where row_start + tid >=
+            row_stop skip the store.
             """
             arr_row_stop = arr.shape[0]
             if arr_row_stop < row_stop:
@@ -255,8 +246,8 @@ def _make_tile16x16_class(dtype):
         def _store3d(self, arr: qd.template(), batch, row_start, row_stop, col_start, col_stop):
             """Store to a 3D array within [row_start, row_stop) x [col_start, col_stop).
 
-            Each thread stores to arr[batch, row_start+tid, col_start:col_stop].
-            Threads where row_start + tid >= row_stop skip the store.
+            Each thread stores to arr[batch, row_start+tid, col_start:col_stop].  Threads where row_start + tid >=
+            row_stop skip the store.
             """
             arr_row_stop = arr.shape[1]
             if arr_row_stop < row_stop:
@@ -272,10 +263,8 @@ def _make_tile16x16_class(dtype):
 
         @qd.func
         def _eye_(self):
-            """Set this tile to the 16x16 identity matrix.
-
-            Each thread sets its diagonal element to 1.0 and all others to 0.0.
-            """
+            """Set this tile to the 16x16 identity matrix.  Each thread sets its diagonal element to 1.0 and all
+            others to 0.0."""
             tid = qd.simt.subgroup.invocation_id()
             for j in qd.static(range(_TILE)):
                 self._set_col(j, 1.0 if tid == j else 0.0)
@@ -365,8 +354,8 @@ def _make_tile16x16_class(dtype):
         def cholesky_(self, eps):
             """In-place 16x16 Cholesky factorization via subgroup shuffles.
 
-            On return, the lower triangle holds L such that A = L @ L^T.
-            Diagonal clamped to sqrt(max(value, eps)) for numerical stability.
+            On return, the lower triangle holds L such that A = L @ L^T.  Diagonal clamped to
+            sqrt(max(value, eps)) for numerical stability.
             """
             tid = qd.i32(qd.simt.subgroup.invocation_id())
             for k in range(_TILE):
@@ -397,8 +386,8 @@ def _make_tile16x16_class(dtype):
         def _trsm(self, L):
             """In-place triangular solve: solve self @ L^T = B (original self).
 
-            L is a Tile16x16 holding the lower-triangular Cholesky factor (from cholesky_).
-            On return, self holds the solution X.
+            L is a Tile16x16 holding the lower-triangular Cholesky factor (from cholesky_).  On return, self holds
+            the solution X.
             """
             for c in range(_TILE):
                 dot = qd.cast(0.0, dtype)
@@ -414,10 +403,8 @@ def _make_tile16x16_class(dtype):
         def solve_triangular_(self, B: Any, lower: bool = True) -> None:
             """Triangular solve: X @ self^T = B, storing result X in B in-place.
 
-            self must be lower-triangular and non-singular (all diagonal
-            elements non-zero). Passing a singular matrix causes division
-            by zero, producing inf/NaN without warning.
-            Only lower=True is supported.
+            self must be lower-triangular and non-singular (all diagonal elements non-zero).  Passing a singular
+            matrix causes division by zero, producing inf/NaN without warning.  Only lower=True is supported.
             """
             if not lower:
                 raise TypeError("Tile16x16.solve_triangular_: only lower=True is supported")
@@ -456,8 +443,7 @@ def _make_tile16x16_class(dtype):
         def _augassign(self, other: Any, op: str) -> None:
             """Handle augmented assignment (e.g. tile -= qd.outer(a, b)).
 
-            Resolves _VecSliceProxy arguments and dispatches to _ger_sub.
-            Only 'Sub' is supported.
+            Resolves _VecSliceProxy arguments and dispatches to _ger_sub.  Only 'Sub' is supported.
             """
             if isinstance(other, _OuterProduct):
                 if op == "Sub":
@@ -475,9 +461,8 @@ def _make_tile16x16_class(dtype):
             else:
                 raise TypeError(f"Tile16x16: unsupported augmented assignment with {type(other)}")
 
-    # StructType.__call__ already defaults missing args to 0, so Tile()
-    # produces a zero-initialized tile without needing default values in the
-    # class definition (which @qd.dataclass doesn't support).
+    # StructType.__call__ already defaults missing args to 0, so Tile() produces a zero-initialized tile
+    # without needing default values in the class definition (which @qd.dataclass doesn't support).
     result = qd.dataclass(_Tile16x16)
     result.SIZE = _TILE  # type: ignore[reportAttributeAccessIssue]
     result.zeros = result  # type: ignore[reportAttributeAccessIssue]
