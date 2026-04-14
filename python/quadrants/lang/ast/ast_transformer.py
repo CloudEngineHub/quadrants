@@ -6,7 +6,6 @@ import dataclasses
 import enum
 import itertools
 import math
-import os
 import platform
 import warnings
 from ast import unparse
@@ -41,6 +40,9 @@ from quadrants.lang.field import Field
 from quadrants.lang.matrix import Matrix, MatrixType
 from quadrants.lang.snode import append, deactivate, length
 from quadrants.lang.struct import Struct, StructType
+from quadrants.lang.util import (
+    is_quadrants_internal_file as _is_quadrants_internal_file,
+)
 from quadrants.types import primitive_types
 from quadrants.types.utils import is_integral
 
@@ -72,24 +74,6 @@ def boundary_type_cast_warning(expression: Expr) -> None:
             f"Casting range_for boundary values from {expr_dtype} to i32, which may cause numerical issues",
             Warning,
         )
-
-
-def _quadrants_package_dir() -> str:
-    """Return the absolute path to the installed quadrants package directory."""
-    import quadrants as _qd_pkg  # pylint: disable=import-outside-toplevel
-
-    return os.path.realpath(os.path.dirname(_qd_pkg.__file__))
-
-
-_QUADRANTS_PKG_DIR: str | None = None
-
-
-def _is_quadrants_internal_file(filepath: str) -> bool:
-    """Return True if filepath is inside the quadrants package (suppresses purity violations)."""
-    global _QUADRANTS_PKG_DIR  # noqa: PLW0603
-    if _QUADRANTS_PKG_DIR is None:
-        _QUADRANTS_PKG_DIR = _quadrants_package_dir()
-    return os.path.realpath(filepath).startswith(_QUADRANTS_PKG_DIR + os.sep)
 
 
 class ASTTransformer(Builder):
