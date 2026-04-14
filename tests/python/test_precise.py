@@ -128,7 +128,7 @@ def test_qd_precise_protects_fast_math():
 # bound below (GLSL.std.450 Sin/Cos: 2^-11 absolute error; Log: 3 ULP outside [0.5, 2.0]; Sqrt: 2.5 ULP), so
 # no amount of tagging can force correctly-rounded transcendentals through the driver on SPIR-V. See
 # `docs/source/user_guide/precise.md` (Backend coverage) for the backend-specific nuance.
-@pytest.mark.parametrize("op_name", ["sin", "cos", "log", "sqrt"])
+@pytest.mark.parametrize("op_name", ["sin", "cos", "log", "sqrt", "rsqrt"])
 @test_utils.test(arch=[qd.cpu, qd.cuda, qd.amdgpu], default_fp=qd.f32, fast_math=True)
 def test_qd_precise_unary_rounding(op_name):
     """Contract check: on every LLVM backend, `qd.precise(qd.<op>(x))` must produce the correctly-rounded f32 result
@@ -143,11 +143,11 @@ def test_qd_precise_unary_rounding(op_name):
     `sqrt` with `rsqrt+refine` under `afn`. In every such regression the precise path is the one that fails here.
 
     `sqrt` is included because LLVM FMF's `afn` can substitute `rsqrt+refine` which is ~2-3 ULP - the precise tag
-    must defeat that substitution. Parametrized per op so each failure reports the specific function that regressed
-    instead of a batched max-ULP over all four.
+    must defeat that substitution. `rsqrt` exercises the unique multi-instruction codegen path (sqrt intrinsic +
+    fdiv) where `disable_fast_math(intermediate)` clears FMF on the sqrt separately from the enclosing fdiv.
+    Parametrized per op so each failure reports the specific function that regressed.
     """
     qd_op = getattr(qd, op_name)
-    np_op = getattr(np, op_name)
 
     @qd.kernel
     def k(x: qd.types.ndarray(qd.f32, ndim=1), out: qd.types.ndarray(qd.f32, ndim=1)):
@@ -163,8 +163,11 @@ def test_qd_precise_unary_rounding(op_name):
     k(in_arr, out)
     res = out.to_numpy()
 
-    # Correctly-rounded f32 reference, computed in f64 then narrowed.
-    ref = np_op(xs.astype(np.float64)).astype(np.float32)
+    # Correctly-rounded f32 reference, computed in f64 then narrowed. NumPy has no rsqrt, so we compute it by hand.
+    if op_name == "rsqrt":
+        ref = (1.0 / np.sqrt(xs.astype(np.float64))).astype(np.float32)
+    else:
+        ref = getattr(np, op_name)(xs.astype(np.float64)).astype(np.float32)
 
     # Within 2 ULP of the correctly-rounded f32 value: tight enough to catch backends that silently
     # substitute fast-math variants, generous enough to absorb single-ULP rounding noise across
@@ -434,6 +437,42 @@ def test_qd_precise_idempotent_when_fast_math_off():
         "Under fast_math=False the compensation term must be IEEE-preserved (non-zero); "
         "if it is zero, the idempotency check is vacuous."
     )
+
+
+@test_utils.test(arch=[qd.cpu, qd.cuda, qd.amdgpu], default_fp=qd.f32, fast_math=True)
+def test_qd_precise_floordiv_rounding():
+    """Contract check: `qd.precise(a // b)` must produce `floor(a / b)` correctly on LLVM backends, even with
+    module-level `fast_math=True`.
+
+    `demote_operations.cpp::demote_ffloor` lowers FP floordiv into a synthesized `div + floor` chain. The PR
+    propagates `stmt->precise` onto both stmts so codegen clears FMF on the div (defeating `arcp` / approximate
+    reciprocal substitution) and on the floor. This test pins that contract: if someone removes the `div->precise`
+    or `floor->precise` propagation in `demote_ffloor`, AND LLVM's `arcp` / `afn` alters the division near an
+    integer boundary, the bit-exact assertion catches the regression.
+    """
+
+    @qd.kernel
+    def k(
+        a: qd.types.ndarray(qd.f32, ndim=1), b: qd.types.ndarray(qd.f32, ndim=1), out: qd.types.ndarray(qd.f32, ndim=1)
+    ):
+        for i in range(a.shape[0]):
+            out[i] = qd.precise(a[i] // b[i])
+
+    # Inputs chosen around integer-quotient boundaries where approximate reciprocal division (`arcp`) or
+    # fused-multiply-reciprocal could round the quotient to the wrong side of the floor.
+    a_vals = np.array([10.0, 7.0, -7.0, 1.0, 100.0, 0.1, 1e10], dtype=np.float32)
+    b_vals = np.array([3.0, 2.0, 2.0, 3.0, 7.0, 0.03, 3.0], dtype=np.float32)
+    a_in = qd.ndarray(dtype=qd.f32, shape=(len(a_vals),))
+    a_in.from_numpy(a_vals)
+    b_in = qd.ndarray(dtype=qd.f32, shape=(len(b_vals),))
+    b_in.from_numpy(b_vals)
+    out = qd.ndarray(dtype=qd.f32, shape=(len(a_vals),))
+    k(a_in, b_in, out)
+    res = out.to_numpy()
+
+    # Reference: floor(a/b) computed in f32 (matching IEEE semantics of the precise div + floor chain).
+    ref = np.floor(a_vals / b_vals)
+    np.testing.assert_array_equal(res, ref, err_msg="qd.precise(a // b) did not match floor(a / b) reference")
 
 
 # NOTE: a behavioral test for `pow` precise-propagation (alg_simp.cpp pow branch, ~line 485) is deliberately omitted.
