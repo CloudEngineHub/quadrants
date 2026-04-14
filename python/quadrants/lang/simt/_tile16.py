@@ -13,6 +13,8 @@ The thread's lane index (tid) is obtained internally via
 See docs/source/user_guide/tile16.md for usage documentation.
 """
 
+from typing import Any, NoReturn
+
 import quadrants as qd
 
 _TILE = 16
@@ -25,18 +27,18 @@ class _OuterProduct:
     RHS of ``tile -= qd.outer(a, b)``.
     """
 
-    def __init__(self, a, b):
+    def __init__(self, a: Any, b: Any) -> None:
         self.a = a
         self.b = b
 
-    def __add__(self, other):
+    def __add__(self, other: Any) -> NoReturn:
         raise TypeError("OuterProduct does not support composition; apply each update separately")
 
-    def __radd__(self, other):
+    def __radd__(self, other: Any) -> NoReturn:
         raise TypeError("OuterProduct does not support composition; apply each update separately")
 
 
-def outer(a, b):
+def outer(a: Any, b: Any) -> _OuterProduct:
     """Create a deferred outer product for use with Tile16x16 augmented assignment.
 
     Usage::
@@ -52,25 +54,27 @@ class _DeferredProxyMixin:
 
     _proxy_description = "Tile proxy"
 
-    def _misuse(self, op="used"):
-        raise TypeError(f"{self._proxy_description} was {op}, but it is only valid in tile operations (tile[:] = ..., ... = tile, qd.outer(...))")
+    def _misuse(self, op: str = "used") -> NoReturn:
+        raise TypeError(
+            f"{self._proxy_description} was {op}, but it is only valid in tile operations (tile[:] = ..., ... = tile, qd.outer(...))"
+        )
 
-    def __add__(self, other):
+    def __add__(self, other: Any) -> NoReturn:
         self._misuse("added")
 
-    def __radd__(self, other):
+    def __radd__(self, other: Any) -> NoReturn:
         self._misuse("added")
 
-    def __sub__(self, other):
+    def __sub__(self, other: Any) -> NoReturn:
         self._misuse("subtracted")
 
-    def __mul__(self, other):
+    def __mul__(self, other: Any) -> NoReturn:
         self._misuse("multiplied")
 
-    def __getitem__(self, key):
+    def __getitem__(self, key: Any) -> NoReturn:
         self._misuse("subscripted")
 
-    def __repr__(self):
+    def __repr__(self) -> str:
         return f"<{self._proxy_description} — not a value; use with tile[:] = ... or qd.outer(...)>"
 
 
@@ -84,7 +88,9 @@ class _TileSliceProxy(_DeferredProxyMixin):
     _qd_is_deferred = True
     _proxy_description = "Array slice proxy (arr[r0:r1, c0:c1])"
 
-    def __init__(self, arr, row_start, row_stop, col_start, col_stop, batch_idx=None):
+    def __init__(
+        self, arr: Any, row_start: Any, row_stop: Any, col_start: Any, col_stop: Any, batch_idx: Any = None
+    ) -> None:
         self.arr = arr
         self.row_start = row_start
         self.row_stop = row_stop
@@ -92,7 +98,7 @@ class _TileSliceProxy(_DeferredProxyMixin):
         self.col_stop = col_stop
         self.batch_idx = batch_idx
 
-    def _assign(self, tile):
+    def _assign(self, tile: Any) -> None:
         """Store path: arr[r:r+n_rows, c:c+n_cols] = tile."""
         if self.batch_idx is not None:
             tile._store3d(self.arr, self.batch_idx, self.row_start, self.row_stop, self.col_start, self.col_stop)
@@ -111,7 +117,7 @@ class _VecSliceProxy(_DeferredProxyMixin):
     _qd_is_deferred = True
     _proxy_description = "Vec slice proxy (arr[r0:r1, col])"
 
-    def __init__(self, arr, row_start, row_stop, col, batch_idx=None):
+    def __init__(self, arr: Any, row_start: Any, row_stop: Any, col: Any, batch_idx: Any = None) -> None:
         self.arr = arr
         self.row_start = row_start
         self.row_stop = row_stop
@@ -128,10 +134,10 @@ class _TileRefProxy:
 
     _qd_is_deferred = True
 
-    def __init__(self, tile):
+    def __init__(self, tile: Any) -> None:
         self.tile = tile
 
-    def _assign(self, value):
+    def _assign(self, value: Any) -> None:
         """Load path: tile[:] = arr[r:r+n, c:c+n]. Dispatches to _load or _load3d."""
         if isinstance(value, _TileSliceProxy):
             if value.batch_idx is not None:
@@ -404,7 +410,7 @@ def _make_tile16x16_class(dtype):
                 new_val = (self._get_col(c) - dot) / diag_c  # type: ignore[reportOperatorIssue]
                 self._set_col(c, new_val)
 
-        def solve_triangular_(self, B, lower=True):
+        def solve_triangular_(self, B: Any, lower: bool = True) -> None:
             """Triangular solve: X @ self^T = B, storing result X in B in-place.
 
             self must be lower-triangular (e.g. from cholesky_()).
@@ -438,13 +444,13 @@ def _make_tile16x16_class(dtype):
                 v = arr[batch, row_start + tid, col]
             return v
 
-        def _resolve_vec_proxy(self, proxy):
+        def _resolve_vec_proxy(self, proxy: _VecSliceProxy) -> Any:
             """Materialize a _VecSliceProxy into a scalar by dispatching to _resolve_vec2d or _resolve_vec3d."""
             if proxy.batch_idx is not None:
                 return self._resolve_vec3d(proxy.arr, proxy.batch_idx, proxy.row_start, proxy.row_stop, proxy.col)
             return self._resolve_vec2d(proxy.arr, proxy.row_start, proxy.row_stop, proxy.col)
 
-        def _augassign(self, other, op):
+        def _augassign(self, other: Any, op: str) -> None:
             """Handle augmented assignment (e.g. tile -= qd.outer(a, b)).
 
             Resolves _VecSliceProxy arguments and dispatches to _ger_sub.

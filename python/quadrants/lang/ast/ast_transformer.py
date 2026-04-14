@@ -74,7 +74,7 @@ def boundary_type_cast_warning(expression: Expr) -> None:
         )
 
 
-def _quadrants_package_dir():
+def _quadrants_package_dir() -> str:
     """Return the absolute path to the installed quadrants package directory."""
     import quadrants as _qd_pkg  # pylint: disable=import-outside-toplevel
 
