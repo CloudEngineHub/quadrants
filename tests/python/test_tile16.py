@@ -819,6 +819,76 @@ def test_tile16_store_missing_stop_raises():
 
 
 @test_utils.test(arch=qd.gpu)
+def test_tile16_slice_wrong_index_order_raises():
+    """arr[r:r2, col, batch] must be rejected (batch must come first)."""
+    Tile = _make_tile16x16(qd.f32)
+    src = qd.ndarray(qd.f32, (3, _TILE, 2))
+
+    @qd.kernel
+    def k1(s: qd.types.NDArray[qd.f32, 3]):
+        qd.loop_config(block_dim=_TILE)
+        for _ in range(_TILE):
+            t = Tile()
+            v = s[0:_TILE, 0, 1]
+            t -= qd.outer(v, v)
+
+    with pytest.raises(Exception):
+        k1(src)
+
+
+@test_utils.test(arch=qd.gpu)
+def test_tile16_slice_extra_indices_raises():
+    """arr[a, b, r:r2, c:c2] must be rejected (too many non-slice indices)."""
+    Tile = _make_tile16x16(qd.f32)
+    src = qd.ndarray(qd.f32, (_TILE, _TILE))
+    dst = qd.ndarray(qd.f32, (_TILE, _TILE))
+
+    @qd.kernel
+    def k1(s: qd.types.NDArray[qd.f32, 2], d: qd.types.NDArray[qd.f32, 2]):
+        qd.loop_config(block_dim=_TILE)
+        for _ in range(_TILE):
+            t = Tile()
+            t[:] = s[0, 0, 0:_TILE, 0:_TILE]
+            d[0:_TILE, 0:_TILE] = t
+
+    with pytest.raises(Exception):
+        k1(src, dst)
+
+
+@test_utils.test(arch=qd.gpu)
+def test_tile16_outer_product_intermediate_variable():
+    """qd.outer(a, b) assigned to a variable before -= must work."""
+    Tile = _make_tile16x16(qd.f32)
+    mat = qd.ndarray(qd.f32, (_TILE, _TILE))
+    out = qd.ndarray(qd.f32, (_TILE, _TILE))
+
+    @qd.kernel
+    def k1(
+        mat_arr: qd.types.NDArray[qd.f32, 2],
+        out_arr: qd.types.NDArray[qd.f32, 2],
+    ):
+        qd.loop_config(block_dim=_TILE)
+        for _ in range(_TILE):
+            t = Tile()
+            t[:] = mat_arr[0:_TILE, 0:_TILE]
+            tid = qd.i32(qd.simt.subgroup.invocation_id())
+            a_val = qd.f32(tid + 1)
+            b_val = qd.f32(tid + 2)
+            op = qd.outer(a_val, b_val)
+            t -= op
+            out_arr[0:_TILE, 0:_TILE] = t
+
+    M = np.arange(_TILE * _TILE, dtype=np.float32).reshape(_TILE, _TILE)
+    a = np.arange(_TILE, dtype=np.float32) + 1.0
+    b = np.arange(_TILE, dtype=np.float32) + 2.0
+    mat.from_numpy(M)
+    k1(mat, out)
+
+    expected = M - np.outer(a, b)
+    np.testing.assert_allclose(out.to_numpy(), expected, atol=1e-5)
+
+
+@test_utils.test(arch=qd.gpu)
 def test_tile16_load_without_slice_rebinds():
     """Omitting [:] on the LHS rebinds the variable to a proxy, not a tile."""
     Tile = _make_tile16x16(qd.f32)
