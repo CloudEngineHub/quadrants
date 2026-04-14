@@ -75,6 +75,7 @@ def boundary_type_cast_warning(expression: Expr) -> None:
 
 
 def _quadrants_package_dir():
+    """Return the absolute path to the installed quadrants package directory."""
     import quadrants as _qd_pkg  # pylint: disable=import-outside-toplevel
 
     return os.path.realpath(os.path.dirname(_qd_pkg.__file__))
@@ -84,6 +85,7 @@ _QUADRANTS_PKG_DIR: str | None = None
 
 
 def _is_quadrants_internal_file(filepath: str) -> bool:
+    """Return True if filepath is inside the quadrants package (suppresses purity violations)."""
     global _QUADRANTS_PKG_DIR  # noqa: PLW0603
     if _QUADRANTS_PKG_DIR is None:
         _QUADRANTS_PKG_DIR = _quadrants_package_dir()

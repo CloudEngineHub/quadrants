@@ -132,6 +132,7 @@ class _TileRefProxy:
         self.tile = tile
 
     def _assign(self, value):
+        """Load path: tile[:] = arr[r:r+n, c:c+n]. Dispatches to _load or _load3d."""
         if isinstance(value, _TileSliceProxy):
             if value.batch_idx is not None:
                 self.tile._load3d(
@@ -438,11 +439,17 @@ def _make_tile16x16_class(dtype):
             return v
 
         def _resolve_vec_proxy(self, proxy):
+            """Materialize a _VecSliceProxy into a scalar by dispatching to _resolve_vec2d or _resolve_vec3d."""
             if proxy.batch_idx is not None:
                 return self._resolve_vec3d(proxy.arr, proxy.batch_idx, proxy.row_start, proxy.row_stop, proxy.col)
             return self._resolve_vec2d(proxy.arr, proxy.row_start, proxy.row_stop, proxy.col)
 
         def _augassign(self, other, op):
+            """Handle augmented assignment (e.g. tile -= qd.outer(a, b)).
+
+            Resolves _VecSliceProxy arguments and dispatches to _ger_sub.
+            Only 'Sub' is supported.
+            """
             if isinstance(other, _OuterProduct):
                 if op == "Sub":
                     a_orig = other.a
