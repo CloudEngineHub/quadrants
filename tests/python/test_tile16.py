@@ -181,6 +181,36 @@ def test_tile16_load_store_partial(tensor_type, qd_dtype):
     np.testing.assert_allclose(result[:, NCOLS:], 0.0)
 
 
+@pytest.mark.parametrize("nrows", [10, 8, 1])
+@pytest.mark.parametrize("qd_dtype", _QD_DTYPES)
+@test_utils.test(arch=qd.gpu)
+def test_tile16_load_store_partial_rows(qd_dtype, nrows):
+    """Load/store with fewer than 16 rows -- threads beyond nrows should be skipped."""
+    test_utils.skip_if_f64_unsupported(qd_dtype)
+    np_dtype = _NP_DTYPES[qd_dtype]
+    GRID = 48
+    src = qd.ndarray(qd_dtype, (GRID, GRID))
+    dst = qd.ndarray(qd_dtype, (GRID, GRID))
+
+    @qd.kernel
+    def k1(src_arr: qd.types.NDArray[qd_dtype, 2], dst_arr: qd.types.NDArray[qd_dtype, 2]):
+        qd.loop_config(block_dim=_TILE)
+        for _ in range(_TILE):
+            t = qd.simt.Tile16x16.zeros(dtype=qd_dtype)
+            t[:] = src_arr[0:nrows, 0:_TILE]
+            dst_arr[0:nrows, 0:_TILE] = t
+
+    data = np.arange(GRID * GRID, dtype=np_dtype).reshape(GRID, GRID) + 1.0
+    src.from_numpy(data)
+    dst.from_numpy(np.full((GRID, GRID), -1.0, dtype=np_dtype))
+    k1(src, dst)
+
+    result = dst.to_numpy()
+    expected = np.full((GRID, GRID), -1.0, dtype=np_dtype)
+    expected[:nrows, :_TILE] = data[:nrows, :_TILE]
+    np.testing.assert_allclose(result, expected)
+
+
 @pytest.mark.parametrize("tensor_type", [qd.ndarray, qd.field])
 @pytest.mark.parametrize("qd_dtype", _QD_DTYPES)
 @test_utils.test(arch=qd.gpu)
@@ -332,6 +362,65 @@ def test_tile16_store_clamp_to_array_rows(tensor_type, qd_dtype):
 @pytest.mark.parametrize("tensor_type", [qd.ndarray, qd.field])
 @pytest.mark.parametrize("qd_dtype", _QD_DTYPES)
 @test_utils.test(arch=qd.gpu)
+def test_tile16_3d_load_clamp_to_array_rows(tensor_type, qd_dtype):
+    """3D load from an array shorter than 16 rows. Extra tile rows should be zero."""
+    test_utils.skip_if_f64_unsupported(qd_dtype)
+    np_dtype = _NP_DTYPES[qd_dtype]
+    NROWS = 10
+    src = tensor_type(qd_dtype, (1, NROWS, _TILE))
+    dst = tensor_type(qd_dtype, (1, _TILE, _TILE))
+
+    Ann_src = _ann(tensor_type, qd_dtype, 3)
+    Ann_dst = _ann(tensor_type, qd_dtype, 3)
+
+    @qd.kernel
+    def k1(src_arr: Ann_src, dst_arr: Ann_dst):
+        qd.loop_config(block_dim=_TILE)
+        for _ in range(_TILE):
+            t = qd.simt.Tile16x16.zeros(dtype=qd_dtype)
+            t[:] = src_arr[0, 0:_TILE, 0:_TILE]
+            dst_arr[0, 0:_TILE, 0:_TILE] = t
+
+    data = np.arange(NROWS * _TILE, dtype=np_dtype).reshape(1, NROWS, _TILE) + 1.0
+    src.from_numpy(data)
+    k1(src, dst)
+    result = dst.to_numpy()
+    np.testing.assert_allclose(result[0, :NROWS, :], data[0])
+    np.testing.assert_allclose(result[0, NROWS:, :], 0.0)
+
+
+@pytest.mark.parametrize("tensor_type", [qd.ndarray, qd.field])
+@pytest.mark.parametrize("qd_dtype", _QD_DTYPES)
+@test_utils.test(arch=qd.gpu)
+def test_tile16_3d_store_clamp_to_array_rows(tensor_type, qd_dtype):
+    """3D store to an array shorter than 16 rows. Must not write out of bounds."""
+    test_utils.skip_if_f64_unsupported(qd_dtype)
+    np_dtype = _NP_DTYPES[qd_dtype]
+    NROWS = 10
+    src = tensor_type(qd_dtype, (1, _TILE, _TILE))
+    dst = tensor_type(qd_dtype, (1, NROWS, _TILE))
+
+    Ann_src = _ann(tensor_type, qd_dtype, 3)
+    Ann_dst = _ann(tensor_type, qd_dtype, 3)
+
+    @qd.kernel
+    def k1(src_arr: Ann_src, dst_arr: Ann_dst):
+        qd.loop_config(block_dim=_TILE)
+        for _ in range(_TILE):
+            t = qd.simt.Tile16x16.zeros(dtype=qd_dtype)
+            t[:] = src_arr[0, 0:_TILE, 0:_TILE]
+            dst_arr[0, 0:_TILE, 0:_TILE] = t
+
+    data = np.arange(_TILE * _TILE, dtype=np_dtype).reshape(1, _TILE, _TILE) + 1.0
+    src.from_numpy(data)
+    k1(src, dst)
+    result = dst.to_numpy()
+    np.testing.assert_allclose(result[0], data[0, :NROWS, :])
+
+
+@pytest.mark.parametrize("tensor_type", [qd.ndarray, qd.field])
+@pytest.mark.parametrize("qd_dtype", _QD_DTYPES)
+@test_utils.test(arch=qd.gpu)
 def test_tile16_syr_sub(tensor_type, qd_dtype):
     test_utils.skip_if_f64_unsupported(qd_dtype)
     np_dtype = _NP_DTYPES[qd_dtype]
@@ -427,6 +516,50 @@ def test_tile16_potrf(tensor_type, qd_dtype):
     k1(src, dst)
     L_expected = np.linalg.cholesky(A.astype(np.float64)).astype(np_dtype)
     np.testing.assert_allclose(np.tril(dst.to_numpy()), L_expected, atol=atol)
+
+
+@pytest.mark.parametrize("dst_delta", [0, 3, 16])
+@pytest.mark.parametrize("src_offset", [0, 5, 32])
+@pytest.mark.parametrize("qd_dtype", _QD_DTYPES)
+@test_utils.test(arch=qd.gpu)
+def test_tile16_potrf_offset(qd_dtype, src_offset, dst_delta):
+    """Cholesky with offset load/store on a larger grid — verifies untouched regions."""
+    test_utils.skip_if_f64_unsupported(qd_dtype)
+    np_dtype = _NP_DTYPES[qd_dtype]
+    atol = _ATOLS[qd_dtype]
+    GRID = 64
+    src = qd.ndarray(qd_dtype, (GRID, GRID))
+    dst = qd.ndarray(qd_dtype, (GRID, GRID))
+    eps_field = qd.field(dtype=qd_dtype, shape=())
+
+    dst_offset = src_offset + dst_delta
+
+    @qd.kernel
+    def k1(src_arr: qd.types.NDArray[qd_dtype, 2], dst_arr: qd.types.NDArray[qd_dtype, 2]):
+        qd.loop_config(block_dim=_TILE)
+        for _ in range(_TILE):
+            t = qd.simt.Tile16x16.zeros(dtype=qd_dtype)
+            t[:] = src_arr[src_offset : src_offset + _TILE, src_offset : src_offset + _TILE]
+            t.cholesky_(eps_field[None])
+            dst_arr[dst_offset : dst_offset + _TILE, dst_offset : dst_offset + _TILE] = t
+
+    A = _make_spd(dtype=np_dtype)
+    src_np = np.zeros((GRID, GRID), dtype=np_dtype)
+    src_np[src_offset : src_offset + _TILE, src_offset : src_offset + _TILE] = A
+    src.from_numpy(src_np)
+    dst.from_numpy(np.full((GRID, GRID), -1.0, dtype=np_dtype))
+    eps_field[None] = _EPS_VALS[qd_dtype]
+    k1(src, dst)
+
+    result = dst.to_numpy()
+    L_gpu = np.tril(result[dst_offset : dst_offset + _TILE, dst_offset : dst_offset + _TILE])
+    L_ref = scipy.linalg.cholesky(A.astype(np.float64), lower=True).astype(np_dtype)
+    np.testing.assert_allclose(L_gpu, L_ref, atol=atol)
+    untouched = np.full((GRID, GRID), -1.0, dtype=np_dtype)
+    untouched[dst_offset : dst_offset + _TILE, dst_offset : dst_offset + _TILE] = result[
+        dst_offset : dst_offset + _TILE, dst_offset : dst_offset + _TILE
+    ]
+    np.testing.assert_allclose(result, untouched)
 
 
 @pytest.mark.parametrize("tensor_type", [qd.ndarray, qd.field])
@@ -528,6 +661,52 @@ def test_tile16_load3d_store3d(tensor_type, qd_dtype):
     src.from_numpy(data)
     k1(src, dst)
     np.testing.assert_allclose(dst.to_numpy(), data)
+
+
+@pytest.mark.parametrize(
+    "batch, src_row, src_col, ncols, nrows",
+    [
+        (0, 0, 0, _TILE, _TILE),
+        (2, 0, 0, _TILE, _TILE),
+        (5, 0, 0, _TILE, _TILE),
+        (1, 8, 4, _TILE, _TILE),
+        (3, 0, 0, 7, 10),
+        (0, 16, 16, 12, 8),
+    ],
+)
+@pytest.mark.parametrize("qd_dtype", _QD_DTYPES)
+@test_utils.test(arch=qd.gpu)
+def test_tile16_load3d_store3d_offsets(qd_dtype, batch, src_row, src_col, ncols, nrows):
+    """3D load/store with various batch indices, sub-tile row/col ranges, and partial tiles."""
+    test_utils.skip_if_f64_unsupported(qd_dtype)
+    np_dtype = _NP_DTYPES[qd_dtype]
+    GRID = 92
+    NBATCH = 6
+    src = qd.ndarray(qd_dtype, (NBATCH, GRID, GRID))
+    dst = qd.ndarray(qd_dtype, (NBATCH, GRID, GRID))
+
+    row_stop = src_row + nrows
+    col_stop = src_col + ncols
+
+    @qd.kernel
+    def k1(src_arr: qd.types.NDArray[qd_dtype, 3], dst_arr: qd.types.NDArray[qd_dtype, 3]):
+        qd.loop_config(block_dim=_TILE)
+        for _ in range(_TILE):
+            t = qd.simt.Tile16x16.zeros(dtype=qd_dtype)
+            t[:] = src_arr[batch, src_row:row_stop, src_col:col_stop]
+            dst_arr[batch, src_row:row_stop, src_col:col_stop] = t
+
+    data = np.arange(NBATCH * GRID * GRID, dtype=np_dtype).reshape(NBATCH, GRID, GRID) + 1.0
+    src.from_numpy(data)
+    dst.from_numpy(np.full((NBATCH, GRID, GRID), -1.0, dtype=np_dtype))
+    k1(src, dst)
+
+    result = dst.to_numpy()
+    expected = np.full((NBATCH, GRID, GRID), -1.0, dtype=np_dtype)
+    expected[batch, src_row : src_row + nrows, src_col : src_col + ncols] = data[
+        batch, src_row : src_row + nrows, src_col : src_col + ncols
+    ]
+    np.testing.assert_allclose(result, expected)
 
 
 @test_utils.test(arch=qd.gpu)
@@ -800,15 +979,19 @@ def test_tile16_vec_proxy_syr_sub_3d(tensor_type):
 
 
 @pytest.mark.parametrize("tensor_type", [qd.ndarray, qd.field])
+@pytest.mark.parametrize("qd_dtype", _QD_DTYPES)
 @test_utils.test(arch=qd.gpu)
-def test_tile16_vec_proxy_ger_sub_2d(tensor_type):
+def test_tile16_vec_proxy_ger_sub_2d(tensor_type, qd_dtype):
     """General rank-1 subtract via two vec proxies at different row offsets."""
-    mat = tensor_type(qd.f32, (_TILE, _TILE))
-    vecs = tensor_type(qd.f32, (_M, _M))
-    out = tensor_type(qd.f32, (_TILE, _TILE))
+    test_utils.skip_if_f64_unsupported(qd_dtype)
+    np_dtype = _NP_DTYPES[qd_dtype]
+    atol = _ATOLS[qd_dtype]
+    mat = tensor_type(qd_dtype, (_TILE, _TILE))
+    vecs = tensor_type(qd_dtype, (_M, _M))
+    out = tensor_type(qd_dtype, (_TILE, _TILE))
 
-    Ann_tile = _ann(tensor_type, qd.f32, 2)
-    Ann_vecs = _ann(tensor_type, qd.f32, 2)
+    Ann_tile = _ann(tensor_type, qd_dtype, 2)
+    Ann_vecs = _ann(tensor_type, qd_dtype, 2)
 
     K0_A = 0
     K0_B = 16
@@ -818,7 +1001,7 @@ def test_tile16_vec_proxy_ger_sub_2d(tensor_type):
     def k1(mat_arr: Ann_tile, vecs_arr: Ann_vecs, out_arr: Ann_tile):
         qd.loop_config(block_dim=_TILE)
         for _ in range(_TILE):
-            t = qd.simt.Tile16x16.zeros(dtype=qd.f32)
+            t = qd.simt.Tile16x16.zeros(dtype=qd_dtype)
             t[:] = mat_arr[0:_TILE, 0:_TILE]
             a = vecs_arr[K0_A : K0_A + qd.simt.Tile16x16.SIZE, COL]
             b = vecs_arr[K0_B : K0_B + qd.simt.Tile16x16.SIZE, COL]
@@ -826,14 +1009,14 @@ def test_tile16_vec_proxy_ger_sub_2d(tensor_type):
             out_arr[0:_TILE, 0:_TILE] = t
 
     rng = np.random.RandomState(300)
-    R = rng.randn(_TILE, _TILE).astype(np.float32)
-    V = rng.randn(_M, _M).astype(np.float32)
+    R = rng.randn(_TILE, _TILE).astype(np_dtype)
+    V = rng.randn(_M, _M).astype(np_dtype)
     mat.from_numpy(R)
     vecs.from_numpy(V)
     k1(mat, vecs, out)
     va = V[K0_A : K0_A + 16, COL]
     vb = V[K0_B : K0_B + 16, COL]
-    np.testing.assert_allclose(out.to_numpy(), R - np.outer(va, vb), atol=1e-5)
+    np.testing.assert_allclose(out.to_numpy(), R - np.outer(va, vb), atol=atol)
 
 
 @test_utils.test(arch=qd.gpu)

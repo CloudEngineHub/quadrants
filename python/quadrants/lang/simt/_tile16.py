@@ -514,7 +514,6 @@ def _make_tile16x16_class(dtype):
     return result
 
 
-
 class _Tile16x16Proxy:
     """Proxy for dtype-at-point-of-use tile creation.
 
