@@ -43,6 +43,9 @@ from quadrants.lang.struct import Struct, StructType
 from quadrants.lang.util import (
     is_from_quadrants_module as _is_from_quadrants_module,
 )
+from quadrants.lang.util import (
+    is_quadrants_internal_file as _is_quadrants_internal_file,
+)
 from quadrants.types import primitive_types
 from quadrants.types.utils import is_integral
 
