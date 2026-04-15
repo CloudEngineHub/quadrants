@@ -295,6 +295,10 @@
 <ul class="nav bd-sidenav">
 <li class="toctree-l1"><a class="reference internal" href="interop.html">Numpy and Torch interop</a></li>
 </ul>
+<p aria-level="2" class="caption" role="heading"><span class="caption-text">SIMT primitives</span></p>
+<ul class="nav bd-sidenav">
+<li class="toctree-l1"><a class="reference internal" href="tile16.html">Tile16x16: register-resident 16x16 tiles</a></li>
+</ul>
 <p aria-level="2" class="caption" role="heading"><span class="caption-text">Performance</span></p>
 <ul class="nav bd-sidenav">
 <li class="toctree-l1"><a class="reference internal" href="graph.html">CUDA Graph</a></li>
@@ -380,8 +384,8 @@
 <p>Standard Python coverage tools only measure host-side code. Quadrants kernel coverage goes further — it tracks which
 lines actually execute <em>inside</em> compiled kernels on the device (CPU or GPU), including which branches of <code class="docutils literal notranslate"><span class="pre">if</span></code>/<code class="docutils literal notranslate"><span class="pre">else</span></code>
 blocks are taken at runtime.</p>
-<p>The coverage data is written in the standard <code class="docutils literal notranslate"><span class="pre">coverage.py</span></code> format, so it works with <code class="docutils literal notranslate"><span class="pre">coverage</span> <span class="pre">report</span></code>, <code class="docutils literal notranslate"><span class="pre">diff-cover</span></code>,
-and IDE coverage viewers out of the box.</p>
+<p>The coverage data is written in the standard <code class="docutils literal notranslate"><span class="pre">coverage.py</span></code> format, so it works with <code class="docutils literal notranslate"><span class="pre">coverage</span> <span class="pre">report</span></code>, <code class="docutils literal notranslate"><span class="pre">pytest-cov</span></code>,
+<code class="docutils literal notranslate"><span class="pre">diff-cover</span></code>, and IDE coverage viewers out of the box.</p>
 <section id="prerequisites">
 <h2>Prerequisites<a class="headerlink" href="#prerequisites" title="Link to this heading">#</a></h2>
 <p>Kernel coverage requires the <code class="docutils literal notranslate"><span class="pre">coverage</span></code> Python package:</p>
