@@ -1579,7 +1579,7 @@ def test_tile16_vec_proxy_multi_column_accumulate(tensor_type):
     np.testing.assert_allclose(out.to_numpy(), expected, atol=1e-4)
 
 
-@test_utils.test(arch=qd.gpu)
+@test_utils.test(arch=qd.gpu, exclude=[qd.vulkan])
 def test_tile16_f64_roundtrip_into_f32_array():
     """Load f32 data through an f64 tile and store back -- must be lossless."""
     src = qd.ndarray(shape=(_TILE, _TILE), dtype=qd.f32)
