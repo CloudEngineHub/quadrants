@@ -24,12 +24,12 @@ if _TYPE_CHECKING:
 
         def __init__(self, *args: Any, **kwargs: Any) -> None: ...  # noqa: E704
         @classmethod
-        def zeros(cls) -> _Tile16x16Proto: ...  # noqa: E704
+        def zeros(cls) -> "_Tile16x16Proto": ...  # noqa: E704
         @classmethod
-        def eye(cls) -> _Tile16x16Proto: ...  # noqa: E704
+        def eye(cls) -> "_Tile16x16Proto": ...  # noqa: E704
         def eye_(self) -> None: ...  # noqa: E704
         def cholesky_(self, eps: Any) -> None: ...  # noqa: E704
-        def solve_triangular_(self, B: _Tile16x16Proto, lower: bool = True) -> None: ...  # noqa: E704
+        def solve_triangular_(self, B: "_Tile16x16Proto", lower: bool = True) -> None: ...  # noqa: E704
         def _load(self, arr: Any, row_start: Any, row_end: Any, col_start: Any, col_end: Any) -> None: ...  # noqa: E704
         def _store(
             self, arr: Any, row_start: Any, row_end: Any, col_start: Any, col_end: Any
@@ -43,8 +43,8 @@ if _TYPE_CHECKING:
         def _get_col(self, k: Any) -> Any: ...  # noqa: E704
         def _set_col(self, k: Any, val: Any) -> None: ...  # noqa: E704
         def _ger_sub(self, a: Any, b: Any) -> None: ...  # noqa: E704
-        def _trsm(self, L: _Tile16x16Proto) -> None: ...  # noqa: E704
-        def __isub__(self, other: Any) -> _Tile16x16Proto: ...  # noqa: E704
+        def _trsm(self, L: "_Tile16x16Proto") -> None: ...  # noqa: E704
+        def __isub__(self, other: Any) -> "_Tile16x16Proto": ...  # noqa: E704
         def __getitem__(self, key: Any) -> Any: ...  # noqa: E704
         def __setitem__(self, key: Any, value: Any) -> None: ...  # noqa: E704
 
@@ -194,10 +194,10 @@ def _make_tile16x16(dtype=None) -> "type[_Tile16x16Proto]":
     if dtype is None:
         dtype = qd.f32
     if dtype in _tile16_cache:
-        return _tile16_cache[dtype]
+        return _tile16_cache[dtype]  # pyright: ignore[reportReturnType]
     cls = _make_tile16x16_class(dtype)
     _tile16_cache[dtype] = cls
-    return cls
+    return cls  # pyright: ignore[reportReturnType]
 
 
 def _make_tile16x16_class(dtype):
