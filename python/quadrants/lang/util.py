@@ -362,10 +362,11 @@ def is_from_quadrants_module(obj: object) -> bool:
     import types  # pylint: disable=C0415
 
     if isinstance(obj, types.ModuleType):
-        return getattr(obj, "__name__", "").startswith("quadrants")
+        name = getattr(obj, "__name__", "")
+        return name == "quadrants" or name.startswith("quadrants.")
     if isinstance(obj, type):
         mod = getattr(obj, "__module__", None)
-        return mod is not None and mod.startswith("quadrants")
+        return mod is not None and (mod == "quadrants" or mod.startswith("quadrants."))
     return False
 
 
