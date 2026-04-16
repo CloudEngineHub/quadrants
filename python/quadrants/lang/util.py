@@ -367,13 +367,20 @@ def is_quadrants_internal_file(filepath: str) -> bool:
 
 
 def is_from_quadrants_module(obj: object) -> bool:
-    """Return True if obj belongs to the quadrants package (module, class, or instance)."""
+    """Return True if obj is a quadrants module or class (not an instance).
+
+    This is intentionally restricted to modules and classes so that mutable
+    instance attributes are still flagged as purity violations.
+    """
     import types  # pylint: disable=C0415
 
     if isinstance(obj, types.ModuleType):
-        return getattr(obj, "__name__", "").startswith("quadrants")
-    mod = getattr(obj, "__module__", None) or getattr(type(obj), "__module__", None)
-    return mod is not None and mod.startswith("quadrants")
+        name = getattr(obj, "__name__", "")
+        return name == "quadrants" or name.startswith("quadrants.")
+    if isinstance(obj, type):
+        mod = getattr(obj, "__module__", None)
+        return mod is not None and (mod == "quadrants" or mod.startswith("quadrants."))
+    return False
 
 
 __all__ = []

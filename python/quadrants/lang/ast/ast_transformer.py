@@ -619,8 +619,6 @@ class ASTTransformer(Builder):
         # whether it is a method of Dynamic SNode and build the expression if it is by calling
         # build_attribute_if_is_dynamic_snode_method. If we find that it is not a method of Dynamic SNode,
         # we continue to process it as a normal attribute node.
-        from quadrants import math as qd_math  # pylint: disable=import-outside-toplevel
-
         try:
             build_stmt(ctx, node.value)
         except Exception as e:
@@ -677,7 +675,7 @@ class ASTTransformer(Builder):
                     violation = True
                     if violation and isinstance(node.ptr, enum.Enum):
                         violation = False
-                    if violation and node.value.ptr in [qd_math, math, np]:
+                    if violation and node.value.ptr in [math, np]:
                         violation = False
                     if violation and _is_from_quadrants_module(node.value.ptr):
                         violation = False
