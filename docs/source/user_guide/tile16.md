@@ -107,6 +107,20 @@ L.solve_triangular_(B)
 
 Solves `X @ L^T = B` in-place, replacing `B` with `X`. `L` must be a lower-triangular, non-singular tile (all diagonal elements non-zero, e.g. from `cholesky_()`). Only `lower=True` is supported; passing `lower=False` raises `TypeError`.
 
+### Combined Cholesky + triangular solve
+
+A common pattern is to factorize a tile and immediately solve against it:
+
+```python
+L = qd.simt.Tile16x16.zeros(dtype=qd.f32)
+L[:] = A[0:N, 0:N]
+L.cholesky_(eps)
+B = qd.simt.Tile16x16.zeros(dtype=qd.f32)
+B[:] = rhs[0:N, 0:N]
+L.solve_triangular_(B)
+rhs[0:N, 0:N] = B
+```
+
 ## SharedArray support
 
 Tiles can load from and store to `qd.simt.block.SharedArray` using the same slice syntax as device arrays:
