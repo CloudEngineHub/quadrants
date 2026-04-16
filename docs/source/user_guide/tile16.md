@@ -32,7 +32,7 @@ t = qd.simt.Tile16x16.eye(dtype=qd.f32)      # 16x16 identity, f32
 t = qd.simt.Tile16x16.eye(dtype=qd.f64)      # 16x16 identity, f64
 ```
 
-The `dtype` argument is required. The underlying tile dataclass has 16 fields (`r0`–`r15`) — the scalar registers for one row.
+The `dtype` argument is optional — if omitted it defaults to the runtime's `default_fp` (usually `qd.f32`). The underlying tile dataclass has 16 fields (`r0`–`r15`) — the scalar registers for one row.
 
 ## Loading and storing
 
