@@ -525,8 +525,6 @@ class _Tile16x16Proxy:
 
     @staticmethod
     def _resolve(dtype):
-        if dtype is not None and dtype in _tile16_cache:
-            return _tile16_cache[dtype]
         from quadrants.lang import impl  # pylint: disable=import-outside-toplevel
         from quadrants.lang.exception import (  # pylint: disable=import-outside-toplevel
             QuadrantsSyntaxError,
@@ -539,6 +537,8 @@ class _Tile16x16Proxy:
             )
         if dtype is None:
             dtype = impl.get_runtime().default_fp
+        if dtype in _tile16_cache:
+            return _tile16_cache[dtype]
         return _make_tile16x16(dtype)
 
     def zeros(self, *, dtype=None):
