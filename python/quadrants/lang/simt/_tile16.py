@@ -534,7 +534,7 @@ class _Tile16x16Proxy:
         )
 
         arch = impl.current_cfg().arch
-        if arch in (qd.cpu, qd.x64, qd.python, getattr(qd, "arm64", None)):
+        if arch in (qd.cpu, qd.x64, getattr(qd, "arm64", None)):
             raise QuadrantsSyntaxError(
                 "Tile16x16 requires a GPU backend (cuda, metal, vulkan, amdgpu). " f"Current arch is {arch}."
             )
