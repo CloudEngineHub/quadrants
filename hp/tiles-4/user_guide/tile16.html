@@ -379,7 +379,7 @@
 <h1>Tile16x16: register-resident 16x16 tiles<a class="headerlink" href="#tile16x16-register-resident-16x16-tiles" title="Link to this heading">#</a></h1>
 <p><code class="docutils literal notranslate"><span class="pre">Tile16x16</span></code> provides a 16x16 matrix tile that lives entirely in registers, distributed across 16 threads in a subgroup (warp). Each thread holds one row as 16 scalar registers. Cross-thread communication uses subgroup shuffles — no shared memory needed.</p>
 <p>This is useful for implementing blocked linear algebra kernels (Cholesky, triangular solve, etc.) where you want to keep working data in registers for maximum throughput.</p>
-<p>Tile16x16 runs on all GPU backends supported by Quadrants: CUDA, AMD, Metal, and Vulkan. It builds on <code class="docutils literal notranslate"><span class="pre">qd.simt.subgroup.shuffle</span></code>, which is cross-platform — no vendor-specific libraries required.</p>
+<p>Tile16x16 runs on all GPU backends supported by Quadrants: CUDA, AMD, Metal, and Vulkan. It builds on <code class="docutils literal notranslate"><span class="pre">qd.simt.subgroup.shuffle</span></code>, which is cross-platform — no vendor-specific libraries required. Using Tile16x16 on a CPU backend raises <code class="docutils literal notranslate"><span class="pre">QuadrantsSyntaxError</span></code>.</p>
 <section id="quick-start">
 <h2>Quick start<a class="headerlink" href="#quick-start" title="Link to this heading">#</a></h2>
 <div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">import</span><span class="w"> </span><span class="nn">quadrants</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">qd</span>
@@ -404,11 +404,11 @@
 <span class="n">t</span> <span class="o">=</span> <span class="n">qd</span><span class="o">.</span><span class="n">simt</span><span class="o">.</span><span class="n">Tile16x16</span><span class="o">.</span><span class="n">eye</span><span class="p">(</span><span class="n">dtype</span><span class="o">=</span><span class="n">qd</span><span class="o">.</span><span class="n">f64</span><span class="p">)</span>      <span class="c1"># 16x16 identity, f64</span>
 </pre></div>
 </div>
-<p>The <code class="docutils literal notranslate"><span class="pre">dtype</span></code> argument is required. The underlying tile dataclass has 16 fields (<code class="docutils literal notranslate"><span class="pre">r0</span></code>–<code class="docutils literal notranslate"><span class="pre">r15</span></code>) — the scalar registers for one row.</p>
+<p>The <code class="docutils literal notranslate"><span class="pre">dtype</span></code> argument is optional — if omitted it defaults to the runtime’s <code class="docutils literal notranslate"><span class="pre">default_fp</span></code> (usually <code class="docutils literal notranslate"><span class="pre">qd.f32</span></code>). The underlying tile dataclass has 16 fields (<code class="docutils literal notranslate"><span class="pre">r0</span></code>–<code class="docutils literal notranslate"><span class="pre">r15</span></code>) — the scalar registers for one row.</p>
 </section>
 <section id="loading-and-storing">
 <h2>Loading and storing<a class="headerlink" href="#loading-and-storing" title="Link to this heading">#</a></h2>
-<p>Load/store transfers data between a tile and device memory arrays using slice syntax. Each thread accesses row <code class="docutils literal notranslate"><span class="pre">row0</span> <span class="pre">+</span> <span class="pre">tid</span></code>, where <code class="docutils literal notranslate"><span class="pre">tid</span></code> is the thread’s subgroup lane index (obtained internally via <code class="docutils literal notranslate"><span class="pre">subgroup.invocation_id()</span></code>).</p>
+<p>Load/store transfers data between a tile and device memory arrays using slice syntax. Both <code class="docutils literal notranslate"><span class="pre">qd.ndarray</span></code> and <code class="docutils literal notranslate"><span class="pre">qd.field</span></code> are supported. Each thread accesses row <code class="docutils literal notranslate"><span class="pre">row0</span> <span class="pre">+</span> <span class="pre">tid</span></code>, where <code class="docutils literal notranslate"><span class="pre">tid</span></code> is the thread’s subgroup lane index (obtained internally via <code class="docutils literal notranslate"><span class="pre">subgroup.invocation_id()</span></code>).</p>
 <section id="slice-syntax">
 <h3>Slice syntax<a class="headerlink" href="#slice-syntax" title="Link to this heading">#</a></h3>
 <div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">t</span><span class="p">[:]</span> <span class="o">=</span> <span class="n">arr</span><span class="p">[</span><span class="n">row0</span><span class="p">:</span><span class="n">row1</span><span class="p">,</span> <span class="n">col0</span><span class="p">:</span><span class="n">col1</span><span class="p">]</span>    <span class="c1"># load from 2D array</span>
@@ -473,6 +473,33 @@
 </pre></div>
 </div>
 <p>Solves <code class="docutils literal notranslate"><span class="pre">X</span> <span class="pre">&#64;</span> <span class="pre">L^T</span> <span class="pre">=</span> <span class="pre">B</span></code> in-place, replacing <code class="docutils literal notranslate"><span class="pre">B</span></code> with <code class="docutils literal notranslate"><span class="pre">X</span></code>. <code class="docutils literal notranslate"><span class="pre">L</span></code> must be a lower-triangular, non-singular tile (all diagonal elements non-zero, e.g. from <code class="docutils literal notranslate"><span class="pre">cholesky_()</span></code>). Only <code class="docutils literal notranslate"><span class="pre">lower=True</span></code> is supported; passing <code class="docutils literal notranslate"><span class="pre">lower=False</span></code> raises <code class="docutils literal notranslate"><span class="pre">TypeError</span></code>.</p>
+<section id="combined-cholesky-triangular-solve">
+<h3>Combined Cholesky + triangular solve<a class="headerlink" href="#combined-cholesky-triangular-solve" title="Link to this heading">#</a></h3>
+<p>A common pattern is to factorize a tile and immediately solve against it:</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">L</span> <span class="o">=</span> <span class="n">qd</span><span class="o">.</span><span class="n">simt</span><span class="o">.</span><span class="n">Tile16x16</span><span class="o">.</span><span class="n">zeros</span><span class="p">(</span><span class="n">dtype</span><span class="o">=</span><span class="n">qd</span><span class="o">.</span><span class="n">f32</span><span class="p">)</span>
+<span class="n">L</span><span class="p">[:]</span> <span class="o">=</span> <span class="n">A</span><span class="p">[</span><span class="mi">0</span><span class="p">:</span><span class="n">N</span><span class="p">,</span> <span class="mi">0</span><span class="p">:</span><span class="n">N</span><span class="p">]</span>
+<span class="n">L</span><span class="o">.</span><span class="n">cholesky_</span><span class="p">(</span><span class="n">eps</span><span class="p">)</span>
+<span class="n">B</span> <span class="o">=</span> <span class="n">qd</span><span class="o">.</span><span class="n">simt</span><span class="o">.</span><span class="n">Tile16x16</span><span class="o">.</span><span class="n">zeros</span><span class="p">(</span><span class="n">dtype</span><span class="o">=</span><span class="n">qd</span><span class="o">.</span><span class="n">f32</span><span class="p">)</span>
+<span class="n">B</span><span class="p">[:]</span> <span class="o">=</span> <span class="n">rhs</span><span class="p">[</span><span class="mi">0</span><span class="p">:</span><span class="n">N</span><span class="p">,</span> <span class="mi">0</span><span class="p">:</span><span class="n">N</span><span class="p">]</span>
+<span class="n">L</span><span class="o">.</span><span class="n">solve_triangular_</span><span class="p">(</span><span class="n">B</span><span class="p">)</span>
+<span class="n">rhs</span><span class="p">[</span><span class="mi">0</span><span class="p">:</span><span class="n">N</span><span class="p">,</span> <span class="mi">0</span><span class="p">:</span><span class="n">N</span><span class="p">]</span> <span class="o">=</span> <span class="n">B</span>
+</pre></div>
+</div>
+</section>
+</section>
+<section id="sharedarray-support">
+<h2>SharedArray support<a class="headerlink" href="#sharedarray-support" title="Link to this heading">#</a></h2>
+<p>Tiles can load from and store to <code class="docutils literal notranslate"><span class="pre">qd.simt.block.SharedArray</span></code> using the same slice syntax as device arrays:</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">sh</span> <span class="o">=</span> <span class="n">qd</span><span class="o">.</span><span class="n">simt</span><span class="o">.</span><span class="n">block</span><span class="o">.</span><span class="n">SharedArray</span><span class="p">((</span><span class="n">qd</span><span class="o">.</span><span class="n">simt</span><span class="o">.</span><span class="n">Tile16x16</span><span class="o">.</span><span class="n">SIZE</span><span class="p">,</span> <span class="n">qd</span><span class="o">.</span><span class="n">simt</span><span class="o">.</span><span class="n">Tile16x16</span><span class="o">.</span><span class="n">SIZE</span><span class="p">),</span> <span class="n">qd</span><span class="o">.</span><span class="n">f32</span><span class="p">)</span>
+<span class="n">t</span> <span class="o">=</span> <span class="n">qd</span><span class="o">.</span><span class="n">simt</span><span class="o">.</span><span class="n">Tile16x16</span><span class="o">.</span><span class="n">zeros</span><span class="p">(</span><span class="n">dtype</span><span class="o">=</span><span class="n">qd</span><span class="o">.</span><span class="n">f32</span><span class="p">)</span>
+<span class="n">t</span><span class="p">[:]</span> <span class="o">=</span> <span class="n">src</span><span class="p">[</span><span class="mi">0</span><span class="p">:</span><span class="n">N</span><span class="p">,</span> <span class="mi">0</span><span class="p">:</span><span class="n">N</span><span class="p">]</span>
+<span class="n">sh</span><span class="p">[</span><span class="mi">0</span><span class="p">:</span><span class="n">N</span><span class="p">,</span> <span class="mi">0</span><span class="p">:</span><span class="n">N</span><span class="p">]</span> <span class="o">=</span> <span class="n">t</span>          <span class="c1"># store tile to shared memory</span>
+<span class="n">qd</span><span class="o">.</span><span class="n">simt</span><span class="o">.</span><span class="n">block</span><span class="o">.</span><span class="n">sync</span><span class="p">()</span>
+<span class="n">t2</span> <span class="o">=</span> <span class="n">qd</span><span class="o">.</span><span class="n">simt</span><span class="o">.</span><span class="n">Tile16x16</span><span class="o">.</span><span class="n">zeros</span><span class="p">(</span><span class="n">dtype</span><span class="o">=</span><span class="n">qd</span><span class="o">.</span><span class="n">f32</span><span class="p">)</span>
+<span class="n">t2</span><span class="p">[:]</span> <span class="o">=</span> <span class="n">sh</span><span class="p">[</span><span class="mi">0</span><span class="p">:</span><span class="n">N</span><span class="p">,</span> <span class="mi">0</span><span class="p">:</span><span class="n">N</span><span class="p">]</span>      <span class="c1"># load tile from shared memory</span>
+</pre></div>
+</div>
+<p>Column clamping applies the same way as for device arrays — columns beyond the SharedArray width are left as zero on load or skipped on store. Column vector slices (<code class="docutils literal notranslate"><span class="pre">v</span> <span class="pre">=</span> <span class="pre">sh[K0:K1,</span> <span class="pre">col]</span></code>) also work with SharedArray.</p>
 </section>
 <section id="kernel-structure">
 <h2>Kernel structure<a class="headerlink" href="#kernel-structure" title="Link to this heading">#</a></h2>
@@ -615,7 +642,11 @@
 </ul>
 </li>
 <li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#cholesky-factorization">Cholesky factorization</a></li>
-<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#triangular-solve">Triangular solve</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#triangular-solve">Triangular solve</a><ul class="nav section-nav flex-column">
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#combined-cholesky-triangular-solve">Combined Cholesky + triangular solve</a></li>
+</ul>
+</li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#sharedarray-support">SharedArray support</a></li>
 <li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#kernel-structure">Kernel structure</a><ul class="nav section-nav flex-column">
 <li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#block-size">Block size</a></li>
 <li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#subgroup-size">Subgroup size</a></li>
