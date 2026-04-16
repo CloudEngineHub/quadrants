@@ -382,11 +382,11 @@ def test_tile16_make_caching():
     assert c is d
 
 
-def _make_spd(seed: int = 42, dtype=np.float32):
+def _make_spd(np_dtype=np.float32, seed: int = 42):
     """Return a well-conditioned 16x16 symmetric positive-definite matrix."""
     rng = np.random.RandomState(seed)
     B = rng.randn(_TILE, _TILE).astype(np.float64)
-    return (B @ B.T + _TILE * np.eye(_TILE)).astype(dtype)
+    return (B @ B.T + _TILE * np.eye(_TILE)).astype(np_dtype)
 
 
 @pytest.mark.parametrize("tensor_type", [qd.ndarray, qd.field])
@@ -474,7 +474,7 @@ def test_tile16_cholesky(tensor_type, qd_dtype, src_offset, dst_delta):
                 t.cholesky_(qd.f32(1e-6))
             t._store(dst_arr, dst_offset, dst_row_end, dst_offset, dst_row_end)
 
-    A = _make_spd(dtype=np_dtype)
+    A = _make_spd(np_dtype)
     src_np = np.zeros((GRID, GRID), dtype=np_dtype)
     src_np[src_offset : src_offset + _TILE, src_offset : src_offset + _TILE] = A
     src.from_numpy(src_np)
@@ -522,7 +522,7 @@ def test_tile16_trsm(tensor_type, qd_dtype):
             L.solve_triangular_(B)
             B._store(out, 0, tile_size, 0, tile_size)
 
-    A = _make_spd(dtype=np_dtype)
+    A = _make_spd(np_dtype)
     L_ref = scipy.linalg.cholesky(A.astype(np.float64), lower=True).astype(np_dtype)
     B = np.random.RandomState(123).randn(_TILE, _TILE).astype(np_dtype)
 
@@ -1182,7 +1182,7 @@ def test_tile16_potrf(tensor_type, qd_dtype):
             t.cholesky_(eps_f[None])
             dst_arr[0:tile_size, 0:tile_size] = t
 
-    A = _make_spd(dtype=np_dtype)
+    A = _make_spd(np_dtype)
     src.from_numpy(A)
     eps_field[None] = _EPS_VALS[qd_dtype]
     k1(src, dst, eps_field)
@@ -1217,7 +1217,7 @@ def test_tile16_potrf_then_trsm(tensor_type, qd_dtype):
             L.solve_triangular_(B)
             x_arr[0:tile_size, 0:tile_size] = B
 
-    A = _make_spd(seed=55, dtype=np_dtype)
+    A = _make_spd(np_dtype, seed=55)
     rng = np.random.RandomState(66)
     Bnp = rng.randn(_TILE, _TILE).astype(np_dtype)
     a_field.from_numpy(A)
