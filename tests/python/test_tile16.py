@@ -1289,9 +1289,10 @@ def test_tile16_shared_array_roundtrip():
     np.testing.assert_allclose(dst.to_numpy(), data)
 
 
+@pytest.mark.parametrize("partial_store,partial_load", [(True, True), (True, False), (False, True)])
 @test_utils.test(arch=qd.gpu)
-def test_tile16_shared_array_partial_cols():
-    """Store/load partial columns (< 16) via SharedArray slice syntax."""
+def test_tile16_shared_array_partial_cols(partial_store, partial_load):
+    """Partial-column load/store through SharedArray."""
     NCOLS = 10
     src = qd.field(dtype=qd.f32, shape=(_TILE, _TILE))
     dst = qd.field(dtype=qd.f32, shape=(_TILE, _TILE))
@@ -1302,12 +1303,25 @@ def test_tile16_shared_array_partial_cols():
         tile_size = qd.simt.Tile16x16.SIZE
         for _ in range(tile_size):
             sh = qd.simt.block.SharedArray((qd.simt.Tile16x16.SIZE, qd.simt.Tile16x16.SIZE), qd.f32)
-            t = qd.simt.Tile16x16.zeros(dtype=qd.f32)
-            t[:] = src_f[0:tile_size, 0:NCOLS]
-            sh[0:tile_size, 0:NCOLS] = t
+            tid = qd.simt.subgroup.invocation_id()
+            for c in range(tile_size):
+                sh[tid, c] = qd.f32(-1.0)
             qd.simt.block.sync()
+
+            t = qd.simt.Tile16x16.zeros(dtype=qd.f32)
+            if qd.static(partial_store):
+                t[:] = src_f[0:tile_size, 0:NCOLS]
+                sh[0:tile_size, 0:NCOLS] = t
+            else:
+                t[:] = src_f[0:tile_size, 0:tile_size]
+                sh[0:tile_size, 0:tile_size] = t
+            qd.simt.block.sync()
+
             t2 = qd.simt.Tile16x16.zeros(dtype=qd.f32)
-            t2[:] = sh[0:tile_size, 0:NCOLS]
+            if qd.static(partial_load):
+                t2[:] = sh[0:tile_size, 0:NCOLS]
+            else:
+                t2[:] = sh[0:tile_size, 0:tile_size]
             dst_f[0:tile_size, 0:tile_size] = t2
 
     data = np.arange(_TILE * _TILE, dtype=np.float32).reshape(_TILE, _TILE) + 1.0
@@ -1315,7 +1329,10 @@ def test_tile16_shared_array_partial_cols():
     k1(src, dst, NCOLS)
     result = dst.to_numpy()
     np.testing.assert_allclose(result[:, :NCOLS], data[:, :NCOLS])
-    np.testing.assert_allclose(result[:, NCOLS:], 0.0)
+    if partial_load:
+        np.testing.assert_allclose(result[:, NCOLS:], 0.0)
+    else:
+        np.testing.assert_allclose(result[:, NCOLS:], -1.0)
 
 
 @test_utils.test(arch=qd.gpu)
@@ -1346,68 +1363,6 @@ def test_tile16_shared_array_cholesky():
     k1(src, dst, eps_field)
     L_expected = np.linalg.cholesky(A.astype(np.float64)).astype(np.float32)
     np.testing.assert_allclose(np.tril(dst.to_numpy()), L_expected, atol=1e-4)
-
-
-@test_utils.test(arch=qd.gpu)
-def test_tile16_shared_array_store_partial_cols():
-    """Store only NCOLS < 16 from tile to SharedArray; remaining SharedArray columns untouched."""
-    NCOLS = 10
-    src = qd.field(dtype=qd.f32, shape=(_TILE, _TILE))
-    dst = qd.field(dtype=qd.f32, shape=(_TILE, _TILE))
-
-    @qd.kernel(fastcache=True)
-    def k1(src_f: qd.Template, dst_f: qd.Template, NCOLS: qd.i32):
-        qd.loop_config(block_dim=qd.simt.Tile16x16.SIZE)
-        tile_size = qd.simt.Tile16x16.SIZE
-        for _ in range(tile_size):
-            sh = qd.simt.block.SharedArray((qd.simt.Tile16x16.SIZE, qd.simt.Tile16x16.SIZE), qd.f32)
-            tid = qd.simt.subgroup.invocation_id()
-            for c in range(tile_size):
-                sh[tid, c] = qd.f32(-1.0)
-            qd.simt.block.sync()
-            t = qd.simt.Tile16x16.zeros(dtype=qd.f32)
-            t[:] = src_f[0:tile_size, 0:tile_size]
-            sh[0:tile_size, 0:NCOLS] = t
-            qd.simt.block.sync()
-            t2 = qd.simt.Tile16x16.zeros(dtype=qd.f32)
-            t2[:] = sh[0:tile_size, 0:tile_size]
-            dst_f[0:tile_size, 0:tile_size] = t2
-
-    data = np.arange(_TILE * _TILE, dtype=np.float32).reshape(_TILE, _TILE) + 1.0
-    src.from_numpy(data)
-    k1(src, dst, NCOLS)
-    result = dst.to_numpy()
-    np.testing.assert_allclose(result[:, :NCOLS], data[:, :NCOLS])
-    np.testing.assert_allclose(result[:, NCOLS:], -1.0)
-
-
-@test_utils.test(arch=qd.gpu)
-def test_tile16_shared_array_load_partial_cols():
-    """Load only NCOLS < 16 from SharedArray to tile; remaining tile registers should be zero."""
-    NCOLS = 10
-    src = qd.field(dtype=qd.f32, shape=(_TILE, _TILE))
-    dst = qd.field(dtype=qd.f32, shape=(_TILE, _TILE))
-
-    @qd.kernel(fastcache=True)
-    def k1(src_f: qd.Template, dst_f: qd.Template, NCOLS: qd.i32):
-        qd.loop_config(block_dim=qd.simt.Tile16x16.SIZE)
-        tile_size = qd.simt.Tile16x16.SIZE
-        for _ in range(tile_size):
-            sh = qd.simt.block.SharedArray((qd.simt.Tile16x16.SIZE, qd.simt.Tile16x16.SIZE), qd.f32)
-            t_load = qd.simt.Tile16x16.zeros(dtype=qd.f32)
-            t_load[:] = src_f[0:tile_size, 0:tile_size]
-            sh[0:tile_size, 0:tile_size] = t_load
-            qd.simt.block.sync()
-            t = qd.simt.Tile16x16.zeros(dtype=qd.f32)
-            t[:] = sh[0:tile_size, 0:NCOLS]
-            dst_f[0:tile_size, 0:tile_size] = t
-
-    data = np.arange(_TILE * _TILE, dtype=np.float32).reshape(_TILE, _TILE) + 1.0
-    src.from_numpy(data)
-    k1(src, dst, NCOLS)
-    result = dst.to_numpy()
-    np.testing.assert_allclose(result[:, :NCOLS], data[:, :NCOLS])
-    np.testing.assert_allclose(result[:, NCOLS:], 0.0)
 
 
 @test_utils.test(arch=qd.gpu)
