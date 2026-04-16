@@ -395,13 +395,28 @@ blocks are taken at runtime.</p>
 </section>
 <section id="enabling-kernel-coverage">
 <h2>Enabling kernel coverage<a class="headerlink" href="#enabling-kernel-coverage" title="Link to this heading">#</a></h2>
-<p>Set the <code class="docutils literal notranslate"><span class="pre">QD_KERNEL_COVERAGE</span></code> environment variable before running your program:</p>
+<section id="automatic-with-pytest-cov">
+<h3>Automatic with pytest-cov<a class="headerlink" href="#automatic-with-pytest-cov" title="Link to this heading">#</a></h3>
+<p>If you use <code class="docutils literal notranslate"><span class="pre">pytest-cov</span></code>, kernel coverage is enabled automatically — no configuration needed. Quadrants ships a pytest
+plugin that detects <code class="docutils literal notranslate"><span class="pre">--cov</span></code> and sets <code class="docutils literal notranslate"><span class="pre">QD_KERNEL_COVERAGE=1</span></code> for you. Just run:</p>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>pytest<span class="w"> </span>--cov<span class="o">=</span>my_package<span class="w"> </span>--cov-branch<span class="w"> </span>tests/
+</pre></div>
+</div>
+<p>To disable kernel coverage while still collecting Python coverage, opt out explicitly:</p>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span><span class="nv">QD_KERNEL_COVERAGE</span><span class="o">=</span><span class="m">0</span><span class="w"> </span>pytest<span class="w"> </span>--cov<span class="o">=</span>my_package<span class="w"> </span>--cov-branch<span class="w"> </span>tests/
+</pre></div>
+</div>
+</section>
+<section id="manual-with-any-script">
+<h3>Manual with any script<a class="headerlink" href="#manual-with-any-script" title="Link to this heading">#</a></h3>
+<p>For scripts outside pytest, set the <code class="docutils literal notranslate"><span class="pre">QD_KERNEL_COVERAGE</span></code> environment variable:</p>
 <div class="highlight-bash notranslate"><div class="highlight"><pre><span></span><span class="nv">QD_KERNEL_COVERAGE</span><span class="o">=</span><span class="m">1</span><span class="w"> </span>python<span class="w"> </span>my_simulation.py
 </pre></div>
 </div>
 <p>This works with any script that uses quadrants kernels — no changes to your code are needed.</p>
 <p>When the process exits, quadrants writes one or more <code class="docutils literal notranslate"><span class="pre">_qd_kcov.&lt;pid&gt;</span></code> files in the working directory containing the
 collected coverage data.</p>
+</section>
 </section>
 <section id="viewing-results">
 <h2>Viewing results<a class="headerlink" href="#viewing-results" title="Link to this heading">#</a></h2>
@@ -421,35 +436,12 @@ coverage<span class="w"> </span>html
 </section>
 <section id="with-pytest-cov">
 <h3>With pytest-cov<a class="headerlink" href="#with-pytest-cov" title="Link to this heading">#</a></h3>
-<p>If you run your tests with <code class="docutils literal notranslate"><span class="pre">pytest-cov</span></code>, kernel coverage data is automatically merged with Python coverage. Enable
-both at once:</p>
-<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span><span class="nv">QD_KERNEL_COVERAGE</span><span class="o">=</span><span class="m">1</span><span class="w"> </span>pytest<span class="w"> </span>--cov<span class="o">=</span>my_package<span class="w"> </span>--cov-branch<span class="w"> </span>tests/
+<p>When using <code class="docutils literal notranslate"><span class="pre">pytest-cov</span></code>, kernel coverage is enabled automatically (see above). The kernel coverage data is merged with
+Python coverage after the run:</p>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>coverage<span class="w"> </span>combine<span class="w"> </span>_qd_kcov.*<span class="w"> </span>.coverage
 </pre></div>
 </div>
-<p>After the run, <code class="docutils literal notranslate"><span class="pre">coverage</span> <span class="pre">combine</span> <span class="pre">_qd_kcov.*</span> <span class="pre">.coverage</span></code> merges the kernel and Python data into a single report.</p>
 </section>
-</section>
-<section id="example">
-<h2>Example<a class="headerlink" href="#example" title="Link to this heading">#</a></h2>
-<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">import</span><span class="w"> </span><span class="nn">quadrants</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">qd</span>
-
-<span class="n">qd</span><span class="o">.</span><span class="n">init</span><span class="p">(</span><span class="n">arch</span><span class="o">=</span><span class="n">qd</span><span class="o">.</span><span class="n">gpu</span><span class="p">)</span>
-
-<span class="n">result</span> <span class="o">=</span> <span class="n">qd</span><span class="o">.</span><span class="n">field</span><span class="p">(</span><span class="n">dtype</span><span class="o">=</span><span class="n">qd</span><span class="o">.</span><span class="n">i32</span><span class="p">,</span> <span class="n">shape</span><span class="o">=</span><span class="p">(</span><span class="mi">1</span><span class="p">,))</span>
-
-<span class="nd">@qd</span><span class="o">.</span><span class="n">kernel</span>
-<span class="k">def</span><span class="w"> </span><span class="nf">my_kernel</span><span class="p">():</span>
-    <span class="n">x</span> <span class="o">=</span> <span class="mi">10</span>
-    <span class="k">if</span> <span class="n">x</span> <span class="o">&gt;</span> <span class="mi">5</span><span class="p">:</span>
-        <span class="n">result</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="o">=</span> <span class="mi">1</span>    <span class="c1"># this line will show as covered</span>
-    <span class="k">else</span><span class="p">:</span>
-        <span class="n">result</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="o">=</span> <span class="mi">2</span>    <span class="c1"># this line will show as NOT covered</span>
-
-<span class="n">my_kernel</span><span class="p">()</span>
-</pre></div>
-</div>
-<p>Running with <code class="docutils literal notranslate"><span class="pre">QD_KERNEL_COVERAGE=1</span></code> and then inspecting the report will show that only the <code class="docutils literal notranslate"><span class="pre">if</span></code> branch was executed,
-and the <code class="docutils literal notranslate"><span class="pre">else</span></code> branch was missed.</p>
 </section>
 <section id="key-properties">
 <h2>Key properties<a class="headerlink" href="#key-properties" title="Link to this heading">#</a></h2>
@@ -457,7 +449,7 @@ and the <code class="docutils literal notranslate"><span class="pre">else</span>
 <li><p><strong>Zero overhead when disabled.</strong> The coverage module is never imported unless <code class="docutils literal notranslate"><span class="pre">QD_KERNEL_COVERAGE=1</span></code> is set. There
 is no cost in normal operation.</p></li>
 <li><p><strong>Branch coverage.</strong> Probes inside <code class="docutils literal notranslate"><span class="pre">if</span></code>/<code class="docutils literal notranslate"><span class="pre">else</span></code> bodies only fire when that branch is taken, giving true runtime
-branch coverage — not just line coverage.</p></li>
+branch coverage — not just kernel-level coverage, or static conditional coverage.</p></li>
 <li><p><strong>Works with pytest-xdist.</strong> Each worker writes to a separate file; combine them afterward.</p></li>
 <li><p><strong>Survives <code class="docutils literal notranslate"><span class="pre">qd.init()</span></code> resets.</strong> Coverage data is accumulated across multiple <code class="docutils literal notranslate"><span class="pre">qd.init()</span></code> calls within the same
 process.</p></li>
@@ -476,50 +468,16 @@ the limit — for example in a very large codebase with many kernels — increas
 </section>
 <section id="coverage-and-autodiff">
 <h2>Coverage and autodiff<a class="headerlink" href="#coverage-and-autodiff" title="Link to this heading">#</a></h2>
-<p>Quadrants compiles each kernel multiple times when autodiff is used: once for the normal forward execution, and
-again for the backward (or forward-mode AD) replay pass. Coverage probes are only inserted into the normal forward
-compilation — they are excluded from the AD replay compilations because the extra field stores would interfere with
-gradient computation.</p>
-<section id="what-is-covered">
-<h3>What is covered<a class="headerlink" href="#what-is-covered" title="Link to this heading">#</a></h3>
-<p>When you call a kernel inside a <code class="docutils literal notranslate"><span class="pre">qd.ad.Tape</span></code> context, the forward pass runs first with coverage probes active. This
-means every line of your kernel source code that executes during the forward pass is tracked normally, including
-branch coverage.</p>
-<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="nd">@qd</span><span class="o">.</span><span class="n">kernel</span>
-<span class="k">def</span><span class="w"> </span><span class="nf">compute_loss</span><span class="p">():</span>
-    <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">n</span><span class="p">):</span>
-        <span class="k">if</span> <span class="n">x</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="o">&gt;</span> <span class="mi">0</span><span class="p">:</span>          <span class="c1"># covered: probe fires during forward pass</span>
-            <span class="n">loss</span><span class="p">[</span><span class="kc">None</span><span class="p">]</span> <span class="o">+=</span> <span class="n">x</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="c1"># covered</span>
-        <span class="k">else</span><span class="p">:</span>
-            <span class="n">loss</span><span class="p">[</span><span class="kc">None</span><span class="p">]</span> <span class="o">+=</span> <span class="mf">0.0</span>  <span class="c1"># covered only if this branch is taken during forward</span>
-
-<span class="k">with</span> <span class="n">qd</span><span class="o">.</span><span class="n">ad</span><span class="o">.</span><span class="n">Tape</span><span class="p">(</span><span class="n">loss</span><span class="p">):</span>
-    <span class="n">compute_loss</span><span class="p">()</span>             <span class="c1"># forward pass: probes active</span>
-                               <span class="c1"># backward pass: runs automatically, no probes</span>
-</pre></div>
-</div>
+<p>The forward pass is covered. The backward pass is not, because instrumenting it would interfere with gradient
+computation. This is normally fine — the backward pass is auto-generated and replays the same control flow, so
+forward coverage is sufficient.</p>
+<p>One edge case: kernel calls inside a <code class="docutils literal notranslate"><span class="pre">qd.ad.Tape</span></code> with <code class="docutils literal notranslate"><span class="pre">validation=True</span></code> will not be covered.</p>
 </section>
-<section id="what-is-not-covered">
-<h3>What is not covered<a class="headerlink" href="#what-is-not-covered" title="Link to this heading">#</a></h3>
-<p>The backward pass is an automatically generated transformation of the same kernel — it is not separate source code
-you wrote. Since it replays the same control flow as the forward pass, there are no user-written lines that would
-only appear in the backward pass.</p>
-<p>In short: as long as your test exercises the forward pass (which is always required before a backward pass), coverage
-of your kernel source lines is accurate and complete.</p>
-</section>
-<section id="edge-case">
-<h3>Edge case<a class="headerlink" href="#edge-case" title="Link to this heading">#</a></h3>
-<p>If you have a kernel that is <em>only</em> ever called inside a <code class="docutils literal notranslate"><span class="pre">qd.ad.Tape</span></code> with <code class="docutils literal notranslate"><span class="pre">validation=True</span></code> and never called
-outside one, it will be compiled exclusively in validation mode and will not receive coverage probes.</p>
-</section>
-</section>
-<section id="limitations">
-<h2>Limitations<a class="headerlink" href="#limitations" title="Link to this heading">#</a></h2>
-<ul class="simple">
-<li><p><strong>Offline cache interaction.</strong> Coverage probes change the compiled kernel, so the offline cache will see them as
-new kernels and recompile. This is expected and does not affect correctness, but the first run with coverage enabled
-will be slower if you normally rely on cached kernels.</p></li>
-</ul>
+<section id="offline-cache-interaction">
+<h2>Offline cache interaction<a class="headerlink" href="#offline-cache-interaction" title="Link to this heading">#</a></h2>
+<p>Coverage probes change the compiled kernel, so the offline cache will see them as new kernels and recompile. This is
+expected and does not affect correctness, but the first run with coverage enabled will be slower if you normally rely
+on cached kernels.</p>
 </section>
 <section id="under-the-hood">
 <h2>Under the hood<a class="headerlink" href="#under-the-hood" title="Link to this heading">#</a></h2>
@@ -578,25 +536,23 @@ as ordinary field stores and execute on the device alongside your kernel code.</
   <nav id="pst-page-toc-nav" class="page-toc" aria-labelledby="pst-page-navigation-heading-2">
     <ul class="pst-show_toc_level nav section-nav flex-column">
 <li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#prerequisites">Prerequisites</a></li>
-<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#enabling-kernel-coverage">Enabling kernel coverage</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#enabling-kernel-coverage">Enabling kernel coverage</a><ul class="nav section-nav flex-column">
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#automatic-with-pytest-cov">Automatic with pytest-cov</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#manual-with-any-script">Manual with any script</a></li>
+</ul>
+</li>
 <li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#viewing-results">Viewing results</a><ul class="nav section-nav flex-column">
 <li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#with-coverage-py">With coverage.py</a></li>
 <li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#with-pytest-cov">With pytest-cov</a></li>
 </ul>
 </li>
-<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#example">Example</a></li>
 <li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#key-properties">Key properties</a></li>
 <li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#advanced-usage">Advanced usage</a><ul class="nav section-nav flex-column">
 <li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#probe-capacity">Probe capacity</a></li>
 </ul>
 </li>
-<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#coverage-and-autodiff">Coverage and autodiff</a><ul class="nav section-nav flex-column">
-<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#what-is-covered">What is covered</a></li>
-<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#what-is-not-covered">What is not covered</a></li>
-<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#edge-case">Edge case</a></li>
-</ul>
-</li>
-<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#limitations">Limitations</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#coverage-and-autodiff">Coverage and autodiff</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#offline-cache-interaction">Offline cache interaction</a></li>
 <li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#under-the-hood">Under the hood</a></li>
 </ul>
   </nav></div>
