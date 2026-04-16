@@ -1,0 +1,815 @@
+
+<!DOCTYPE html>
+
+
+<html lang="en" data-content_root="../" >
+
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+
+    <title>Automatic differentiation &#8212; Quadrants 0.6.3 documentation</title>
+  
+  
+  
+  <script data-cfasync="false">
+    document.documentElement.dataset.mode = localStorage.getItem("mode") || "";
+    document.documentElement.dataset.theme = localStorage.getItem("theme") || "";
+  </script>
+  <!--
+    this give us a css class that will be invisible only if js is disabled
+  -->
+  <noscript>
+    <style>
+      .pst-js-only { display: none !important; }
+
+    </style>
+  </noscript>
+  
+  <!-- Loaded before other Sphinx assets -->
+  <link href="../_static/styles/theme.css?digest=7f76b32a3354e82990f2" rel="stylesheet" />
+<link href="../_static/styles/pydata-sphinx-theme.css?digest=7f76b32a3354e82990f2" rel="stylesheet" />
+
+    <link rel="stylesheet" type="text/css" href="../_static/pygments.css?v=8f2a1f02" />
+    <link rel="stylesheet" type="text/css" href="../_static/copybutton.css?v=76b2166b" />
+    <link rel="stylesheet" type="text/css" href="../_static/togglebutton.css?v=9c3e77be" />
+    <link rel="stylesheet" type="text/css" href="../_static/graphviz.css?v=4ae1632d" />
+    <link rel="stylesheet" type="text/css" href="../_static/sphinx-design.min.css?v=95c83b7e" />
+    <link rel="stylesheet" type="text/css" href="../_static/css/custom.css" />
+  
+  <!-- So that users can add custom icons -->
+  <script defer src="../_static/scripts/fontawesome.js?digest=7f76b32a3354e82990f2"></script>
+  <!-- Pre-loaded scripts that we'll load fully later -->
+  <link rel="preload" as="script" href="../_static/scripts/bootstrap.js?digest=7f76b32a3354e82990f2" />
+<link rel="preload" as="script" href="../_static/scripts/pydata-sphinx-theme.js?digest=7f76b32a3354e82990f2" />
+
+    <script src="../_static/documentation_options.js?v=b8503983"></script>
+    <script src="../_static/doctools.js?v=9bcbadda"></script>
+    <script src="../_static/sphinx_highlight.js?v=dc90522c"></script>
+    <script src="../_static/clipboard.min.js?v=a7894cd8"></script>
+    <script src="../_static/copybutton.js?v=f281be69"></script>
+    <script>let toggleHintShow = 'Click to show';</script>
+    <script>let toggleHintHide = 'Click to hide';</script>
+    <script>let toggleOpenOnPrint = 'true';</script>
+    <script src="../_static/togglebutton.js?v=b8b12719"></script>
+    <script>var togglebuttonSelector = '.toggle, .admonition.dropdown';</script>
+    <script src="../_static/design-tabs.js?v=f930bc37"></script>
+    <script>var togglebuttonSelector = '.toggle, .admonition.dropdown';</script>
+    <script>DOCUMENTATION_OPTIONS.pagename = 'user_guide/autodiff';</script>
+    <script>DOCUMENTATION_OPTIONS.search_as_you_type = false;</script>
+    <link rel="index" title="Index" href="../genindex.html" />
+    <link rel="search" title="Search" href="../search.html" />
+    <link rel="next" title="Tile16x16: register-resident 16x16 tiles" href="tile16.html" />
+    <link rel="prev" title="Numpy and Torch interop" href="interop.html" />
+  <meta name="viewport" content="width=device-width, initial-scale=1"/>
+  <meta name="docsearch:language" content="en"/>
+  <meta name="docsearch:version" content="0.6.3" />
+  
+    
+    <script src="../_static/searchtools.js"></script>
+    <script src="../_static/language_data.js"></script>
+    <script src="../searchindex.js"></script>
+  
+  </head>
+  <body data-default-mode="">
+  
+  
+  <div id="pst-skip-link" class="skip-link d-print-none"><a href="#main-content">Skip to main content</a></div>
+
+  
+  <div id="pst-scroll-pixel-helper"></div>
+  
+  <button type="button" class="btn rounded-pill" id="pst-back-to-top">
+    <i class="fa-solid fa-arrow-up"></i>Back to top</button>
+
+  
+  <dialog id="pst-search-dialog">
+    
+<form class="bd-search d-flex align-items-center"
+      action="../search.html"
+      method="get">
+  <i class="fa-solid fa-magnifying-glass"></i>
+  <input type="search"
+         class="form-control"
+         name="q"
+         placeholder="Search the docs ..."
+         aria-label="Search the docs ..."
+         autocomplete="off"
+         autocorrect="off"
+         autocapitalize="off"
+         spellcheck="false"/>
+  <span class="search-button__kbd-shortcut"><kbd class="kbd-shortcut__modifier">Ctrl</kbd>+<kbd>K</kbd></span>
+</form>
+  </dialog>
+
+  <div class="pst-async-banner-revealer d-none">
+  <aside id="bd-header-version-warning" class="d-none d-print-none" aria-label="Version warning"></aside>
+</div>
+
+  
+    <header id="pst-header" class="bd-header navbar navbar-expand-lg bd-navbar d-print-none">
+<div class="bd-header__inner bd-page-width">
+  <button class="pst-navbar-icon sidebar-toggle primary-toggle" aria-label="Site navigation">
+    <span class="fa-solid fa-bars"></span>
+  </button>
+  
+  
+  <div class="col-lg-3 navbar-header-items__start">
+    
+      <div class="navbar-item">
+
+  
+    
+  
+
+<a class="navbar-brand logo" href="../index.html">
+  
+  
+  
+  
+  
+  
+    <p class="title logo__title">Quadrants 0.6.3 documentation</p>
+  
+</a></div>
+    
+  </div>
+  
+  <div class="col-lg-9 navbar-header-items">
+    
+    <div class="me-auto navbar-header-items__center">
+      
+        <div class="navbar-item">
+<nav>
+  <ul class="bd-navbar-elements navbar-nav">
+    
+<li class="nav-item current active">
+  <a class="nav-link nav-internal" href="index.html">
+    User guide
+  </a>
+</li>
+
+
+<li class="nav-item ">
+  <a class="nav-link nav-internal" href="../autoapi/index.html">
+    API Reference
+  </a>
+</li>
+
+  </ul>
+</nav></div>
+      
+    </div>
+    
+    
+    <div class="navbar-header-items__end">
+      
+        <div class="navbar-item navbar-persistent--container">
+          
+
+<button class="btn search-button-field search-button__button pst-js-only" title="Search" aria-label="Search" data-bs-placement="bottom" data-bs-toggle="tooltip">
+ <i class="fa-solid fa-magnifying-glass"></i>
+ <span class="search-button__default-text">Search</span>
+ <span class="search-button__kbd-shortcut"><kbd class="kbd-shortcut__modifier">Ctrl</kbd>+<kbd class="kbd-shortcut__modifier">K</kbd></span>
+</button>
+        </div>
+      
+      
+        <div class="navbar-item">
+
+<button class="btn btn-sm nav-link pst-navbar-icon theme-switch-button pst-js-only" aria-label="Color mode" data-bs-title="Color mode"  data-bs-placement="bottom" data-bs-toggle="tooltip">
+  <i class="theme-switch fa-solid fa-sun                fa-lg" data-mode="light" title="Light"></i>
+  <i class="theme-switch fa-solid fa-moon               fa-lg" data-mode="dark"  title="Dark"></i>
+  <i class="theme-switch fa-solid fa-circle-half-stroke fa-lg" data-mode="auto"  title="System Settings"></i>
+</button></div>
+      
+    </div>
+    
+  </div>
+  
+  
+    <div class="navbar-persistent--mobile">
+
+<button class="btn search-button-field search-button__button pst-js-only" title="Search" aria-label="Search" data-bs-placement="bottom" data-bs-toggle="tooltip">
+ <i class="fa-solid fa-magnifying-glass"></i>
+ <span class="search-button__default-text">Search</span>
+ <span class="search-button__kbd-shortcut"><kbd class="kbd-shortcut__modifier">Ctrl</kbd>+<kbd class="kbd-shortcut__modifier">K</kbd></span>
+</button>
+    </div>
+  
+
+  
+    <button class="pst-navbar-icon sidebar-toggle secondary-toggle" aria-label="On this page">
+      <span class="fa-solid fa-outdent"></span>
+    </button>
+  
+</div>
+
+    </header>
+  
+
+  <div class="bd-container">
+    <div class="bd-container__inner bd-page-width">
+      
+      
+      
+      <dialog id="pst-primary-sidebar-modal"></dialog>
+      <div id="pst-primary-sidebar" class="bd-sidebar-primary bd-sidebar">
+        
+
+  
+  <div class="sidebar-header-items sidebar-primary__section">
+    
+    
+      <div class="sidebar-header-items__center">
+        
+          
+          
+            <div class="navbar-item">
+<nav>
+  <ul class="bd-navbar-elements navbar-nav">
+    
+<li class="nav-item current active">
+  <a class="nav-link nav-internal" href="index.html">
+    User guide
+  </a>
+</li>
+
+
+<li class="nav-item ">
+  <a class="nav-link nav-internal" href="../autoapi/index.html">
+    API Reference
+  </a>
+</li>
+
+  </ul>
+</nav></div>
+          
+        
+      </div>
+    
+    
+    
+      <div class="sidebar-header-items__end">
+        
+          <div class="navbar-item">
+
+<button class="btn btn-sm nav-link pst-navbar-icon theme-switch-button pst-js-only" aria-label="Color mode" data-bs-title="Color mode"  data-bs-placement="bottom" data-bs-toggle="tooltip">
+  <i class="theme-switch fa-solid fa-sun                fa-lg" data-mode="light" title="Light"></i>
+  <i class="theme-switch fa-solid fa-moon               fa-lg" data-mode="dark"  title="Dark"></i>
+  <i class="theme-switch fa-solid fa-circle-half-stroke fa-lg" data-mode="auto"  title="System Settings"></i>
+</button></div>
+        
+      </div>
+    
+  </div>
+  
+    <div class="sidebar-primary-items__start sidebar-primary__section">
+        <div class="sidebar-primary-item pst-sidebar-collapse"><button id="pst-collapse-sidebar-button" aria-expanded="true" aria-controls="pst-primary-sidebar"><svg class="pst-icon svg-inline--fa" role="img" aria-hidden="true" focusable="false" viewBox="0 0 16 16" xmlns="http://www.w3.org/2000/svg">
+    <path fill="currentColor" d="M3 15.5C2.36232 15.5 1.74874 15.2564 1.28478 14.8189C0.820828 14.3815 0.541576 13.7832 0.504167 13.1467L0.5 13L0.5 3C0.499965 2.36232 0.743605 1.74874 1.18107 1.28478C1.61854 0.820828 2.21676 0.541576 2.85333 0.504167L3 0.5L13 0.5C13.6377 0.499965 14.2513 0.743605 14.7152 1.18107C15.1792 1.61854 15.4584 2.21676 15.4958 2.85333L15.5 3L15.5 13C15.5 13.6377 15.2564 14.2513 14.8189 14.7152C14.3815 15.1792 13.7832 15.4584 13.1467 15.4958L13 15.5L3 15.5ZM3 13.8333L10.5 13.8333L10.5 2.16667L3 2.16667C2.79589 2.16669 2.59889 2.24163 2.44636 2.37726C2.29383 2.5129 2.19638 2.69979 2.1725 2.9025L2.16667 3L2.16667 13C2.16669 13.2041 2.24163 13.4011 2.37726 13.5536C2.5129 13.7062 2.69979 13.8036 2.9025 13.8275L3 13.8333ZM6.65583 10.325L6.5775 10.2558L4.91083 8.58917C4.76735 8.44567 4.68116 8.25476 4.66843 8.05223C4.65569 7.84971 4.71729 7.6495 4.84167 7.48917L4.91083 7.41083L6.5775 5.74417C6.72747 5.59471 6.9287 5.50794 7.14032 5.50148C7.35194 5.49502 7.55809 5.56935 7.7169 5.70937C7.8757 5.8494 7.97525 6.04463 7.99533 6.25539C8.01541 6.46616 7.95451 6.67667 7.825 6.84417L7.75583 6.9225L6.67917 8L7.75583 9.0775C7.89931 9.22099 7.98551 9.41191 7.99824 9.61443C8.01097 9.81695 7.94938 10.0172 7.825 10.1775L7.75583 10.2558C7.61234 10.3993 7.42142 10.4855 7.2189 10.4982C7.01638 10.511 6.81617 10.4494 6.65583 10.325Z"/>
+  </svg>
+  <span class="pst-collapse-sidebar-label">Collapse Sidebar</span>
+  <span class="pst-expand-sidebar-label">Expand Sidebar</span>
+</button></div>
+        <div class="sidebar-primary-item">
+
+<nav class="bd-docs-nav bd-links"
+     aria-label="Section Navigation">
+  <p class="bd-links__title" role="heading" aria-level="1">Section Navigation</p>
+  <div class="bd-toc-item navbar-nav"><p aria-level="2" class="caption" role="heading"><span class="caption-text">Getting started</span></p>
+<ul class="nav bd-sidenav">
+<li class="toctree-l1"><a class="reference internal" href="getting_started.html">Getting started</a></li>
+<li class="toctree-l1"><a class="reference internal" href="supported_systems.html">Supported systems</a></li>
+</ul>
+<p aria-level="2" class="caption" role="heading"><span class="caption-text">Core concepts</span></p>
+<ul class="nav bd-sidenav">
+<li class="toctree-l1"><a class="reference internal" href="tensor_types.html">Tensor types</a></li>
+<li class="toctree-l1"><a class="reference internal" href="scalar_tensors.html">Scalar tensors</a></li>
+<li class="toctree-l1"><a class="reference internal" href="matrix_vector.html">Matrix and Vector</a></li>
+<li class="toctree-l1"><a class="reference internal" href="compound_types.html">Compound types</a></li>
+<li class="toctree-l1"><a class="reference internal" href="static.html">qd.static</a></li>
+<li class="toctree-l1"><a class="reference internal" href="sub_functions.html">Sub-functions</a></li>
+<li class="toctree-l1"><a class="reference internal" href="parallelization.html">Parallelization</a></li>
+</ul>
+<p aria-level="2" class="caption" role="heading"><span class="caption-text">Integration</span></p>
+<ul class="nav bd-sidenav">
+<li class="toctree-l1"><a class="reference internal" href="interop.html">Numpy and Torch interop</a></li>
+</ul>
+<p aria-level="2" class="caption" role="heading"><span class="caption-text">Autodiff</span></p>
+<ul class="current nav bd-sidenav">
+<li class="toctree-l1 current active"><a class="current reference internal" href="#">Automatic differentiation</a></li>
+</ul>
+<p aria-level="2" class="caption" role="heading"><span class="caption-text">SIMT primitives</span></p>
+<ul class="nav bd-sidenav">
+<li class="toctree-l1"><a class="reference internal" href="tile16.html">Tile16x16: register-resident 16x16 tiles</a></li>
+</ul>
+<p aria-level="2" class="caption" role="heading"><span class="caption-text">Performance</span></p>
+<ul class="nav bd-sidenav">
+<li class="toctree-l1"><a class="reference internal" href="graph.html">CUDA Graph</a></li>
+<li class="toctree-l1"><a class="reference internal" href="perf_dispatch.html">Performance Dispatch</a></li>
+</ul>
+<p aria-level="2" class="caption" role="heading"><span class="caption-text">Reference</span></p>
+<ul class="nav bd-sidenav">
+<li class="toctree-l1"><a class="reference internal" href="unsupported_python.html">Python features in kernel scope</a></li>
+<li class="toctree-l1"><a class="reference internal" href="python_backend.html">Python backend</a></li>
+<li class="toctree-l1"><a class="reference internal" href="debug.html">Debug mode</a></li>
+<li class="toctree-l1"><a class="reference internal" href="quirks.html">Quirks</a></li>
+<li class="toctree-l1"><a class="reference internal" href="troubleshooting.html">Troubleshooting</a></li>
+</ul>
+<p aria-level="2" class="caption" role="heading"><span class="caption-text">Internal</span></p>
+<ul class="nav bd-sidenav">
+<li class="toctree-l1"><a class="reference internal" href="building_cudagraph_conditional_fatbin.html">Building the CUDA graph conditional fatbin</a></li>
+</ul>
+</div>
+</nav></div>
+    </div>
+  
+  
+  <div class="sidebar-primary-items__end sidebar-primary__section">
+      <div class="sidebar-primary-item">
+<div id="ethical-ad-placement"
+      class="flat"
+      data-ea-publisher="readthedocs"
+      data-ea-type="readthedocs-sidebar"
+      data-ea-manual="true">
+</div></div>
+  </div>
+
+
+      </div>
+      
+      <main id="main-content" class="bd-main" role="main">
+        
+        
+          <div class="bd-content">
+            <div class="bd-article-container">
+              
+              <div class="bd-header-article d-print-none">
+<div class="header-article-items header-article__inner">
+  
+    <div class="header-article-items__start">
+      
+        <div class="header-article-item">
+
+<nav aria-label="Breadcrumb" class="d-print-none">
+  <ul class="bd-breadcrumbs">
+    
+    <li class="breadcrumb-item breadcrumb-home">
+      <a href="../index.html" class="nav-link" aria-label="Home">
+        <i class="fa-solid fa-home"></i>
+      </a>
+    </li>
+    
+    <li class="breadcrumb-item"><a href="index.html" class="nav-link">User guide</a></li>
+    
+    <li class="breadcrumb-item active" aria-current="page"><span class="ellipsis">Automatic differentiation</span></li>
+  </ul>
+</nav>
+</div>
+      
+    </div>
+  
+  
+</div>
+</div>
+              
+              
+              
+                
+<div id="searchbox"></div>
+                <article class="bd-article">
+                  
+  <section class="tex2jax_ignore mathjax_ignore" id="automatic-differentiation">
+<h1>Automatic differentiation<a class="headerlink" href="#automatic-differentiation" title="Link to this heading">#</a></h1>
+<p>Automatic differentiation (autodiff) computes the exact gradient of a kernel’s output with respect to its inputs, without the user writing the derivative formulas by hand. Gradient-based optimizers then use this gradient to train neural networks, fit physical models to data, drive differentiable simulators, or solve inverse problems.</p>
+<p>Quadrants implements autodiff as a source-to-source IR transform: when <code class="docutils literal notranslate"><span class="pre">.grad()</span></code> is requested, the compiler emits a companion kernel that runs on the same backend as the forward one and writes gradients into the primal fields’ <code class="docutils literal notranslate"><span class="pre">.grad</span></code> companions. There is no Python-side tape, no per-op dispatch overhead, and no dependency on an external AD framework - the backward pass is a fused kernel, usually only marginally slower than the forward.</p>
+<p>Three styles are supported:</p>
+<ul class="simple">
+<li><p><strong>Reverse mode</strong> - one scalar output, many inputs. One backward pass yields every input gradient. This is the usual training setup and the bulk of the page.</p></li>
+<li><p><strong>Forward mode</strong> - few inputs, many outputs. One forward pass yields every output derivative along a chosen input direction. See <a class="reference internal" href="#forward-mode-ad-via-qd-ad-fwdmode">Forward-mode AD via <code class="docutils literal notranslate"><span class="pre">qd.ad.FwdMode</span></code></a>.</p></li>
+<li><p><strong>Custom gradients</strong> - override the auto-generated gradient with a user-supplied one, typically to inject a closed-form analytic derivative or to checkpoint for memory. See <a class="reference internal" href="#overriding-the-compiler-generated-gradient">Overriding the compiler-generated gradient</a>.</p></li>
+</ul>
+<p>The adstack pipeline, the validation checker, and the backend support matrix are covered further down for when the default path is not enough.</p>
+<section id="reverse-mode-autodiff">
+<h2>Reverse-mode autodiff<a class="headerlink" href="#reverse-mode-autodiff" title="Link to this heading">#</a></h2>
+<p>Reverse-mode AD computes the gradient of a scalar output with respect to every input in a single backward sweep. It walks the forward kernel’s operations in reverse order and applies the chain rule to accumulate contributions into adjoint (<code class="docutils literal notranslate"><span class="pre">.grad</span></code>) fields alongside the primal fields.</p>
+<p>This is the engine under every gradient-based training loop: Torch’s <code class="docutils literal notranslate"><span class="pre">.backward()</span></code> is reverse-mode autodiff, and so are most differentiable-simulation frameworks. If you want to put a learned parameter inside a Quadrants kernel and have an optimizer tune it, this section is how you do it.</p>
+<p>The workflow is:</p>
+<ol class="arabic simple">
+<li><p>Allocate an adjoint (<code class="docutils literal notranslate"><span class="pre">.grad</span></code>) buffer next to every primal field gradients are needed for.</p></li>
+<li><p>Run the forward kernel.</p></li>
+<li><p>Seed the loss gradient - typically <code class="docutils literal notranslate"><span class="pre">loss.grad[None]</span> <span class="pre">=</span> <span class="pre">1.0</span></code>.</p></li>
+<li><p>Call <code class="docutils literal notranslate"><span class="pre">kernel.grad()</span></code>.</p></li>
+<li><p>Read the gradients from the <code class="docutils literal notranslate"><span class="pre">.grad</span></code> fields.</p></li>
+</ol>
+<p>Self-contained example:</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">import</span><span class="w"> </span><span class="nn">quadrants</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">qd</span>
+
+<span class="n">qd</span><span class="o">.</span><span class="n">init</span><span class="p">(</span><span class="n">arch</span><span class="o">=</span><span class="n">qd</span><span class="o">.</span><span class="n">gpu</span><span class="p">)</span>
+
+<span class="n">x</span> <span class="o">=</span> <span class="n">qd</span><span class="o">.</span><span class="n">field</span><span class="p">(</span><span class="n">qd</span><span class="o">.</span><span class="n">f32</span><span class="p">)</span>
+<span class="n">y</span> <span class="o">=</span> <span class="n">qd</span><span class="o">.</span><span class="n">field</span><span class="p">(</span><span class="n">qd</span><span class="o">.</span><span class="n">f32</span><span class="p">)</span>
+<span class="n">qd</span><span class="o">.</span><span class="n">root</span><span class="o">.</span><span class="n">dense</span><span class="p">(</span><span class="n">qd</span><span class="o">.</span><span class="n">i</span><span class="p">,</span> <span class="mi">16</span><span class="p">)</span><span class="o">.</span><span class="n">place</span><span class="p">(</span><span class="n">x</span><span class="p">,</span> <span class="n">x</span><span class="o">.</span><span class="n">grad</span><span class="p">)</span>
+<span class="n">qd</span><span class="o">.</span><span class="n">root</span><span class="o">.</span><span class="n">place</span><span class="p">(</span><span class="n">y</span><span class="p">,</span> <span class="n">y</span><span class="o">.</span><span class="n">grad</span><span class="p">)</span>
+
+<span class="nd">@qd</span><span class="o">.</span><span class="n">kernel</span>
+<span class="k">def</span><span class="w"> </span><span class="nf">compute</span><span class="p">():</span>
+    <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="n">x</span><span class="p">:</span>
+        <span class="n">y</span><span class="p">[</span><span class="kc">None</span><span class="p">]</span> <span class="o">+=</span> <span class="n">x</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="o">*</span> <span class="n">x</span><span class="p">[</span><span class="n">i</span><span class="p">]</span>
+
+<span class="c1"># Forward pass.</span>
+<span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="mi">16</span><span class="p">):</span>
+    <span class="n">x</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="o">=</span> <span class="nb">float</span><span class="p">(</span><span class="n">i</span><span class="p">)</span>
+<span class="n">y</span><span class="p">[</span><span class="kc">None</span><span class="p">]</span> <span class="o">=</span> <span class="mf">0.0</span>
+<span class="n">compute</span><span class="p">()</span>
+
+<span class="c1"># Seed the loss adjoint and run the reverse pass.</span>
+<span class="n">y</span><span class="o">.</span><span class="n">grad</span><span class="p">[</span><span class="kc">None</span><span class="p">]</span> <span class="o">=</span> <span class="mf">1.0</span>
+<span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="mi">16</span><span class="p">):</span>
+    <span class="n">x</span><span class="o">.</span><span class="n">grad</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="o">=</span> <span class="mf">0.0</span>
+<span class="n">compute</span><span class="o">.</span><span class="n">grad</span><span class="p">()</span>
+
+<span class="c1"># x.grad[i] == 2 * x[i]</span>
+</pre></div>
+</div>
+<p>Notes:</p>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">place(x,</span> <span class="pre">x.grad)</span></code> allocates the adjoint alongside the primal. Without it, <code class="docutils literal notranslate"><span class="pre">kernel.grad()</span></code> raises at first use. Ndarrays take <code class="docutils literal notranslate"><span class="pre">needs_grad=True</span></code> instead.</p></li>
+<li><p>Adjoints must be cleared before each reverse pass; leftover values accumulate. <code class="docutils literal notranslate"><span class="pre">qd.ad.Tape</span></code> (below) does this automatically.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">kernel.grad(...)</span></code> takes the same arguments as the forward kernel.</p></li>
+</ul>
+<section id="recording-a-backward-pass-with-qd-ad-tape">
+<h3>Recording a backward pass with <code class="docutils literal notranslate"><span class="pre">qd.ad.Tape</span></code><a class="headerlink" href="#recording-a-backward-pass-with-qd-ad-tape" title="Link to this heading">#</a></h3>
+<p>Training loops typically chain several kernels - physics step, feature extraction, loss. Differentiating such a pipeline by hand means calling each <code class="docutils literal notranslate"><span class="pre">.grad()</span></code> in the correct reverse order, seeding the loss, and clearing adjoints on every iteration.</p>
+<p><code class="docutils literal notranslate"><span class="pre">qd.ad.Tape</span></code> automates this. Kernel calls inside a <code class="docutils literal notranslate"><span class="pre">with</span> <span class="pre">qd.ad.Tape(loss=...)</span></code> block are recorded; on exit the tape replays them in reverse, seeds <code class="docutils literal notranslate"><span class="pre">loss.grad[None]</span> <span class="pre">=</span> <span class="pre">1.0</span></code>, and writes the input gradients back into the <code class="docutils literal notranslate"><span class="pre">.grad</span></code> fields. Adjoints are cleared on entry, which is the desired behavior for almost every training iteration.</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="k">with</span> <span class="n">qd</span><span class="o">.</span><span class="n">ad</span><span class="o">.</span><span class="n">Tape</span><span class="p">(</span><span class="n">loss</span><span class="o">=</span><span class="n">y</span><span class="p">):</span>
+    <span class="n">compute</span><span class="p">()</span>
+<span class="c1"># x.grad is now populated.</span>
+</pre></div>
+</div>
+<p><code class="docutils literal notranslate"><span class="pre">Tape</span></code> is the default choice as soon as the forward pass spans more than a single kernel. Use <code class="docutils literal notranslate"><span class="pre">kernel.grad()</span></code> directly for one-shot kernels, or when the loss is not a single scalar and you want to seed multiple adjoint entries by hand.</p>
+</section>
+<section id="forward-mode-ad-via-qd-ad-fwdmode">
+<h3>Forward-mode AD via <code class="docutils literal notranslate"><span class="pre">qd.ad.FwdMode</span></code><a class="headerlink" href="#forward-mode-ad-via-qd-ad-fwdmode" title="Link to this heading">#</a></h3>
+<p>Forward mode propagates a tangent vector alongside the primal in a single forward pass and writes the directional derivative into a <code class="docutils literal notranslate"><span class="pre">.dual</span></code> companion field. The direction (the “seed”) is fixed upfront; the result is a Jacobian-vector product.</p>
+<p>Reverse mode returns every input gradient of one scalar output per pass; forward mode returns every output derivative along one input direction per pass. Pick accordingly:</p>
+<ul class="simple">
+<li><p>Few inputs, many outputs: forward mode. Example: one kinematic parameter of a robot, derivative of every joint with respect to it.</p></li>
+<li><p>Many inputs, one scalar loss: reverse mode. Example: loss over a million network weights. This is the training default.</p></li>
+<li><p>Full Jacobian: stack whichever direction has the smaller dimension (forward for input columns, reverse for output rows).</p></li>
+</ul>
+<p>Allocate the <code class="docutils literal notranslate"><span class="pre">.dual</span></code> field alongside the primal (with <code class="docutils literal notranslate"><span class="pre">qd.root.lazy_dual()</span></code> or <code class="docutils literal notranslate"><span class="pre">needs_dual=True</span></code>), then enter the <code class="docutils literal notranslate"><span class="pre">qd.ad.FwdMode</span></code> context manager:</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">qd</span><span class="o">.</span><span class="n">init</span><span class="p">(</span><span class="n">arch</span><span class="o">=</span><span class="n">qd</span><span class="o">.</span><span class="n">gpu</span><span class="p">)</span>
+
+<span class="n">x</span> <span class="o">=</span> <span class="n">qd</span><span class="o">.</span><span class="n">field</span><span class="p">(</span><span class="n">qd</span><span class="o">.</span><span class="n">f32</span><span class="p">,</span> <span class="n">shape</span><span class="o">=</span><span class="mi">5</span><span class="p">)</span>
+<span class="n">loss</span> <span class="o">=</span> <span class="n">qd</span><span class="o">.</span><span class="n">field</span><span class="p">(</span><span class="n">qd</span><span class="o">.</span><span class="n">f32</span><span class="p">,</span> <span class="n">shape</span><span class="o">=</span><span class="mi">5</span><span class="p">)</span>
+<span class="n">qd</span><span class="o">.</span><span class="n">root</span><span class="o">.</span><span class="n">lazy_dual</span><span class="p">()</span>   <span class="c1"># place x.dual and loss.dual next to the primals</span>
+
+<span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="mi">5</span><span class="p">):</span>
+    <span class="n">x</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="o">=</span> <span class="nb">float</span><span class="p">(</span><span class="n">i</span><span class="p">)</span>
+
+<span class="nd">@qd</span><span class="o">.</span><span class="n">kernel</span>
+<span class="k">def</span><span class="w"> </span><span class="nf">compute</span><span class="p">():</span>
+    <span class="n">loss</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span> <span class="o">+=</span> <span class="n">x</span><span class="p">[</span><span class="mi">3</span><span class="p">]</span> <span class="o">*</span> <span class="n">x</span><span class="p">[</span><span class="mi">4</span><span class="p">]</span>
+
+<span class="c1"># Directional derivative at (0, 0, 0, 1, 1): d loss[1] / d x[3] + d loss[1] / d x[4].</span>
+<span class="k">with</span> <span class="n">qd</span><span class="o">.</span><span class="n">ad</span><span class="o">.</span><span class="n">FwdMode</span><span class="p">(</span><span class="n">loss</span><span class="o">=</span><span class="n">loss</span><span class="p">,</span> <span class="n">param</span><span class="o">=</span><span class="n">x</span><span class="p">,</span> <span class="n">seed</span><span class="o">=</span><span class="p">[</span><span class="mi">0</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="mi">1</span><span class="p">,</span> <span class="mi">1</span><span class="p">]):</span>
+    <span class="n">compute</span><span class="p">()</span>
+
+<span class="c1"># loss.dual[1] == x[3] + x[4] == 7</span>
+</pre></div>
+</div>
+<p>Rules:</p>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">param</span></code> must be a single <code class="docutils literal notranslate"><span class="pre">ScalarField</span></code>. Differentiating with respect to multiple fields requires one <code class="docutils literal notranslate"><span class="pre">FwdMode</span></code> pass per field.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">seed</span></code> is a flat list matching the flattened shape of <code class="docutils literal notranslate"><span class="pre">param</span></code>. For a 0-D <code class="docutils literal notranslate"><span class="pre">param</span></code>, <code class="docutils literal notranslate"><span class="pre">seed</span></code> defaults to <code class="docutils literal notranslate"><span class="pre">[1.0]</span></code>.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">loss</span></code> is a scalar field or a list of scalar fields; the result lands in <code class="docutils literal notranslate"><span class="pre">loss.dual</span></code>. Duals are cleared on entry and kernel autodiff modes are restored on exit.</p></li>
+<li><p>Forward mode uses <code class="docutils literal notranslate"><span class="pre">AutodiffMode.FORWARD</span></code> and the <code class="docutils literal notranslate"><span class="pre">MakeDual</span></code> transform; the adstack pipeline does not apply.</p></li>
+</ul>
+<p>To build a full Jacobian, call <code class="docutils literal notranslate"><span class="pre">FwdMode</span></code> once per basis vector (one-hot seed) and stack the resulting <code class="docutils literal notranslate"><span class="pre">loss.dual</span></code> columns.</p>
+</section>
+<section id="overriding-the-compiler-generated-gradient">
+<h3>Overriding the compiler-generated gradient<a class="headerlink" href="#overriding-the-compiler-generated-gradient" title="Link to this heading">#</a></h3>
+<p>Source-transforming the forward IR is correct by construction but not always desirable:</p>
+<ul class="simple">
+<li><p>A closed-form analytic gradient is cheaper, more numerically stable, or easier to vectorize than the auto-generated one.</p></li>
+<li><p>The forward pass calls external code (for example a custom C/CUDA op) that Quadrants cannot see through.</p></li>
+<li><p>Checkpointing: re-run part of the forward on the backward pass instead of keeping intermediates.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">qd.ad.Tape</span></code> needs to drive a section whose gradient is supplied by hand, while auto-differentiating everything around it.</p></li>
+</ul>
+<p><code class="docutils literal notranslate"><span class="pre">qd.ad.grad_replaced</span></code> decorates a plain Python function wrapping one or more kernel calls; <code class="docutils literal notranslate"><span class="pre">qd.ad.grad_for(primal)</span></code> decorates the function that plays the role of its gradient. <code class="docutils literal notranslate"><span class="pre">Tape</span></code> runs the replaced forward on entry and the user-supplied gradient on exit, bypassing the auto-generated one.</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">x</span> <span class="o">=</span> <span class="n">qd</span><span class="o">.</span><span class="n">field</span><span class="p">(</span><span class="n">qd</span><span class="o">.</span><span class="n">f32</span><span class="p">)</span>
+<span class="n">total</span> <span class="o">=</span> <span class="n">qd</span><span class="o">.</span><span class="n">field</span><span class="p">(</span><span class="n">qd</span><span class="o">.</span><span class="n">f32</span><span class="p">)</span>
+<span class="n">qd</span><span class="o">.</span><span class="n">root</span><span class="o">.</span><span class="n">dense</span><span class="p">(</span><span class="n">qd</span><span class="o">.</span><span class="n">i</span><span class="p">,</span> <span class="mi">128</span><span class="p">)</span><span class="o">.</span><span class="n">place</span><span class="p">(</span><span class="n">x</span><span class="p">)</span>
+<span class="n">qd</span><span class="o">.</span><span class="n">root</span><span class="o">.</span><span class="n">place</span><span class="p">(</span><span class="n">total</span><span class="p">)</span>
+<span class="n">qd</span><span class="o">.</span><span class="n">root</span><span class="o">.</span><span class="n">lazy_grad</span><span class="p">()</span>
+
+<span class="nd">@qd</span><span class="o">.</span><span class="n">kernel</span>
+<span class="k">def</span><span class="w"> </span><span class="nf">accumulate</span><span class="p">(</span><span class="n">mul</span><span class="p">:</span> <span class="n">qd</span><span class="o">.</span><span class="n">f32</span><span class="p">):</span>
+    <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="mi">128</span><span class="p">):</span>
+        <span class="n">qd</span><span class="o">.</span><span class="n">atomic_add</span><span class="p">(</span><span class="n">total</span><span class="p">[</span><span class="kc">None</span><span class="p">],</span> <span class="n">x</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="o">*</span> <span class="n">mul</span><span class="p">)</span>
+
+<span class="nd">@qd</span><span class="o">.</span><span class="n">ad</span><span class="o">.</span><span class="n">grad_replaced</span>
+<span class="k">def</span><span class="w"> </span><span class="nf">forward</span><span class="p">(</span><span class="n">mul</span><span class="p">):</span>
+    <span class="n">accumulate</span><span class="p">(</span><span class="n">mul</span><span class="p">)</span>
+    <span class="n">accumulate</span><span class="p">(</span><span class="n">mul</span><span class="p">)</span>   <span class="c1"># called twice in the forward pass</span>
+
+<span class="nd">@qd</span><span class="o">.</span><span class="n">ad</span><span class="o">.</span><span class="n">grad_for</span><span class="p">(</span><span class="n">forward</span><span class="p">)</span>
+<span class="k">def</span><span class="w"> </span><span class="nf">backward</span><span class="p">(</span><span class="n">mul</span><span class="p">):</span>
+    <span class="c1"># Analytic gradient: d total / d x[i] == 2 * mul for every i.</span>
+    <span class="n">accumulate</span><span class="o">.</span><span class="n">grad</span><span class="p">(</span><span class="n">mul</span><span class="p">)</span>
+
+<span class="k">with</span> <span class="n">qd</span><span class="o">.</span><span class="n">ad</span><span class="o">.</span><span class="n">Tape</span><span class="p">(</span><span class="n">loss</span><span class="o">=</span><span class="n">total</span><span class="p">):</span>
+    <span class="n">forward</span><span class="p">(</span><span class="mi">4</span><span class="p">)</span>
+<span class="c1"># x.grad[i] == 4 for every i</span>
+</pre></div>
+</div>
+<p>Constraints:</p>
+<ul class="simple">
+<li><p>The decorated forward must be a regular Python function, not a <code class="docutils literal notranslate"><span class="pre">&#64;qd.kernel</span></code>. Wrap kernels inside a Python function.</p></li>
+<li><p>Under <code class="docutils literal notranslate"><span class="pre">validation=True</span></code> (see below), custom-gradient sections are exempt from the global data access rule; correctness is the user’s responsibility.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">qd.ad.no_grad</span></code> is the degenerate case: a custom forward that contributes no gradient.</p></li>
+</ul>
+</section>
+<section id="global-data-access-rules-and-the-validation-checker">
+<h3>Global data access rules and the validation checker<a class="headerlink" href="#global-data-access-rules-and-the-validation-checker" title="Link to this heading">#</a></h3>
+<p>Source-transformed reverse-mode AD is correct only when the forward kernel obeys two rules on global memory access (primal fields and ndarrays):</p>
+<ol class="arabic simple">
+<li><p>Within a single kernel launch, a field entry that has been read must not be written to afterward. Overwriting after reading destroys the primal value the reverse pass needs for local partials.</p></li>
+<li><p>Different kernel launches may read and write the same field freely; the constraint is strictly per-launch.</p></li>
+</ol>
+<p>Most violations follow the “read <code class="docutils literal notranslate"><span class="pre">x[i]</span></code>, then overwrite <code class="docutils literal notranslate"><span class="pre">x[i]</span></code>” pattern, often in the form of an in-place update like <code class="docutils literal notranslate"><span class="pre">x[i]</span> <span class="pre">=</span> <span class="pre">x[i]</span> <span class="pre">+</span> <span class="pre">dt</span> <span class="pre">*</span> <span class="pre">v[i]</span></code> inside a loop that also reads <code class="docutils literal notranslate"><span class="pre">x[i]</span></code> earlier in the body. The fix is typically to split the update across two fields (double-buffer with <code class="docutils literal notranslate"><span class="pre">x_new</span></code>) or across two kernels.</p>
+<p>Violating example:</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="nd">@qd</span><span class="o">.</span><span class="n">kernel</span>
+<span class="k">def</span><span class="w"> </span><span class="nf">bad</span><span class="p">():</span>
+    <span class="c1"># Reads b[None] for loss, then overwrites b[None] -&gt; invalid.</span>
+    <span class="n">loss</span><span class="p">[</span><span class="kc">None</span><span class="p">]</span> <span class="o">=</span> <span class="n">x</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span> <span class="o">*</span> <span class="n">b</span><span class="p">[</span><span class="kc">None</span><span class="p">]</span>
+    <span class="n">b</span><span class="p">[</span><span class="kc">None</span><span class="p">]</span> <span class="o">+=</span> <span class="mi">100</span>
+</pre></div>
+</div>
+<p>Fixed:</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="nd">@qd</span><span class="o">.</span><span class="n">kernel</span>
+<span class="k">def</span><span class="w"> </span><span class="nf">compute_loss</span><span class="p">():</span>
+    <span class="n">loss</span><span class="p">[</span><span class="kc">None</span><span class="p">]</span> <span class="o">=</span> <span class="n">x</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span> <span class="o">*</span> <span class="n">b</span><span class="p">[</span><span class="kc">None</span><span class="p">]</span>
+
+<span class="nd">@qd</span><span class="o">.</span><span class="n">kernel</span>
+<span class="k">def</span><span class="w"> </span><span class="nf">update_b</span><span class="p">():</span>
+    <span class="n">b</span><span class="p">[</span><span class="kc">None</span><span class="p">]</span> <span class="o">+=</span> <span class="mi">100</span>
+
+<span class="c1"># Two kernel launches: each obeys rule 1 on its own.</span>
+<span class="n">compute_loss</span><span class="p">()</span>
+<span class="n">update_b</span><span class="p">()</span>
+</pre></div>
+</div>
+<p>Quadrants can check rule 1 at runtime. Pass <code class="docutils literal notranslate"><span class="pre">validation=True</span></code> to <code class="docutils literal notranslate"><span class="pre">qd.ad.Tape</span></code>, with <code class="docutils literal notranslate"><span class="pre">qd.init(debug=True)</span></code>:</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">qd</span><span class="o">.</span><span class="n">init</span><span class="p">(</span><span class="n">arch</span><span class="o">=</span><span class="n">qd</span><span class="o">.</span><span class="n">gpu</span><span class="p">,</span> <span class="n">debug</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+<span class="o">...</span>
+<span class="k">with</span> <span class="n">qd</span><span class="o">.</span><span class="n">ad</span><span class="o">.</span><span class="n">Tape</span><span class="p">(</span><span class="n">loss</span><span class="o">=</span><span class="n">loss</span><span class="p">,</span> <span class="n">validation</span><span class="o">=</span><span class="kc">True</span><span class="p">):</span>
+    <span class="n">compute_loss</span><span class="p">()</span>
+    <span class="n">update_b</span><span class="p">()</span>
+</pre></div>
+</div>
+<p>Under <code class="docutils literal notranslate"><span class="pre">validation=True</span></code>, each <code class="docutils literal notranslate"><span class="pre">needs_grad=True</span></code> scalar field gets a companion single-byte checkbit field (<code class="docutils literal notranslate"><span class="pre">i32</span></code> on Vulkan). The compiler rewrites every forward kernel in the tape so that a <code class="docutils literal notranslate"><span class="pre">GlobalLoadStmt</span></code> sets the checkbit to 1 and every subsequent <code class="docutils literal notranslate"><span class="pre">GlobalStoreStmt</span></code> / <code class="docutils literal notranslate"><span class="pre">AtomicOpStmt</span></code> asserts the checkbit is still 0. Checkbits are cleared on tape entry. A violation raises <code class="docutils literal notranslate"><span class="pre">QuadrantsAssertionError</span></code> with the offending snode name and traceback. Kernels wrapped in <code class="docutils literal notranslate"><span class="pre">qd.ad.grad_replaced</span></code> are skipped; their gradient is the user’s responsibility.</p>
+<p>Validation adds per-access runtime work and extra memory, so it is opt-in and only honored under <code class="docutils literal notranslate"><span class="pre">debug=True</span></code>. Use it while developing a new differentiable kernel; drop it in production.</p>
+</section>
+</section>
+<section id="the-adstack-pipeline">
+<h2>The adstack pipeline<a class="headerlink" href="#the-adstack-pipeline" title="Link to this heading">#</a></h2>
+<p>Reverse-mode AD through a dynamic loop must remember, for every iteration, the primal values the reverse pass needs to evaluate local partials. Quadrants stores this history in an autodiff stack (adstack): a per-variable stack the forward pass pushes to and the reverse pass pops from.</p>
+<p>The adstack pipeline is opt-in. It costs additional local memory and kernel compile time and is only required for a narrow class of kernels.</p>
+<section id="when-the-adstack-is-required">
+<h3>When the adstack is required<a class="headerlink" href="#when-the-adstack-is-required" title="Link to this heading">#</a></h3>
+<p>Enable the adstack when the kernel contains any of the following inside a dynamic <code class="docutils literal notranslate"><span class="pre">for</span></code> loop (<code class="docutils literal notranslate"><span class="pre">range</span></code>, <code class="docutils literal notranslate"><span class="pre">qd.ndrange</span></code>, field iteration):</p>
+<ul class="simple">
+<li><p>A loop-carried dependency (a variable read, written, and read again across iterations, e.g. <code class="docutils literal notranslate"><span class="pre">v</span> <span class="pre">=</span> <span class="pre">v</span> <span class="pre">*</span> <span class="pre">0.95</span> <span class="pre">+</span> <span class="pre">0.01</span></code>).</p></li>
+<li><p>A local variable used as an index into a global field.</p></li>
+<li><p>Non-linear ops (<code class="docutils literal notranslate"><span class="pre">sin</span></code>, <code class="docutils literal notranslate"><span class="pre">cos</span></code>, <code class="docutils literal notranslate"><span class="pre">exp</span></code>, <code class="docutils literal notranslate"><span class="pre">sqrt</span></code>, <code class="docutils literal notranslate"><span class="pre">tanh</span></code>, <code class="docutils literal notranslate"><span class="pre">pow</span></code>, …) whose reverse partial depends on the primal value at that specific iteration.</p></li>
+<li><p>An <code class="docutils literal notranslate"><span class="pre">if</span></code> whose condition depends on a variable that mutates across iterations.</p></li>
+</ul>
+<p>The adstack is not needed for:</p>
+<ul class="simple">
+<li><p>Kernels with no dynamic <code class="docutils literal notranslate"><span class="pre">for</span></code> loops.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">qd.static(range(...))</span></code> loops, which are unrolled at compile time.</p></li>
+<li><p>Loops whose body only reads globals and writes accumulated results (no loop-carried local state).</p></li>
+</ul>
+<p>Enabling the adstack when it is not strictly required is safe and produces correct gradients; leaving it off when it is required silently yields wrong gradients (typically zeros).</p>
+<p>Example that requires the adstack:</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">qd</span><span class="o">.</span><span class="n">init</span><span class="p">(</span><span class="n">arch</span><span class="o">=</span><span class="n">qd</span><span class="o">.</span><span class="n">gpu</span><span class="p">,</span> <span class="n">ad_stack_experimental_enabled</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+
+<span class="n">x</span> <span class="o">=</span> <span class="n">qd</span><span class="o">.</span><span class="n">field</span><span class="p">(</span><span class="n">qd</span><span class="o">.</span><span class="n">f32</span><span class="p">)</span>
+<span class="n">y</span> <span class="o">=</span> <span class="n">qd</span><span class="o">.</span><span class="n">field</span><span class="p">(</span><span class="n">qd</span><span class="o">.</span><span class="n">f32</span><span class="p">)</span>
+<span class="n">qd</span><span class="o">.</span><span class="n">root</span><span class="o">.</span><span class="n">dense</span><span class="p">(</span><span class="n">qd</span><span class="o">.</span><span class="n">i</span><span class="p">,</span> <span class="mi">1</span><span class="p">)</span><span class="o">.</span><span class="n">place</span><span class="p">(</span><span class="n">x</span><span class="p">,</span> <span class="n">x</span><span class="o">.</span><span class="n">grad</span><span class="p">)</span>
+<span class="n">qd</span><span class="o">.</span><span class="n">root</span><span class="o">.</span><span class="n">place</span><span class="p">(</span><span class="n">y</span><span class="p">,</span> <span class="n">y</span><span class="o">.</span><span class="n">grad</span><span class="p">)</span>
+
+<span class="nd">@qd</span><span class="o">.</span><span class="n">kernel</span>
+<span class="k">def</span><span class="w"> </span><span class="nf">compute</span><span class="p">():</span>
+    <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="n">x</span><span class="p">:</span>
+        <span class="n">v</span> <span class="o">=</span> <span class="n">x</span><span class="p">[</span><span class="n">i</span><span class="p">]</span>
+        <span class="k">for</span> <span class="n">_</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="mi">10</span><span class="p">):</span>
+            <span class="n">v</span> <span class="o">=</span> <span class="n">v</span> <span class="o">*</span> <span class="mf">0.95</span> <span class="o">+</span> <span class="mf">0.01</span>   <span class="c1"># loop-carried dependency: needs the adstack</span>
+        <span class="n">y</span><span class="p">[</span><span class="kc">None</span><span class="p">]</span> <span class="o">+=</span> <span class="n">v</span>
+
+<span class="n">x</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="o">=</span> <span class="mf">0.5</span>
+<span class="n">y</span><span class="p">[</span><span class="kc">None</span><span class="p">]</span> <span class="o">=</span> <span class="mf">0.0</span>
+<span class="n">compute</span><span class="p">()</span>
+<span class="n">y</span><span class="o">.</span><span class="n">grad</span><span class="p">[</span><span class="kc">None</span><span class="p">]</span> <span class="o">=</span> <span class="mf">1.0</span>
+<span class="n">x</span><span class="o">.</span><span class="n">grad</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="o">=</span> <span class="mf">0.0</span>
+<span class="n">compute</span><span class="o">.</span><span class="n">grad</span><span class="p">()</span>
+
+<span class="c1"># x.grad[0] == 0.95 ** 10</span>
+</pre></div>
+</div>
+<p>Without <code class="docutils literal notranslate"><span class="pre">ad_stack_experimental_enabled=True</span></code>, <code class="docutils literal notranslate"><span class="pre">x.grad[0]</span></code> comes out as zero: the default pipeline has no way to remember <code class="docutils literal notranslate"><span class="pre">v</span></code> at each of the 10 iterations, so the chain-rule multiplication is lost. The flag is compile-time and must be set at <code class="docutils literal notranslate"><span class="pre">qd.init</span></code> time, before the offending kernel compiles.</p>
+</section>
+<section id="default-ad-stack-size-and-overflow-behavior">
+<h3><code class="docutils literal notranslate"><span class="pre">default_ad_stack_size</span></code> and overflow behavior<a class="headerlink" href="#default-ad-stack-size-and-overflow-behavior" title="Link to this heading">#</a></h3>
+<p>Each adstack has a fixed capacity baked into the compiled kernel. When the compiler can prove the worst-case loop trip count, that value is used; otherwise it falls back to <code class="docutils literal notranslate"><span class="pre">compile_config.default_ad_stack_size</span></code>, which defaults to <code class="docutils literal notranslate"><span class="pre">128</span></code>.</p>
+<p>The default is capped on purpose. Every live adstack in the kernel is materialized as Function-scope arrays of this size (primal + adjoint), so total per-thread private memory scales as <code class="docutils literal notranslate"><span class="pre">2</span> <span class="pre">*</span> <span class="pre">sizeof(element)</span> <span class="pre">*</span> <span class="pre">default_ad_stack_size</span> <span class="pre">*</span> <span class="pre">number_of_adstacks</span></code>. Above this cap, <strong>Apple’s Metal shader compiler crashes (<code class="docutils literal notranslate"><span class="pre">XPC_ERROR_CONNECTION_INTERRUPTED</span></code>) when the footprint grows past a few kilobytes per thread</strong>, which kernels with many loop-carried variables will reach quickly at larger values (empirically, <code class="docutils literal notranslate"><span class="pre">256</span></code> crashes and <code class="docutils literal notranslate"><span class="pre">128</span></code> compiles for realistic reverse-mode AD kernels). Vulkan drivers have a softer but comparable private-memory / register-budget limit.</p>
+<p>Raise the value only as far as your workload requires and the target platform will tolerate:</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">qd</span><span class="o">.</span><span class="n">init</span><span class="p">(</span>
+    <span class="n">arch</span><span class="o">=</span><span class="n">qd</span><span class="o">.</span><span class="n">gpu</span><span class="p">,</span>
+    <span class="n">ad_stack_experimental_enabled</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>
+    <span class="n">default_ad_stack_size</span><span class="o">=</span><span class="mi">256</span><span class="p">,</span>  <span class="c1"># only safe on LLVM backends and sufficiently large GPUs</span>
+<span class="p">)</span>
+</pre></div>
+</div>
+<p>On LLVM backends, if the forward pass pushes more elements than the stack can hold, the kernel aborts with a diagnostic pointing at this knob; silently wrapping would corrupt the adjoint tape. On SPIR-V the overflow iteration is silently dropped (see “Known limitations”), so the recommended workflow is: run on an LLVM backend first to catch overflow aborts and size the value accordingly, then ship to SPIR-V with the same value (or a smaller one, if the Metal shader compiler chokes). Raising the size costs GPU local memory per live stack per thread, so bump it only when overflow is confirmed.</p>
+</section>
+</section>
+<section id="backend-support-matrix">
+<h2>Backend support matrix<a class="headerlink" href="#backend-support-matrix" title="Link to this heading">#</a></h2>
+<div class="pst-scrollable-table-container"><table class="table">
+<thead>
+<tr class="row-odd"><th class="head"><p>Backend</p></th>
+<th class="head"><p>Forward AD</p></th>
+<th class="head"><p>Adstack pipeline</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p>x64, arm64 (CPU)</p></td>
+<td><p>yes</p></td>
+<td><p>yes</p></td>
+</tr>
+<tr class="row-odd"><td><p>CUDA</p></td>
+<td><p>yes</p></td>
+<td><p>yes</p></td>
+</tr>
+<tr class="row-even"><td><p>AMDGPU</p></td>
+<td><p>yes</p></td>
+<td><p>yes</p></td>
+</tr>
+<tr class="row-odd"><td><p>Metal</p></td>
+<td><p>yes</p></td>
+<td><p>yes</p></td>
+</tr>
+<tr class="row-even"><td><p>Vulkan</p></td>
+<td><p>yes</p></td>
+<td><p>yes</p></td>
+</tr>
+</tbody>
+</table>
+</div>
+<p>The adstack pipeline is flagged experimental across all backends (enabled via <code class="docutils literal notranslate"><span class="pre">ad_stack_experimental_enabled=True</span></code>). All backends share the same IR-level passes, so correctness is expected to match; report discrepancies.</p>
+</section>
+<section id="known-limitations">
+<h2>Known limitations<a class="headerlink" href="#known-limitations" title="Link to this heading">#</a></h2>
+<ul class="simple">
+<li><p>The adstack pipeline is opt-in because enabling it unconditionally would regress forward-only AD kernels. When in doubt, enable it.</p></li>
+<li><p>Adstack overflow on SPIR-V is bounds-checked in the kernel (the push becomes a no-op past capacity) but the overflow is not reported back to the host: the iteration’s gradient contribution is silently dropped. LLVM backends surface the overflow as a kernel abort with a diagnostic; on SPIR-V, raise <code class="docutils literal notranslate"><span class="pre">default_ad_stack_size</span></code> at <code class="docutils literal notranslate"><span class="pre">qd.init</span></code> time if your kernel can exceed the current capacity.</p></li>
+<li><p>On Metal, raising <code class="docutils literal notranslate"><span class="pre">default_ad_stack_size</span></code> too high trips Apple’s shader compiler: pipeline creation fails with <code class="docutils literal notranslate"><span class="pre">XPC_ERROR_CONNECTION_INTERRUPTED</span></code> from the MSL-translation XPC service, as the combined Function-scope footprint of many adstacks exceeds what Apple’s compiler is willing to ingest. The default (<code class="docutils literal notranslate"><span class="pre">128</span></code>) was chosen as the largest value that compiles cleanly on Metal for realistic reverse-mode AD kernels; raise it only if your workload needs deeper stacks and the target driver can take it.</p></li>
+<li><p>Reverse-mode AD does not propagate gradients through integer casts or non-real operations; cast to <code class="docutils literal notranslate"><span class="pre">qd.f32</span></code> / <code class="docutils literal notranslate"><span class="pre">qd.f64</span></code> before the differentiable section.</p></li>
+</ul>
+</section>
+</section>
+
+
+                </article>
+              
+              
+              
+              
+              
+                <footer class="prev-next-footer d-print-none">
+                  
+<div class="prev-next-area">
+    <a class="left-prev"
+       href="interop.html"
+       title="previous page">
+      <i class="fa-solid fa-angle-left"></i>
+      <div class="prev-next-info">
+        <p class="prev-next-subtitle">previous</p>
+        <p class="prev-next-title">Numpy and Torch interop</p>
+      </div>
+    </a>
+    <a class="right-next"
+       href="tile16.html"
+       title="next page">
+      <div class="prev-next-info">
+        <p class="prev-next-subtitle">next</p>
+        <p class="prev-next-title">Tile16x16: register-resident 16x16 tiles</p>
+      </div>
+      <i class="fa-solid fa-angle-right"></i>
+    </a>
+</div>
+                </footer>
+              
+            </div>
+            
+            
+              
+                <dialog id="pst-secondary-sidebar-modal"></dialog>
+                <div id="pst-secondary-sidebar" class="bd-sidebar-secondary bd-toc"><div class="sidebar-secondary-items sidebar-secondary__inner">
+
+
+  <div class="sidebar-secondary-item">
+<div
+    id="pst-page-navigation-heading-2"
+    class="page-toc tocsection onthispage">
+    <i class="fa-solid fa-list"></i> On this page
+  </div>
+  <nav id="pst-page-toc-nav" class="page-toc" aria-labelledby="pst-page-navigation-heading-2">
+    <ul class="pst-show_toc_level nav section-nav flex-column">
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#reverse-mode-autodiff">Reverse-mode autodiff</a><ul class="nav section-nav flex-column">
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#recording-a-backward-pass-with-qd-ad-tape">Recording a backward pass with <code class="docutils literal notranslate"><span class="pre">qd.ad.Tape</span></code></a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#forward-mode-ad-via-qd-ad-fwdmode">Forward-mode AD via <code class="docutils literal notranslate"><span class="pre">qd.ad.FwdMode</span></code></a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#overriding-the-compiler-generated-gradient">Overriding the compiler-generated gradient</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#global-data-access-rules-and-the-validation-checker">Global data access rules and the validation checker</a></li>
+</ul>
+</li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#the-adstack-pipeline">The adstack pipeline</a><ul class="nav section-nav flex-column">
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#when-the-adstack-is-required">When the adstack is required</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#default-ad-stack-size-and-overflow-behavior"><code class="docutils literal notranslate"><span class="pre">default_ad_stack_size</span></code> and overflow behavior</a></li>
+</ul>
+</li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#backend-support-matrix">Backend support matrix</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#known-limitations">Known limitations</a></li>
+</ul>
+  </nav></div>
+
+  <div class="sidebar-secondary-item">
+
+  <div class="tocsection sourcelink">
+    <a href="../_sources/user_guide/autodiff.md.txt">
+      <i class="fa-solid fa-file-lines"></i> Show Source
+    </a>
+  </div>
+</div>
+
+</div></div>
+              
+            
+          </div>
+          <footer class="bd-footer-content">
+            
+          </footer>
+        
+      </main>
+    </div>
+  </div>
+  
+  <!-- Scripts loaded after <body> so the DOM is not blocked -->
+  <script defer src="../_static/scripts/bootstrap.js?digest=7f76b32a3354e82990f2"></script>
+<script defer src="../_static/scripts/pydata-sphinx-theme.js?digest=7f76b32a3354e82990f2"></script>
+
+  <footer class="bd-footer">
+<div class="bd-footer__inner bd-page-width">
+  
+    <div class="footer-items__start">
+      
+        <div class="footer-item">
+
+  <p class="copyright">
+    
+      © Copyright 2025 Genesis AI Inc.
+      <br/>
+    
+  </p>
+</div>
+      
+        <div class="footer-item">
+
+  <p class="sphinx-version">
+    Created using <a href="https://www.sphinx-doc.org/">Sphinx</a> 8.1.3.
+    <br/>
+  </p>
+</div>
+      
+    </div>
+  
+  
+  
+    <div class="footer-items__end">
+      
+        <div class="footer-item">
+<p class="theme-version">
+  <!-- # L10n: Setting the PST URL as an argument as this does not need to be localized -->
+  Built with the <a href="https://pydata-sphinx-theme.readthedocs.io/en/stable/index.html">PyData Sphinx Theme</a> 0.17.0.
+</p></div>
+      
+    </div>
+  
+</div>
+
+  </footer>
+  </body>
+</html>

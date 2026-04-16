@@ -1,0 +1,304 @@
+# Automatic differentiation
+
+Automatic differentiation (autodiff) computes the exact gradient of a kernel's output with respect to its inputs, without the user writing the derivative formulas by hand. Gradient-based optimizers then use this gradient to train neural networks, fit physical models to data, drive differentiable simulators, or solve inverse problems.
+
+Quadrants implements autodiff as a source-to-source IR transform: when `.grad()` is requested, the compiler emits a companion kernel that runs on the same backend as the forward one and writes gradients into the primal fields' `.grad` companions. There is no Python-side tape, no per-op dispatch overhead, and no dependency on an external AD framework - the backward pass is a fused kernel, usually only marginally slower than the forward.
+
+Three styles are supported:
+
+- **Reverse mode** - one scalar output, many inputs. One backward pass yields every input gradient. This is the usual training setup and the bulk of the page.
+- **Forward mode** - few inputs, many outputs. One forward pass yields every output derivative along a chosen input direction. See [Forward-mode AD via `qd.ad.FwdMode`](#forward-mode-ad-via-qdadfwdmode).
+- **Custom gradients** - override the auto-generated gradient with a user-supplied one, typically to inject a closed-form analytic derivative or to checkpoint for memory. See [Overriding the compiler-generated gradient](#overriding-the-compiler-generated-gradient).
+
+The adstack pipeline, the validation checker, and the backend support matrix are covered further down for when the default path is not enough.
+
+## Reverse-mode autodiff
+
+Reverse-mode AD computes the gradient of a scalar output with respect to every input in a single backward sweep. It walks the forward kernel's operations in reverse order and applies the chain rule to accumulate contributions into adjoint (`.grad`) fields alongside the primal fields.
+
+This is the engine under every gradient-based training loop: Torch's `.backward()` is reverse-mode autodiff, and so are most differentiable-simulation frameworks. If you want to put a learned parameter inside a Quadrants kernel and have an optimizer tune it, this section is how you do it.
+
+The workflow is:
+
+1. Allocate an adjoint (`.grad`) buffer next to every primal field gradients are needed for.
+2. Run the forward kernel.
+3. Seed the loss gradient - typically `loss.grad[None] = 1.0`.
+4. Call `kernel.grad()`.
+5. Read the gradients from the `.grad` fields.
+
+Self-contained example:
+
+```python
+import quadrants as qd
+
+qd.init(arch=qd.gpu)
+
+x = qd.field(qd.f32)
+y = qd.field(qd.f32)
+qd.root.dense(qd.i, 16).place(x, x.grad)
+qd.root.place(y, y.grad)
+
+@qd.kernel
+def compute():
+    for i in x:
+        y[None] += x[i] * x[i]
+
+# Forward pass.
+for i in range(16):
+    x[i] = float(i)
+y[None] = 0.0
+compute()
+
+# Seed the loss adjoint and run the reverse pass.
+y.grad[None] = 1.0
+for i in range(16):
+    x.grad[i] = 0.0
+compute.grad()
+
+# x.grad[i] == 2 * x[i]
+```
+
+Notes:
+
+- `place(x, x.grad)` allocates the adjoint alongside the primal. Without it, `kernel.grad()` raises at first use. Ndarrays take `needs_grad=True` instead.
+- Adjoints must be cleared before each reverse pass; leftover values accumulate. `qd.ad.Tape` (below) does this automatically.
+- `kernel.grad(...)` takes the same arguments as the forward kernel.
+
+### Recording a backward pass with `qd.ad.Tape`
+
+Training loops typically chain several kernels - physics step, feature extraction, loss. Differentiating such a pipeline by hand means calling each `.grad()` in the correct reverse order, seeding the loss, and clearing adjoints on every iteration.
+
+`qd.ad.Tape` automates this. Kernel calls inside a `with qd.ad.Tape(loss=...)` block are recorded; on exit the tape replays them in reverse, seeds `loss.grad[None] = 1.0`, and writes the input gradients back into the `.grad` fields. Adjoints are cleared on entry, which is the desired behavior for almost every training iteration.
+
+```python
+with qd.ad.Tape(loss=y):
+    compute()
+# x.grad is now populated.
+```
+
+`Tape` is the default choice as soon as the forward pass spans more than a single kernel. Use `kernel.grad()` directly for one-shot kernels, or when the loss is not a single scalar and you want to seed multiple adjoint entries by hand.
+
+### Forward-mode AD via `qd.ad.FwdMode`
+
+Forward mode propagates a tangent vector alongside the primal in a single forward pass and writes the directional derivative into a `.dual` companion field. The direction (the "seed") is fixed upfront; the result is a Jacobian-vector product.
+
+Reverse mode returns every input gradient of one scalar output per pass; forward mode returns every output derivative along one input direction per pass. Pick accordingly:
+
+- Few inputs, many outputs: forward mode. Example: one kinematic parameter of a robot, derivative of every joint with respect to it.
+- Many inputs, one scalar loss: reverse mode. Example: loss over a million network weights. This is the training default.
+- Full Jacobian: stack whichever direction has the smaller dimension (forward for input columns, reverse for output rows).
+
+Allocate the `.dual` field alongside the primal (with `qd.root.lazy_dual()` or `needs_dual=True`), then enter the `qd.ad.FwdMode` context manager:
+
+```python
+qd.init(arch=qd.gpu)
+
+x = qd.field(qd.f32, shape=5)
+loss = qd.field(qd.f32, shape=5)
+qd.root.lazy_dual()   # place x.dual and loss.dual next to the primals
+
+for i in range(5):
+    x[i] = float(i)
+
+@qd.kernel
+def compute():
+    loss[1] += x[3] * x[4]
+
+# Directional derivative at (0, 0, 0, 1, 1): d loss[1] / d x[3] + d loss[1] / d x[4].
+with qd.ad.FwdMode(loss=loss, param=x, seed=[0, 0, 0, 1, 1]):
+    compute()
+
+# loss.dual[1] == x[3] + x[4] == 7
+```
+
+Rules:
+
+- `param` must be a single `ScalarField`. Differentiating with respect to multiple fields requires one `FwdMode` pass per field.
+- `seed` is a flat list matching the flattened shape of `param`. For a 0-D `param`, `seed` defaults to `[1.0]`.
+- `loss` is a scalar field or a list of scalar fields; the result lands in `loss.dual`. Duals are cleared on entry and kernel autodiff modes are restored on exit.
+- Forward mode uses `AutodiffMode.FORWARD` and the `MakeDual` transform; the adstack pipeline does not apply.
+
+To build a full Jacobian, call `FwdMode` once per basis vector (one-hot seed) and stack the resulting `loss.dual` columns.
+
+### Overriding the compiler-generated gradient
+
+Source-transforming the forward IR is correct by construction but not always desirable:
+
+- A closed-form analytic gradient is cheaper, more numerically stable, or easier to vectorize than the auto-generated one.
+- The forward pass calls external code (for example a custom C/CUDA op) that Quadrants cannot see through.
+- Checkpointing: re-run part of the forward on the backward pass instead of keeping intermediates.
+- `qd.ad.Tape` needs to drive a section whose gradient is supplied by hand, while auto-differentiating everything around it.
+
+`qd.ad.grad_replaced` decorates a plain Python function wrapping one or more kernel calls; `qd.ad.grad_for(primal)` decorates the function that plays the role of its gradient. `Tape` runs the replaced forward on entry and the user-supplied gradient on exit, bypassing the auto-generated one.
+
+```python
+x = qd.field(qd.f32)
+total = qd.field(qd.f32)
+qd.root.dense(qd.i, 128).place(x)
+qd.root.place(total)
+qd.root.lazy_grad()
+
+@qd.kernel
+def accumulate(mul: qd.f32):
+    for i in range(128):
+        qd.atomic_add(total[None], x[i] * mul)
+
+@qd.ad.grad_replaced
+def forward(mul):
+    accumulate(mul)
+    accumulate(mul)   # called twice in the forward pass
+
+@qd.ad.grad_for(forward)
+def backward(mul):
+    # Analytic gradient: d total / d x[i] == 2 * mul for every i.
+    accumulate.grad(mul)
+
+with qd.ad.Tape(loss=total):
+    forward(4)
+# x.grad[i] == 4 for every i
+```
+
+Constraints:
+
+- The decorated forward must be a regular Python function, not a `@qd.kernel`. Wrap kernels inside a Python function.
+- Under `validation=True` (see below), custom-gradient sections are exempt from the global data access rule; correctness is the user's responsibility.
+- `qd.ad.no_grad` is the degenerate case: a custom forward that contributes no gradient.
+
+### Global data access rules and the validation checker
+
+Source-transformed reverse-mode AD is correct only when the forward kernel obeys two rules on global memory access (primal fields and ndarrays):
+
+1. Within a single kernel launch, a field entry that has been read must not be written to afterward. Overwriting after reading destroys the primal value the reverse pass needs for local partials.
+2. Different kernel launches may read and write the same field freely; the constraint is strictly per-launch.
+
+Most violations follow the "read `x[i]`, then overwrite `x[i]`" pattern, often in the form of an in-place update like `x[i] = x[i] + dt * v[i]` inside a loop that also reads `x[i]` earlier in the body. The fix is typically to split the update across two fields (double-buffer with `x_new`) or across two kernels.
+
+Violating example:
+
+```python
+@qd.kernel
+def bad():
+    # Reads b[None] for loss, then overwrites b[None] -> invalid.
+    loss[None] = x[1] * b[None]
+    b[None] += 100
+```
+
+Fixed:
+
+```python
+@qd.kernel
+def compute_loss():
+    loss[None] = x[1] * b[None]
+
+@qd.kernel
+def update_b():
+    b[None] += 100
+
+# Two kernel launches: each obeys rule 1 on its own.
+compute_loss()
+update_b()
+```
+
+Quadrants can check rule 1 at runtime. Pass `validation=True` to `qd.ad.Tape`, with `qd.init(debug=True)`:
+
+```python
+qd.init(arch=qd.gpu, debug=True)
+...
+with qd.ad.Tape(loss=loss, validation=True):
+    compute_loss()
+    update_b()
+```
+
+Under `validation=True`, each `needs_grad=True` scalar field gets a companion single-byte checkbit field (`i32` on Vulkan). The compiler rewrites every forward kernel in the tape so that a `GlobalLoadStmt` sets the checkbit to 1 and every subsequent `GlobalStoreStmt` / `AtomicOpStmt` asserts the checkbit is still 0. Checkbits are cleared on tape entry. A violation raises `QuadrantsAssertionError` with the offending snode name and traceback. Kernels wrapped in `qd.ad.grad_replaced` are skipped; their gradient is the user's responsibility.
+
+Validation adds per-access runtime work and extra memory, so it is opt-in and only honored under `debug=True`. Use it while developing a new differentiable kernel; drop it in production.
+
+## The adstack pipeline
+
+Reverse-mode AD through a dynamic loop must remember, for every iteration, the primal values the reverse pass needs to evaluate local partials. Quadrants stores this history in an autodiff stack (adstack): a per-variable stack the forward pass pushes to and the reverse pass pops from.
+
+The adstack pipeline is opt-in. It costs additional local memory and kernel compile time and is only required for a narrow class of kernels.
+
+### When the adstack is required
+
+Enable the adstack when the kernel contains any of the following inside a dynamic `for` loop (`range`, `qd.ndrange`, field iteration):
+
+- A loop-carried dependency (a variable read, written, and read again across iterations, e.g. `v = v * 0.95 + 0.01`).
+- A local variable used as an index into a global field.
+- Non-linear ops (`sin`, `cos`, `exp`, `sqrt`, `tanh`, `pow`, ...) whose reverse partial depends on the primal value at that specific iteration.
+- An `if` whose condition depends on a variable that mutates across iterations.
+
+The adstack is not needed for:
+
+- Kernels with no dynamic `for` loops.
+- `qd.static(range(...))` loops, which are unrolled at compile time.
+- Loops whose body only reads globals and writes accumulated results (no loop-carried local state).
+
+Enabling the adstack when it is not strictly required is safe and produces correct gradients; leaving it off when it is required silently yields wrong gradients (typically zeros).
+
+Example that requires the adstack:
+
+```python
+qd.init(arch=qd.gpu, ad_stack_experimental_enabled=True)
+
+x = qd.field(qd.f32)
+y = qd.field(qd.f32)
+qd.root.dense(qd.i, 1).place(x, x.grad)
+qd.root.place(y, y.grad)
+
+@qd.kernel
+def compute():
+    for i in x:
+        v = x[i]
+        for _ in range(10):
+            v = v * 0.95 + 0.01   # loop-carried dependency: needs the adstack
+        y[None] += v
+
+x[0] = 0.5
+y[None] = 0.0
+compute()
+y.grad[None] = 1.0
+x.grad[0] = 0.0
+compute.grad()
+
+# x.grad[0] == 0.95 ** 10
+```
+
+Without `ad_stack_experimental_enabled=True`, `x.grad[0]` comes out as zero: the default pipeline has no way to remember `v` at each of the 10 iterations, so the chain-rule multiplication is lost. The flag is compile-time and must be set at `qd.init` time, before the offending kernel compiles.
+
+### `default_ad_stack_size` and overflow behavior
+
+Each adstack has a fixed capacity baked into the compiled kernel. When the compiler can prove the worst-case loop trip count, that value is used; otherwise it falls back to `compile_config.default_ad_stack_size`, which defaults to `128`.
+
+The default is capped on purpose. Every live adstack in the kernel is materialized as Function-scope arrays of this size (primal + adjoint), so total per-thread private memory scales as `2 * sizeof(element) * default_ad_stack_size * number_of_adstacks`. Above this cap, **Apple's Metal shader compiler crashes (`XPC_ERROR_CONNECTION_INTERRUPTED`) when the footprint grows past a few kilobytes per thread**, which kernels with many loop-carried variables will reach quickly at larger values (empirically, `256` crashes and `128` compiles for realistic reverse-mode AD kernels). Vulkan drivers have a softer but comparable private-memory / register-budget limit.
+
+Raise the value only as far as your workload requires and the target platform will tolerate:
+
+```python
+qd.init(
+    arch=qd.gpu,
+    ad_stack_experimental_enabled=True,
+    default_ad_stack_size=256,  # only safe on LLVM backends and sufficiently large GPUs
+)
+```
+
+On LLVM backends, if the forward pass pushes more elements than the stack can hold, the kernel aborts with a diagnostic pointing at this knob; silently wrapping would corrupt the adjoint tape. On SPIR-V the overflow iteration is silently dropped (see "Known limitations"), so the recommended workflow is: run on an LLVM backend first to catch overflow aborts and size the value accordingly, then ship to SPIR-V with the same value (or a smaller one, if the Metal shader compiler chokes). Raising the size costs GPU local memory per live stack per thread, so bump it only when overflow is confirmed.
+
+## Backend support matrix
+
+| Backend | Forward AD | Adstack pipeline |
+| --- | --- | --- |
+| x64, arm64 (CPU) | yes | yes |
+| CUDA | yes | yes |
+| AMDGPU | yes | yes |
+| Metal | yes | yes |
+| Vulkan | yes | yes |
+
+The adstack pipeline is flagged experimental across all backends (enabled via `ad_stack_experimental_enabled=True`). All backends share the same IR-level passes, so correctness is expected to match; report discrepancies.
+
+## Known limitations
+
+- The adstack pipeline is opt-in because enabling it unconditionally would regress forward-only AD kernels. When in doubt, enable it.
+- Adstack overflow on SPIR-V is bounds-checked in the kernel (the push becomes a no-op past capacity) but the overflow is not reported back to the host: the iteration's gradient contribution is silently dropped. LLVM backends surface the overflow as a kernel abort with a diagnostic; on SPIR-V, raise `default_ad_stack_size` at `qd.init` time if your kernel can exceed the current capacity.
+- On Metal, raising `default_ad_stack_size` too high trips Apple's shader compiler: pipeline creation fails with `XPC_ERROR_CONNECTION_INTERRUPTED` from the MSL-translation XPC service, as the combined Function-scope footprint of many adstacks exceeds what Apple's compiler is willing to ingest. The default (`128`) was chosen as the largest value that compiles cleanly on Metal for realistic reverse-mode AD kernels; raise it only if your workload needs deeper stacks and the target driver can take it.
+- Reverse-mode AD does not propagate gradients through integer casts or non-real operations; cast to `qd.f32` / `qd.f64` before the differentiable section.
