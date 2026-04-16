@@ -832,12 +832,15 @@ def test_tile_slice_proxy_misuse_errors():
     assert "not a value" in repr(vec_proxy)
 
 
-@pytest.mark.parametrize("bad_slice,match", [
-    ("neg_row", "Negative indices"),
-    ("neg_col", "Negative indices"),
-    ("no_start", "start and stop indices are required"),
-    ("no_stop", "start and stop indices are required"),
-])
+@pytest.mark.parametrize(
+    "bad_slice,match",
+    [
+        ("neg_row", "Negative indices"),
+        ("neg_col", "Negative indices"),
+        ("no_start", "start and stop indices are required"),
+        ("no_stop", "start and stop indices are required"),
+    ],
+)
 @test_utils.test(arch=qd.gpu)
 def test_tile16_load_slice_errors(bad_slice, match):
     Tile = _make_tile16x16(qd.f32)
@@ -864,12 +867,15 @@ def test_tile16_load_slice_errors(bad_slice, match):
         k1(src, dst)
 
 
-@pytest.mark.parametrize("bad_slice,match", [
-    ("neg_row", "Negative indices"),
-    ("neg_col", "Negative indices"),
-    ("no_start", "start and stop indices are required"),
-    ("no_stop", "start and stop indices are required"),
-])
+@pytest.mark.parametrize(
+    "bad_slice,match",
+    [
+        ("neg_row", "Negative indices"),
+        ("neg_col", "Negative indices"),
+        ("no_start", "start and stop indices are required"),
+        ("no_stop", "start and stop indices are required"),
+    ],
+)
 @test_utils.test(arch=qd.gpu)
 def test_tile16_store_slice_errors(bad_slice, match):
     Tile = _make_tile16x16(qd.f32)
