@@ -284,23 +284,17 @@ On LLVM backends, if the forward pass pushes more elements than the stack can ho
 
 A future "adaptive sizing" pass would mitigate this by proving tighter per-loop bounds at compile time, shrinking the static allocation and letting more kernels compile at smaller sizes. Tracked as a follow-up.
 
-## Backend support matrix
+## Backend support
 
-| Backend | Forward AD | Adstack pipeline |
-| --- | --- | --- |
-| x64, arm64 (CPU) | yes | yes |
-| CUDA | yes | yes |
-| AMDGPU | yes | yes |
-| Metal | yes | yes |
-| Vulkan | yes | yes |
+Forward-mode AD, reverse-mode AD, and the adstack pipeline are supported on every backend Quadrants targets: x64 / arm64 CPU, CUDA, AMDGPU, Metal, and Vulkan. All backends share the same IR-level passes, so correctness is expected to match; report discrepancies.
 
-The adstack pipeline is flagged experimental across all backends (enabled via `ad_stack_experimental_enabled=True`). All backends share the same IR-level passes, so correctness is expected to match; report discrepancies.
+The adstack pipeline is still behind `ad_stack_experimental_enabled=True` because its compile-time footprint (see the last bullet under "Known limitations") is not yet acceptable as a default for non-adstack workloads, not because of correctness uncertainty.
 
 ## Known limitations
 
-- The adstack pipeline is opt-in because enabling it unconditionally would regress forward-only AD kernels. When in doubt, enable it.
-- Adstack overflow on SPIR-V is bounds-checked in the kernel (the push becomes a no-op past capacity) but the overflow is not reported back to the host: the iteration's gradient contribution is silently dropped. LLVM backends surface the overflow as a kernel abort with a diagnostic; on SPIR-V, raise `default_ad_stack_size` at `qd.init` time if your kernel can exceed the current capacity.
+- The adstack pipeline is opt-in. Enabling it unconditionally would visibly slow compile times on AD kernels that don't actually need per-iteration history (the extra IR pass runs, allocates, and spills regardless), so the switch stays off by default. When in doubt, enable it.
+- Adstack overflow on SPIR-V is bounds-checked in the kernel (the push becomes a no-op past capacity) but the overflow is not reported back to the host: the iteration's gradient contribution is silently dropped, producing numerically wrong gradients. This is a known footgun and a follow-up will surface it as a runtime error via a host-polled SSBO flag. LLVM backends already surface the overflow as a kernel abort with a diagnostic; on SPIR-V, raise `default_ad_stack_size` at `qd.init` time if your kernel can exceed the current capacity.
 - On Metal, raising `default_ad_stack_size` past the default trips Apple's shader compiler: pipeline creation fails with `XPC_ERROR_CONNECTION_INTERRUPTED` from the MSL-translation XPC service, as the combined per-thread Function-scope footprint of many adstacks exceeds what the compiler is willing to ingest. The default (`32`) is deliberately small; raise it only if your workload needs deeper stacks and the target driver can take it. An adaptive sizing pass that proves tighter per-loop bounds and shrinks the static allocation is tracked as a follow-up.
 - The adstack pipeline trades compile-time complexity for generality. Real-world kernels (many loop-carried variables, nested dynamic loops, large inner-loop bodies) can push compile times from seconds into minutes and, on some backends, into the territory where the driver's shader compiler gives up entirely. The implementation does not currently try to share stacks across independent variables or coalesce pushes, so the generated kernel's IR grows roughly linearly with the number of live adstack slots. Expect compile regressions when migrating existing reverse-mode AD workloads to the adstack pipeline; budget accordingly.
 - Runtime speed of the generated backward kernel is not yet a focus. The current codegen is "correct first": adjoint accumulation goes through ordinary atomics and ordinary loads / stores, with no backend-specific tuning (no tiling across the reverse pass, no fusion of adjoint accumulations, no specialized scheduling for the push/pop pattern). Backward passes on non-trivial kernels run noticeably slower than the corresponding forward pass, sometimes by an order of magnitude on SPIR-V. Improving this is future work.
-- Reverse-mode AD does not propagate gradients through integer casts or non-real operations; cast to `qd.f32` / `qd.f64` before the differentiable section.
+- Reverse-mode AD does not propagate gradients through integer casts or non-real operations. No error is raised; the gradient simply stops at the cast and silently reads as zero upstream. Cast to `qd.f32` / `qd.f64` before the differentiable section. Surfacing this as an explicit error is future work.

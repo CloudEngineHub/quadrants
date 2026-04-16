@@ -633,50 +633,20 @@
 <p>A future “adaptive sizing” pass would mitigate this by proving tighter per-loop bounds at compile time, shrinking the static allocation and letting more kernels compile at smaller sizes. Tracked as a follow-up.</p>
 </section>
 </section>
-<section id="backend-support-matrix">
-<h2>Backend support matrix<a class="headerlink" href="#backend-support-matrix" title="Link to this heading">#</a></h2>
-<div class="pst-scrollable-table-container"><table class="table">
-<thead>
-<tr class="row-odd"><th class="head"><p>Backend</p></th>
-<th class="head"><p>Forward AD</p></th>
-<th class="head"><p>Adstack pipeline</p></th>
-</tr>
-</thead>
-<tbody>
-<tr class="row-even"><td><p>x64, arm64 (CPU)</p></td>
-<td><p>yes</p></td>
-<td><p>yes</p></td>
-</tr>
-<tr class="row-odd"><td><p>CUDA</p></td>
-<td><p>yes</p></td>
-<td><p>yes</p></td>
-</tr>
-<tr class="row-even"><td><p>AMDGPU</p></td>
-<td><p>yes</p></td>
-<td><p>yes</p></td>
-</tr>
-<tr class="row-odd"><td><p>Metal</p></td>
-<td><p>yes</p></td>
-<td><p>yes</p></td>
-</tr>
-<tr class="row-even"><td><p>Vulkan</p></td>
-<td><p>yes</p></td>
-<td><p>yes</p></td>
-</tr>
-</tbody>
-</table>
-</div>
-<p>The adstack pipeline is flagged experimental across all backends (enabled via <code class="docutils literal notranslate"><span class="pre">ad_stack_experimental_enabled=True</span></code>). All backends share the same IR-level passes, so correctness is expected to match; report discrepancies.</p>
+<section id="backend-support">
+<h2>Backend support<a class="headerlink" href="#backend-support" title="Link to this heading">#</a></h2>
+<p>Forward-mode AD, reverse-mode AD, and the adstack pipeline are supported on every backend Quadrants targets: x64 / arm64 CPU, CUDA, AMDGPU, Metal, and Vulkan. All backends share the same IR-level passes, so correctness is expected to match; report discrepancies.</p>
+<p>The adstack pipeline is still behind <code class="docutils literal notranslate"><span class="pre">ad_stack_experimental_enabled=True</span></code> because its compile-time footprint (see the last bullet under “Known limitations”) is not yet acceptable as a default for non-adstack workloads, not because of correctness uncertainty.</p>
 </section>
 <section id="known-limitations">
 <h2>Known limitations<a class="headerlink" href="#known-limitations" title="Link to this heading">#</a></h2>
 <ul class="simple">
-<li><p>The adstack pipeline is opt-in because enabling it unconditionally would regress forward-only AD kernels. When in doubt, enable it.</p></li>
-<li><p>Adstack overflow on SPIR-V is bounds-checked in the kernel (the push becomes a no-op past capacity) but the overflow is not reported back to the host: the iteration’s gradient contribution is silently dropped. LLVM backends surface the overflow as a kernel abort with a diagnostic; on SPIR-V, raise <code class="docutils literal notranslate"><span class="pre">default_ad_stack_size</span></code> at <code class="docutils literal notranslate"><span class="pre">qd.init</span></code> time if your kernel can exceed the current capacity.</p></li>
+<li><p>The adstack pipeline is opt-in. Enabling it unconditionally would visibly slow compile times on AD kernels that don’t actually need per-iteration history (the extra IR pass runs, allocates, and spills regardless), so the switch stays off by default. When in doubt, enable it.</p></li>
+<li><p>Adstack overflow on SPIR-V is bounds-checked in the kernel (the push becomes a no-op past capacity) but the overflow is not reported back to the host: the iteration’s gradient contribution is silently dropped, producing numerically wrong gradients. This is a known footgun and a follow-up will surface it as a runtime error via a host-polled SSBO flag. LLVM backends already surface the overflow as a kernel abort with a diagnostic; on SPIR-V, raise <code class="docutils literal notranslate"><span class="pre">default_ad_stack_size</span></code> at <code class="docutils literal notranslate"><span class="pre">qd.init</span></code> time if your kernel can exceed the current capacity.</p></li>
 <li><p>On Metal, raising <code class="docutils literal notranslate"><span class="pre">default_ad_stack_size</span></code> past the default trips Apple’s shader compiler: pipeline creation fails with <code class="docutils literal notranslate"><span class="pre">XPC_ERROR_CONNECTION_INTERRUPTED</span></code> from the MSL-translation XPC service, as the combined per-thread Function-scope footprint of many adstacks exceeds what the compiler is willing to ingest. The default (<code class="docutils literal notranslate"><span class="pre">32</span></code>) is deliberately small; raise it only if your workload needs deeper stacks and the target driver can take it. An adaptive sizing pass that proves tighter per-loop bounds and shrinks the static allocation is tracked as a follow-up.</p></li>
 <li><p>The adstack pipeline trades compile-time complexity for generality. Real-world kernels (many loop-carried variables, nested dynamic loops, large inner-loop bodies) can push compile times from seconds into minutes and, on some backends, into the territory where the driver’s shader compiler gives up entirely. The implementation does not currently try to share stacks across independent variables or coalesce pushes, so the generated kernel’s IR grows roughly linearly with the number of live adstack slots. Expect compile regressions when migrating existing reverse-mode AD workloads to the adstack pipeline; budget accordingly.</p></li>
 <li><p>Runtime speed of the generated backward kernel is not yet a focus. The current codegen is “correct first”: adjoint accumulation goes through ordinary atomics and ordinary loads / stores, with no backend-specific tuning (no tiling across the reverse pass, no fusion of adjoint accumulations, no specialized scheduling for the push/pop pattern). Backward passes on non-trivial kernels run noticeably slower than the corresponding forward pass, sometimes by an order of magnitude on SPIR-V. Improving this is future work.</p></li>
-<li><p>Reverse-mode AD does not propagate gradients through integer casts or non-real operations; cast to <code class="docutils literal notranslate"><span class="pre">qd.f32</span></code> / <code class="docutils literal notranslate"><span class="pre">qd.f64</span></code> before the differentiable section.</p></li>
+<li><p>Reverse-mode AD does not propagate gradients through integer casts or non-real operations. No error is raised; the gradient simply stops at the cast and silently reads as zero upstream. Cast to <code class="docutils literal notranslate"><span class="pre">qd.f32</span></code> / <code class="docutils literal notranslate"><span class="pre">qd.f64</span></code> before the differentiable section. Surfacing this as an explicit error is future work.</p></li>
 </ul>
 </section>
 </section>
@@ -740,7 +710,7 @@
 <li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#default-ad-stack-size-and-overflow-behavior"><code class="docutils literal notranslate"><span class="pre">default_ad_stack_size</span></code> and overflow behavior</a></li>
 </ul>
 </li>
-<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#backend-support-matrix">Backend support matrix</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#backend-support">Backend support</a></li>
 <li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#known-limitations">Known limitations</a></li>
 </ul>
   </nav></div>
