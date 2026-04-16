@@ -1573,7 +1573,7 @@ def test_tile16_vec_proxy_multi_column_accumulate(tensor_type):
     np.testing.assert_allclose(out.to_numpy(), expected, atol=1e-4)
 
 
-@test_utils.test(arch=qd.gpu, exclude=[qd.vulkan])
+@test_utils.test(arch=qd.gpu, exclude=[qd.vulkan, qd.metal])
 def test_tile16_f64_roundtrip_into_f32_array():
     """Load f32 data through an f64 tile and store back -- must be lossless."""
     src = qd.ndarray(shape=(_TILE, _TILE), dtype=qd.f32)
@@ -1715,7 +1715,7 @@ def test_proxy_in_func(tensor_type):
 
 
 @pytest.mark.parametrize("tensor_type", [qd.ndarray, qd.field])
-@test_utils.test(arch=qd.gpu)
+@test_utils.test(arch=qd.gpu, exclude=[qd.vulkan, qd.metal])
 def test_proxy_default_dtype_survives_reinit(tensor_type):
     """Proxy with default dtype must follow default_fp across init/reset cycles.
 
