@@ -1815,9 +1815,8 @@ def test_proxy_in_func(tensor_type):
 def test_proxy_default_dtype_survives_reinit(tensor_type):
     """Proxy with default dtype must follow default_fp across init/reset cycles.
 
-    This is the actual regression scenario: init with f64, compile a kernel,
-    reset, reinit with f32, compile the same kernel pattern -- the second
-    kernel must use f32 tiles, not stale f64.
+    This is the actual regression scenario: init with f64, compile a kernel, reset, reinit with f32, compile the
+    same kernel pattern -- the second kernel must use f32 tiles, not stale f64.
     """
     from quadrants.lang import impl  # pylint: disable=import-outside-toplevel
 
