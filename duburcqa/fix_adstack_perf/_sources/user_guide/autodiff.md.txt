@@ -10,17 +10,17 @@ Three styles are supported:
 - **Forward mode** - few inputs, many outputs. One forward pass yields every output derivative along a chosen input direction. See [Forward-mode AD via `qd.ad.FwdMode`](#forward-mode-ad-via-qdadfwdmode).
 - **Custom gradients** - override the auto-generated gradient with a user-supplied one, typically to inject a closed-form analytic derivative or to checkpoint for memory. See [Overriding the compiler-generated gradient](#overriding-the-compiler-generated-gradient).
 
-The adstack pipeline, the validation checker, and the backend support matrix are covered further down for when the default path is not enough.
+Dynamic loops, runtime validation, and the backend support matrix are covered further down for when the default path is not enough.
 
 ## Reverse-mode autodiff
 
 Reverse-mode AD computes the gradient of a scalar output with respect to every input in a single backward sweep. It walks the forward kernel's operations in reverse order and applies the chain rule to accumulate contributions into adjoint (`.grad`) fields alongside the primal fields.
 
-This is the engine under every gradient-based training loop: Torch's `.backward()` is reverse-mode autodiff, and so are most differentiable-simulation frameworks. If you want to put a learned parameter inside a Quadrants kernel and have an optimizer tune it, this section is how you do it.
+This is the engine under every gradient-based training loop: Torch's `.backward()` runs reverse-mode autodiff, as do most differentiable-simulation frameworks. If you want to put a learned parameter inside a Quadrants kernel and have an optimizer tune it, this section is how you do it.
 
 The workflow is:
 
-1. Allocate an adjoint (`.grad`) buffer next to every primal field gradients are needed for.
+1. Allocate an adjoint (`.grad`) buffer next to every primal field whose gradient you need.
 2. Run the forward kernel.
 3. Seed the loss gradient - typically `loss.grad[None] = 1.0`.
 4. Call `kernel.grad()`.
@@ -116,9 +116,9 @@ Rules:
 - `param` must be a single `ScalarField`. Differentiating with respect to multiple fields requires one `FwdMode` pass per field.
 - `seed` is a flat list matching the flattened shape of `param`. For a 0-D `param`, `seed` defaults to `[1.0]`.
 - `loss` is a scalar field or a list of scalar fields; the result lands in `loss.dual`. Duals are cleared on entry and kernel autodiff modes are restored on exit.
-- Forward mode uses `AutodiffMode.FORWARD` and the `MakeDual` transform; the adstack pipeline does not apply.
+- Forward mode does not use the adstack pipeline: no compile-time flag is required.
 
-The *Jacobian* is the matrix of partial derivatives of every output with respect to every input: entry `(i, j)` is `d(output_i) / d(input_j)`. Forward mode computes one *column* per pass (pick one input direction, get every output's derivative along it); reverse mode computes one *row* per pass (pick one output, get every input's derivative). That is why forward mode wins when inputs << outputs and reverse mode wins when outputs << inputs (the typical ML loss case: a single scalar loss over millions of parameters). To build the full Jacobian in forward mode, call `FwdMode` once per basis vector (one-hot seed) and stack the resulting `loss.dual` columns.
+The *Jacobian* is the matrix of partial derivatives of every output with respect to every input: entry `(i, j)` is `d(output_i) / d(input_j)`. Forward mode computes one *column* per pass — pick one input direction, get every output's derivative along it. Reverse mode computes one *row* per pass — pick one output, get every input's derivative. Forward mode wins when inputs << outputs (for example, one kinematic parameter of a robot, many joint positions to differentiate); reverse mode wins when outputs << inputs (for example, a single scalar loss over millions of trainable parameters). To build the Jacobian in forward mode, call `FwdMode` once per basis vector of the input space and stack the resulting `loss.dual` columns; in reverse mode, call `kernel.grad()` once per basis vector of the output space (seed `loss.grad` one entry at a time) and stack the resulting `.grad` rows.
 
 ### Overriding the compiler-generated gradient
 
@@ -223,7 +223,7 @@ Reverse-mode AD through a dynamic loop (one whose trip count is not known at com
 
 - A loop-carried dependency (a variable read, written, and read again across iterations, e.g. `v = v * 0.95 + 0.01`).
 - A local variable used as an index into a global field.
-- Non-linear ops (`sin`, `cos`, `exp`, `sqrt`, `tanh`, `pow`, ...) whose reverse partial depends on the primal value at that specific iteration.
+- Non-linear ops (`sin`, `cos`, `exp`, `sqrt`, `tanh`, `pow`, ...) whose derivative depends on the primal value at that iteration.
 - An `if` whose condition depends on a variable that mutates across iterations.
 
 `qd.static(range(...))` loops are unrolled at compile time and never need the adstack. If in doubt, enable it: running with the adstack when it is not strictly needed is safe, while running without it when it is needed silently yields zero gradients.
@@ -262,7 +262,7 @@ Without `ad_stack_experimental_enabled=True`, `x.grad[0]` comes out as zero. The
 
 Each adstack has a fixed capacity baked into the compiled kernel. When the compiler can prove the worst-case loop trip count, that value is used; otherwise it falls back to a conservative default.
 
-Every live adstack is allocated up front as per-thread private memory at kernel entry, regardless of whether any push runs. On SPIR-V backends (Metal, Vulkan) the per-thread private memory footprint is capped by the driver's shader compiler, so the fallback default stays small. If a kernel overflows its adstack at runtime, Quadrants raises a Python `RuntimeError` at the next synchronize() pointing at the issue; if the default is already too large for the target shader compiler, pipeline creation itself fails with a similar exception at kernel-launch time.
+Every live adstack is allocated up front at kernel entry, regardless of whether any push runs. On SPIR-V backends (Metal, Vulkan) the allocation lives in per-thread on-chip memory, which the driver caps at a few kilobytes, so the fallback default stays small. If a kernel overflows its adstack at runtime, Quadrants raises a Python `RuntimeError` naming the overflow at the next `qd.sync()`; if the default is already too large for the target driver, pipeline creation itself fails with a similar exception at kernel-launch time.
 
 Pass `ad_stack_size=N` to `qd.init()` to override the fallback. Heap-backed SPIR-V adstack, which would lift the per-thread ceiling, is left for future work.
 
@@ -275,7 +275,7 @@ The adstack pipeline is still behind `ad_stack_experimental_enabled=True`. Enabl
 ## Known limitations
 
 - Adstack overflow is reported as a Python-level exception on every backend, but asynchronously: the offending kernel sets a flag during execution and the next `qd.sync()` (explicit, or implicit via a host read like `to_numpy()` / `to_torch()`) raises. This follows the same pattern as CUDA async errors so every launch does not pay a per-launch sync. If you want the exception to land exactly at the offending kernel rather than at the next sync, call `qd.sync()` right after the kernel, or enable `qd.init(debug=True)` on LLVM backends to poll after every launch.
-- On SPIR-V backends (Metal, Vulkan), a large adstack can make the driver's shader compiler reject the pipeline because the per-thread Function-scope footprint exceeds what it accepts. When it does, Quadrants raises a Python `RuntimeError` at kernel-launch time. LLVM backends (CPU, CUDA, AMDGPU) allocate the adstack on the heap and do not hit this limit. Moving SPIR-V adstacks off Function-scope onto a heap-backed buffer to lift this ceiling is left for future work.
-- The adstack pipeline trades compile-time complexity for generality. Real-world kernels (many loop-carried variables, nested dynamic loops, large inner-loop bodies) can push compile times from seconds into minutes and, on some backends, into the territory where the driver's shader compiler gives up entirely. The implementation does not currently try to share stacks across independent variables or coalesce pushes, so the generated kernel's IR grows roughly linearly with the number of live adstack slots. Expect compile regressions when migrating existing reverse-mode AD workloads to the adstack pipeline; budget accordingly.
+- On SPIR-V backends (Metal, Vulkan) the adstack is allocated as per-thread on-chip memory, which the driver's shader compiler caps at a few kilobytes. Kernels whose combined adstack demand exceeds that cap fail to compile and Quadrants raises a Python `RuntimeError` at kernel-launch time. LLVM backends (CPU, CUDA, AMDGPU) allocate on the heap and do not hit this limit. Lifting the SPIR-V limit by moving the adstack off on-chip memory is tracked for future work.
+- The adstack pipeline trades compile time for generality. Kernels with many loop-carried variables, nested dynamic loops, or large inner-loop bodies can push compile times from seconds into minutes and, on SPIR-V backends, into the territory where the driver's shader compiler gives up. Expect compile regressions when migrating existing reverse-mode AD workloads; budget accordingly.
 - Reverse-mode AD does not propagate gradients through integer casts or non-real operations. No error is raised; the gradient simply stops at the cast and silently reads as zero upstream. Cast to `qd.f32` / `qd.f64` before the differentiable section.
-- Runtime speed of the generated backward kernel is not yet a focus. The current codegen is "correct first": adjoint accumulation goes through ordinary atomics and ordinary loads / stores, with no backend-specific tuning (no tiling across the reverse pass, no fusion of adjoint accumulations, no specialized scheduling for the push/pop pattern). Backward passes on non-trivial kernels run noticeably slower than the corresponding forward pass, sometimes by an order of magnitude on SPIR-V. Improving this is future work. The adstack pipeline is opt-in (`ad_stack_experimental_enabled=True`) while this is being addressed.
+- Runtime speed of the generated backward kernel is not yet prioritized. Backward passes on non-trivial kernels run noticeably slower than the corresponding forward pass, sometimes by an order of magnitude on SPIR-V. Closing this gap is future work. The adstack pipeline remains opt-in (`ad_stack_experimental_enabled=True`) until it does.
