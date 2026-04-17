@@ -122,7 +122,7 @@ The *Jacobian* is the matrix of partial derivatives of every output with respect
 
 ### Overriding the compiler-generated gradient
 
-**Problem.** The compiler generates a gradient kernel from the forward kernel automatically. That is correct by construction but not always what you want:
+Sometimes you may want to write your own backwards kernel, for example:
 
 - You already know a closed-form analytic gradient that is cheaper, more numerically stable, or easier to vectorize than the auto-generated one.
 - The forward pass calls external code (for example a custom C/CUDA op) that the compiler cannot see through.
@@ -132,7 +132,7 @@ The *Jacobian* is the matrix of partial derivatives of every output with respect
 **Workflow.**
 
 1. Write your forward as a plain Python function that calls one or more kernels. Decorate it with `@qd.ad.grad_replaced`.
-2. Write a second Python function that does whatever you want the reverse pass to do (call a hand-written gradient kernel, rerun the forward for checkpointing, etc.). Decorate it with `@qd.ad.grad_for(<name-of-forward>)`.
+2. Write a second Python function that does whatever you want the reverse pass to do (call a hand-written gradient kernel, rerun the forward for checkpointing, etc.). Decorate it with `@qd.ad.grad_for(<forward-function>)`.
 3. Call the forward inside a `qd.ad.Tape` block as usual. On exit, the tape runs your gradient function in place of the compiler-generated one.
 
 ```python
@@ -162,16 +162,9 @@ with qd.ad.Tape(loss=total):
 # x.grad[i] == 4 for every i
 ```
 
-Constraints:
-
-- The decorated forward must be a regular Python function, not a `@qd.kernel`. Wrap kernels inside a Python function.
-- `qd.ad.no_grad` is the degenerate case: a custom forward that contributes no gradient.
-
 ### Global data access rules and the validation checker
 
-**Problem.** Reverse-mode AD needs the forward kernel's primal values in memory when the reverse pass runs. If the forward kernel reads a global entry (field or ndarray) and later overwrites it within the *same* launch, the primal needed for the chain rule is gone, and the gradient is silently wrong.
-
-**The rule** (applied uniformly to fields and ndarrays): within a single kernel launch, a global entry that has been read must not be written to afterward. The constraint is strictly per-launch, so different kernels can freely read and write the same entry.
+**The rule**: within a single kernel launch, a field or ndarray entry that has been read must not be written to afterward. The constraint is strictly per-launch, so different kernels can freely read and write the same entry. Kernel scalar arguments are not subject to this rule: they are function parameters, not globals, and the reverse pass does not need to re-read their original value.
 
 Here is a kernel that violates the rule:
 
@@ -183,7 +176,7 @@ def bad():
     b[None] += 100
 ```
 
-This is the "read then overwrite" pattern: `b[None]` is read on the first line, then written on the second, inside the same launch. The reverse pass would need the original `b[None]` to compute `dloss/dx[1]`, but by then it has been clobbered.
+This is the "read then overwrite" pattern: `b[None]` is read, then written, inside the same launch. The reverse pass would need the original `b[None]` to compute `dloss/dx[1]`, but by then it has been clobbered.
 
 To fix it, separate the read and the write into two distinct kernels. Each kernel launch becomes self-consistent: `compute_loss` only reads, `update_b` only writes, and the rule is obeyed because the constraint is per-launch.
 
@@ -203,17 +196,7 @@ update_b()
 
 The pattern often hides inside in-place time-stepping updates like `x[i] = x[i] + dt * v[i]` when the same loop body reads `x[i]` earlier. The same fix applies (split into two kernels), or equivalently, double-buffer: have the update write into an `x_new` field and swap the references after the kernel returns.
 
-**Runtime check.** Violations of the rule do not produce an error on their own - the gradients are just silently wrong. To get Quadrants to validate the rule at runtime, pass `validation=True` to `qd.ad.Tape` (with `qd.init(debug=True)` set):
-
-```python
-qd.init(arch=qd.gpu, debug=True)
-...
-with qd.ad.Tape(loss=loss, validation=True):
-    compute_loss()
-    update_b()
-```
-
-A violation raises `QuadrantsAssertionError` with the offending field name. Validation adds per-access runtime work and extra memory, so it is opt-in and only honored under `debug=True`. Use it while developing a new differentiable kernel; drop it in production. Kernels wrapped in `qd.ad.grad_replaced` are exempt from the check - their gradient is the user's responsibility.
+**Runtime check.** Violations of the rule do not produce an error on their own - the gradients are just silently wrong. To get Quadrants to validate the rule at runtime, pass `validation=True` to `qd.ad.Tape` (with `qd.init(debug=True)` set). A violation raises `QuadrantsAssertionError` with the offending field name. Kernels wrapped in `qd.ad.grad_replaced` are exempt - their gradient is the user's responsibility.
 
 ## Autodiff with dynamic loops
 
@@ -228,49 +211,21 @@ Reverse-mode AD through a dynamic loop (one whose trip count is not known at com
 
 `qd.static(range(...))` loops are unrolled at compile time and never need the adstack. If in doubt, enable it: running with the adstack when it is not strictly needed is safe, while running without it when it is needed silently yields zero gradients.
 
-Example:
-
-```python
-qd.init(arch=qd.gpu, ad_stack_experimental_enabled=True)
-
-x = qd.field(qd.f32)
-y = qd.field(qd.f32)
-qd.root.dense(qd.i, 1).place(x, x.grad)
-qd.root.place(y, y.grad)
-
-@qd.kernel
-def compute():
-    for i in x:
-        v = x[i]
-        for _ in range(10):
-            v = v * 0.95 + 0.01   # loop-carried dependency: needs the adstack
-        y[None] += v
-
-x[0] = 0.5
-y[None] = 0.0
-compute()
-y.grad[None] = 1.0
-x.grad[0] = 0.0
-compute.grad()
-
-# x.grad[0] == 0.95 ** 10
-```
-
-Without `ad_stack_experimental_enabled=True`, `x.grad[0]` comes out as zero. The flag is compile-time, so it must be set at `qd.init` time, before the offending kernel compiles.
+The `ad_stack_experimental_enabled` flag is compile-time, so it must be set at `qd.init` time, before the offending kernel compiles.
 
 ### Adstack overflow
 
-Each adstack has a fixed capacity baked into the compiled kernel. When the compiler can prove the worst-case loop trip count, that value is used; otherwise it falls back to a conservative default.
+Every live adstack is allocated up front at kernel entry, regardless of whether any push runs. Note that its capacity is fixed at compile time and cannot be modified at runtime. On SPIR-V backends (Metal, Vulkan) the allocation lives in per-thread on-chip memory, which the driver caps at a few kilobytes, so the fallback default stays small.
 
-Every live adstack is allocated up front at kernel entry, regardless of whether any push runs. On SPIR-V backends (Metal, Vulkan) the allocation lives in per-thread on-chip memory, which the driver caps at a few kilobytes, so the fallback default stays small. If a kernel overflows its adstack at runtime, Quadrants raises a Python `RuntimeError` naming the overflow at the next `qd.sync()`; if the default is already too large for the target driver, pipeline creation itself fails with a similar exception at kernel-launch time.
+When the compiler can prove the worst-case loop trip count, that value is used for the capacity; otherwise it falls back to a conservative default. Pass `ad_stack_size=N` to `qd.init()` to override the fallback.
 
-Pass `ad_stack_size=N` to `qd.init()` to override the fallback. Heap-backed SPIR-V adstack, which would lift the per-thread ceiling, is left for future work.
+If a kernel overflows its adstack at runtime, Quadrants raises a Python `RuntimeError` naming the overflow at the next `qd.sync()`; if the default is already too large for the target driver, pipeline creation itself fails with a similar exception at kernel-launch time. Heap-backed SPIR-V adstack, which would lift the per-thread ceiling, is left for future work.
 
 ## Backend support
 
-Forward-mode AD, reverse-mode AD, and the adstack pipeline are supported on every backend Quadrants targets: x64 / arm64 CPU, CUDA, AMDGPU, Metal, and Vulkan. All backends share the same IR-level passes, so correctness is expected to match; report discrepancies.
+Forward-mode AD, reverse-mode AD, and the adstack pipeline are supported on every backend Quadrants targets: x64 / arm64 CPU, CUDA, AMDGPU, Metal, and Vulkan.
 
-The adstack pipeline is still behind `ad_stack_experimental_enabled=True`. Enable it when reverse-mode AD through a dynamic loop is needed.
+The adstack pipeline is behind `ad_stack_experimental_enabled=True`. Enable it when reverse-mode AD through a dynamic loop is needed.
 
 ## Known limitations
 
@@ -278,4 +233,4 @@ The adstack pipeline is still behind `ad_stack_experimental_enabled=True`. Enabl
 - On SPIR-V backends (Metal, Vulkan) the adstack is allocated as per-thread on-chip memory, which the driver's shader compiler caps at a few kilobytes. Kernels whose combined adstack demand exceeds that cap fail to compile and Quadrants raises a Python `RuntimeError` at kernel-launch time. LLVM backends (CPU, CUDA, AMDGPU) allocate on the heap and do not hit this limit. Lifting the SPIR-V limit by moving the adstack off on-chip memory is tracked for future work.
 - The adstack pipeline trades compile time for generality. Kernels with many loop-carried variables, nested dynamic loops, or large inner-loop bodies can push compile times from seconds into minutes and, on SPIR-V backends, into the territory where the driver's shader compiler gives up. Expect compile regressions when migrating existing reverse-mode AD workloads; budget accordingly.
 - Reverse-mode AD does not propagate gradients through integer casts or non-real operations. No error is raised; the gradient simply stops at the cast and silently reads as zero upstream. Cast to `qd.f32` / `qd.f64` before the differentiable section.
-- Runtime speed of the generated backward kernel is not yet prioritized. Backward passes on non-trivial kernels run noticeably slower than the corresponding forward pass, sometimes by an order of magnitude on SPIR-V. Closing this gap is future work. The adstack pipeline remains opt-in (`ad_stack_experimental_enabled=True`) until it does.
+- Backward passes on non-trivial kernels run noticeably slower than the corresponding forward pass, sometimes by an order of magnitude on SPIR-V. Closing this gap is future work.
