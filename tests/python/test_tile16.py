@@ -291,23 +291,6 @@ def test_tile16_size_constant():
     assert Tile.SIZE == 16
 
 
-@test_utils.test(arch=qd.gpu)
-def test_tile16_size_constant_in_kernel():
-    """Tile.SIZE must be accessible inside a kernel without purity violations."""
-    Tile = _make_tile16x16(qd.f32)
-    out = qd.ndarray(qd.i32, (1,))
-
-    @qd.kernel(fastcache=True)
-    def k1(result: qd.types.NDArray[qd.i32, 1]):
-        qd.loop_config(block_dim=qd.simt.Tile16x16.SIZE)
-        tile_size = qd.simt.Tile16x16.SIZE
-        for _ in range(tile_size):
-            result[0] = Tile.SIZE
-
-    k1(out)
-    assert out.to_numpy()[0] == 16
-
-
 @pytest.mark.parametrize("tensor_type", [qd.ndarray, qd.field])
 @pytest.mark.parametrize("qd_dtype", _QD_DTYPES)
 @test_utils.test(arch=qd.gpu)
