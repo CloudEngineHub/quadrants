@@ -14,6 +14,8 @@ def _skip_if_f64_unsupported(dtype):
     arch = qd.lang.impl.current_cfg().arch
     if dtype in (qd.i64, qd.u64) and arch == qd.metal:
         pytest.skip("64-bit integer types not supported on Metal")
+    if dtype in (qd.i64, qd.u64) and arch == qd.vulkan and platform.system() == "Darwin":
+        pytest.skip("MoltenVK does not support 64-bit integer types")
     if dtype != qd.f64:
         return
     if arch == qd.metal:
