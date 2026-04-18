@@ -517,8 +517,9 @@ def test_grid_memfence():
 
 
 def _init_field(field, n, dtype):
+    int_dtypes = (qd.i32, qd.i64, qd.u64)
     for i in range(n):
-        field[i] = (i + 1) if dtype == qd.i32 else 1.0000000000001 * (i + 1)
+        field[i] = (i + 1) if dtype in int_dtypes else 1.0000000000001 * (i + 1)
 
 
 @pytest.mark.parametrize("dtype", [qd.i32, qd.f32, qd.f64])
@@ -682,7 +683,7 @@ def test_subgroup_shuffle_down_reduction(dtype):
     assert abs(dst[0] - expected) < 1e-5
 
 
-@pytest.mark.parametrize("dtype", [qd.i32, qd.f32, qd.f64])
+@pytest.mark.parametrize("dtype", [qd.i32, qd.i64, qd.u64, qd.f32, qd.f64])
 @pytest.mark.parametrize("log2_size", [1, 2, 3, 4, 5])
 @test_utils.test(arch=qd.gpu)
 def test_subgroup_reduce_add(dtype, log2_size):
@@ -703,13 +704,14 @@ def test_subgroup_reduce_add(dtype, log2_size):
 
     group_size = 1 << log2_size
     expected = sum(src[i] for i in range(group_size))
-    if dtype == qd.i32:
+    int_dtypes = (qd.i32, qd.i64, qd.u64)
+    if dtype in int_dtypes:
         assert dst[0] == expected
     else:
         assert abs(dst[0] - expected) < 1e-4 * abs(expected)
 
 
-@pytest.mark.parametrize("dtype", [qd.i32, qd.f32, qd.f64])
+@pytest.mark.parametrize("dtype", [qd.i32, qd.i64, qd.u64, qd.f32, qd.f64])
 @pytest.mark.parametrize("log2_size", [1, 2, 3, 4, 5])
 @test_utils.test(arch=qd.gpu)
 def test_subgroup_reduce_all_add(dtype, log2_size):
@@ -730,8 +732,9 @@ def test_subgroup_reduce_all_add(dtype, log2_size):
 
     group_size = 1 << log2_size
     expected = sum(src[i] for i in range(group_size))
+    int_dtypes = (qd.i32, qd.i64, qd.u64)
     for i in range(group_size):
-        if dtype == qd.i32:
+        if dtype in int_dtypes:
             assert dst[i] == expected, f"lane {i}: got {dst[i]}, expected {expected}"
         else:
             assert abs(dst[i] - expected) < 1e-4 * abs(expected), (
