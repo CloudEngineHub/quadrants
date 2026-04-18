@@ -2,7 +2,9 @@
 
 Automatic differentiation (autodiff) computes the exact gradient of a kernel's output with respect to its inputs, without the user writing the derivative formulas by hand. Gradient-based optimizers then use this gradient to train neural networks, fit physical models to data, drive differentiable simulators, or solve inverse problems.
 
-Quadrants implements autodiff at compile time: when `.grad()` is requested, the compiler emits a companion kernel that runs on the same backend as the forward one and writes gradients into the primal fields' `.grad` companions. There is no Python-side tape, no per-op dispatch overhead, and no dependency on an external AD framework. The backward pass does more work than the forward pass (it runs every forward op, then for each one accumulates a gradient contribution back into the inputs' adjoints, usually via atomic writes), so expect it to be on the order of 1.5 to 3x slower than the forward pass of the same kernel.
+Throughout this page, the *primal* is the value a kernel computes in its normal forward pass (the field value, the loss, whatever the kernel writes); the *adjoint* (or *gradient*) is the derivative of the final scalar output (typically a loss) with respect to that primal value, stored in the `.grad` field next to the primal.
+
+Quadrants implements autodiff at compile time: when `.grad()` is requested, the compiler emits a companion kernel that runs on the same backend as the forward one and writes gradients into the primal fields' `.grad` companions. There is no Python-side tape, no per-op dispatch overhead, and no dependency on an external AD framework. The backward pass does more work than the forward pass: it runs every forward op, then for each op accumulates a gradient contribution back into the inputs' adjoints, usually via atomic writes. Expect the backward pass to be on the order of 1.5 to 3x slower than the corresponding forward pass.
 
 Three styles are supported:
 
@@ -118,7 +120,12 @@ Rules:
 - `loss` is a scalar field or a list of scalar fields; the result lands in `loss.dual`. Duals are cleared on entry and kernel autodiff modes are restored on exit.
 - Forward mode does not use the adstack pipeline: no compile-time flag is required.
 
-The *Jacobian* is the matrix of partial derivatives of every output with respect to every input: entry `(i, j)` is `d(output_i) / d(input_j)`. Forward mode computes one *column* per pass — pick one input direction, get every output's derivative along it. Reverse mode computes one *row* per pass — pick one output, get every input's derivative. Forward mode wins when inputs << outputs (for example, one kinematic parameter of a robot, many joint positions to differentiate); reverse mode wins when outputs << inputs (for example, a single scalar loss over millions of trainable parameters). To build the Jacobian in forward mode, call `FwdMode` once per basis vector of the input space and stack the resulting `loss.dual` columns; in reverse mode, call `kernel.grad()` once per basis vector of the output space (seed `loss.grad` one entry at a time) and stack the resulting `.grad` rows.
+**Forward vs reverse, picking the right one.** The *Jacobian* is the matrix of partial derivatives of every output with respect to every input: entry `(i, j)` is `d(output_i) / d(input_j)`.
+
+- Forward mode computes one *column* of the Jacobian per pass: pick one input direction, get every output's derivative along it. Wins when inputs are few and outputs are many (for example, one kinematic parameter of a robot, many joint positions to differentiate).
+- Reverse mode computes one *row* per pass: pick one output, get every input's derivative. Wins when outputs are few and inputs are many (for example, a single scalar loss over millions of trainable parameters).
+
+To build the full Jacobian, call either mode once per basis vector of the smaller side and stack the results: `FwdMode` once per input in forward mode (stack the `loss.dual` columns), `kernel.grad()` once per output in reverse mode (seed `loss.grad` one entry at a time and stack the `.grad` rows).
 
 ### Overriding the compiler-generated gradient
 
@@ -132,7 +139,7 @@ Sometimes you may want to write your own backwards kernel, for example:
 **Workflow.**
 
 1. Write your forward as a plain Python function that calls one or more kernels. Decorate it with `@qd.ad.grad_replaced`.
-2. Write a second Python function that does whatever you want the reverse pass to do (call a hand-written gradient kernel, rerun the forward for checkpointing, etc.). Decorate it with `@qd.ad.grad_for(<forward-function>)`.
+2. Write a second Python function that does whatever you want the reverse pass to do (call a hand-written gradient kernel, rerun the forward for checkpointing, etc.). Decorate it with `@qd.ad.grad_for(<forward-function>)` - pass the decorated forward function itself, not its name.
 3. Call the forward inside a `qd.ad.Tape` block as usual. On exit, the tape runs your gradient function in place of the compiler-generated one.
 
 ```python
@@ -206,7 +213,7 @@ The pattern often hides inside in-place time-stepping updates like `x[i] = x[i] 
 
 **Problem.** Reverse-mode AD through a dynamic loop (one whose trip count is not known at compile time) needs to recover the primal value at each iteration when walking the loop backwards. Without that, the chain-rule steps read a stale value and the gradients come out silently wrong. Static-unrolled (`qd.static(range(...))`) loops are not affected because every iteration becomes its own inlined block at compile time.
 
-**How Quadrants does it.** An opt-in compiler pipeline called the *autodiff stack* (*adstack*) allocates a per-variable stack alongside each loop-carried primal. The forward pass pushes an entry each iteration; the reverse pass pops them back off in reverse order to recover the correct primal for every chain-rule step. It is opt-in because it costs extra per-thread memory and compile time, and because most kernels do not need it. Running with the adstack when it is not strictly needed is safe; running without it when it is needed silently yields zero gradients.
+**How Quadrants does it.** An opt-in compiler pipeline called the *autodiff stack* (*adstack*) allocates a per-variable stack alongside each loop-carried primal. The forward pass pushes an entry each iteration; the reverse pass pops them back off in reverse order to recover the correct primal for every chain-rule step. It is opt-in because it costs extra per-thread memory and compile time, and because most kernels do not need it. Running with the adstack when it is not strictly needed is safe. Running without it when it is needed raises a `QuadrantsCompilationError` in most cases (the autodiff pass rejects a non-static range that would otherwise lose its primal); in the narrow cases where the kernel compiles anyway, the reverse pass reads a stale value for every iteration and the gradients come out wrong but non-zero.
 
 **Workflow.** Enable the pipeline at init time and keep using the normal reverse-mode workflow: `qd.init(..., ad_stack_experimental_enabled=True)`. The flag is compile-time, so it must be set before the offending kernel compiles.
 
@@ -217,7 +224,13 @@ The pattern often hides inside in-place time-stepping updates like `x[i] = x[i] 
 - Non-linear ops (`sin`, `cos`, `exp`, `sqrt`, `tanh`, `pow`, ...) whose derivative depends on the primal value at that iteration.
 - An `if` whose condition depends on a variable that mutates across iterations.
 
-`qd.static(range(...))` loops are unrolled at compile time and never need the adstack.
+### Examples of dynamic loops that do not need it
+
+- Read-only streaming over a field with a linear accumulator: `for i in x: total += x[i]`. The per-iteration gradient contribution is a constant, no per-iteration primal replay is needed.
+- A linear reduction over a dynamic range: `for i in range(n): total += a * x[i] + b`. Same rationale.
+- A dynamic range whose body does not carry state across iterations and whose only non-linear op uses a loop-invariant value (the primal is the same every iteration, so replay is trivially correct).
+
+`qd.static(range(...))` loops are unrolled at compile time and never need the adstack either.
 
 ### Adstack overflow
 
