@@ -17,8 +17,7 @@ Python source compiles to the right vendor primitive on each backend.
 | `subgroup.shuffle_down(v, n)`  | yes  | yes\*  | yes             | i32, u32, f32, f64, i64, u64 |
 
 \* AMDGPU `shuffle_down` is currently emulated via `ds_bpermute`
-(~50 cycle latency). A DPP `ROW_SHR` fast path for the common reduction
-offsets (1, 2, 4, 8, 16) is planned.
+(~50 cycle latency).
 
 The remaining flavours (`shuffle_up`, `shuffle_xor`) are exposed in the
 Python module but are not yet implemented across backends. Calling them
@@ -158,8 +157,7 @@ near the top read past the end of the subgroup.
   — typically a handful of cycles, no memory traffic.
 - AMDGPU `shuffle` and `shuffle_down` both go through
   `ds_permute`/`ds_bpermute` today (LDS-routed, roughly tens of
-  cycles). A DPP `ROW_SHR` fast path for `shuffle_down` reduction
-  offsets is planned.
+  cycles).
 - 64-bit dtypes (`i64`, `u64`, `f64`) are emulated as two 32-bit
   shuffles on AMDGPU. Prefer 32-bit values when you have a choice.
 
