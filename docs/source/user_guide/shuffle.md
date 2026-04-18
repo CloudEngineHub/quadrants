@@ -1,15 +1,13 @@
 # Subgroup shuffles
 
 Subgroup shuffle operations let threads within the same subgroup (warp on
-NVIDIA, wave on AMD) read each other's register values directly, with no
-shared memory and no barrier. They are the building block for fast
+NVIDIA, wave on AMD) read each other's register values directly, without using
+shared memory or barriers. They are the building block for fast
 in-warp data exchange — broadcasts, neighbour exchanges, permutations —
 and are used internally by `Tile16x16` (see [tile16](tile16.md)).
 
 Shuffle ops live under `qd.simt.subgroup` and are written so the same
-Python source compiles to the right vendor primitive on each backend
-(CUDA `__shfl_sync`, AMDGPU `ds_bpermute`, and SPIR-V
-`OpGroupNonUniformShuffle`).
+Python source compiles to the right vendor primitive on each backend.
 
 ## What's available
 
@@ -38,14 +36,10 @@ one subgroup participate.
   `subgroup.invocation_id()`-derived values or known-good lane ids.
 - The op is issued under a full active mask on CUDA (`0xFFFFFFFF`). Call
   it from uniform control flow; calling from divergent control flow is
-  undefined on most backends.
+  undefined on most backends. (this means: all threads have to execute the shuffle)
 
 Subgroup size varies by backend (32 on NVIDIA, 32 or 64 on AMD, 32 in
-Vulkan compute on most GPUs). Quadrants guarantees that the first 4
-lanes of any subgroup are always in the same subgroup, so patterns that
-fit within 4 lanes are universally portable. Wider patterns should query
-`subgroup.size()` or use a feature like `Tile16x16` that already handles
-sizing internally.
+Vulkan compute on most GPUs).
 
 ## Examples
 
