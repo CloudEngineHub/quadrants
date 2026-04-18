@@ -19,8 +19,7 @@ source compiles to the right vendor primitive on each backend.
 | `subgroup.reduce_all_add(v, log2_size)`     | yes  | yes    | yes             | any type supporting `+`      |
 
 \* AMDGPU `shuffle_down` (and therefore `reduce_add`, which is built on it)
-is currently emulated via `ds_bpermute` (~50 cycle latency). A DPP `ROW_SHR`
-fast path for the common reduction offsets (1, 2, 4, 8, 16) is planned.
+is currently emulated via `ds_bpermute` (~50 cycle latency).
 
 The remaining shuffle flavours (`shuffle_up`, `shuffle_xor`) are exposed in
 the Python module but are not yet implemented across backends. Calling them
@@ -243,9 +242,7 @@ Metal / RDNA, up to 6 on CDNA).
   — typically a handful of cycles, no memory traffic.
 - AMDGPU `shuffle` and `shuffle_down` both go through
   `ds_permute`/`ds_bpermute` today (LDS-routed, roughly tens of
-  cycles). A DPP `ROW_SHR` fast path for `shuffle_down` reduction
-  offsets is planned, and will accelerate `reduce_add` on AMDGPU
-  automatically.
+  cycles).
 - `reduce_add` and `reduce_all_add` both issue exactly `log2_size`
   shuffles and `log2_size` adds per call. No barriers, no shared
   memory, no launch overhead (they inline).
