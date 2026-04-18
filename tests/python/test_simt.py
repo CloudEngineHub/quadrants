@@ -737,9 +737,7 @@ def test_subgroup_reduce_all_add(dtype, log2_size):
         if dtype in int_dtypes:
             assert dst[i] == expected, f"lane {i}: got {dst[i]}, expected {expected}"
         else:
-            assert abs(dst[i] - expected) < 1e-4 * abs(expected), (
-                f"lane {i}: got {dst[i]}, expected {expected}"
-            )
+            assert abs(dst[i] - expected) < 1e-4 * abs(expected), f"lane {i}: got {dst[i]}, expected {expected}"
 
 
 @test_utils.test(arch=qd.gpu)
