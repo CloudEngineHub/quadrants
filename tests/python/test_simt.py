@@ -509,61 +509,11 @@ def test_grid_memfence():
         assert a[i] == i + 1
 
 
-# Higher level primitives test
-def _test_subgroup_reduce(op, group_op, np_op, size, initial_value, dtype):
-    field = qd.field(dtype, (size))
-    if dtype == qd.i32 or dtype == qd.i64:
-        rand_values = np.random.randint(1, 100, size=(size))
-        field.from_numpy(rand_values)
-    if dtype == qd.f32 or dtype == qd.f64:
-        rand_values = np.random.random(size=(size)).astype(np.float32)
-        field.from_numpy(rand_values)
-
-    @qd.kernel
-    def reduce_all() -> dtype:
-        sum = qd.cast(initial_value, dtype)
-        for i in field:
-            value = field[i]
-            reduce_value = group_op(value)
-            if subgroup.elect():
-                op(sum, reduce_value)
-        return sum
-
-    if dtype == qd.i32 or dtype == qd.i64:
-        assert reduce_all() == np_op(rand_values)
-    else:
-        assert reduce_all() == approx(np_op(rand_values), 3e-4)
-
-
-# We use 2677 as size because it is a prime number
-# i.e. any device other than a subgroup size of 1 should have one non active group
-
-
-# Note: the old `subgroup.reduce_add(value)` no-arg API used the SPIR-V-only
-# `OpGroupNonUniformFAdd` op and ran over the natural subgroup width.  It has been replaced by the
-# portable `subgroup.reduce_add(value, log2_size)` (lane-0 result) and `subgroup.reduce_all_add(...)`
-# (all-lanes result), both of which expand to a shuffle tree and work on all backends.  See the
-# `test_subgroup_reduce_add_*` and `test_subgroup_reduce_all_add_*` tests below.
-
-
-# @test_utils.test(arch=qd.vulkan)
-# def test_subgroup_reduction_mul_i32():
-#     _test_subgroup_reduce(qd.atomic_add, subgroup.reduce_mul, np.prod, 8, 1, qd.f32)
-
-
-@test_utils.test(arch=qd.vulkan, exclude=[(qd.vulkan, "Darwin")])
-def test_subgroup_reduction_max_i32():
-    _test_subgroup_reduce(qd.atomic_max, subgroup.reduce_max, np.max, 2677, 0, qd.i32)
-
-
-@test_utils.test(arch=qd.vulkan)
-def test_subgroup_reduction_max_f32():
-    _test_subgroup_reduce(qd.atomic_max, subgroup.reduce_max, np.max, 2677, 0, qd.f32)
-
-
-@test_utils.test(arch=qd.vulkan)
-def test_subgroup_reduction_min_f32():
-    _test_subgroup_reduce(qd.atomic_max, subgroup.reduce_max, np.max, 2677, 0, qd.f32)
+# The old SPIR-V-only no-arg subgroup reductions (`subgroup.reduce_add` / `reduce_mul` / `reduce_min`
+# / `reduce_max` / `reduce_and` / `reduce_or` / `reduce_xor`) and their Vulkan-specific tests have
+# been removed.  See `test_subgroup_reduce_add` / `test_subgroup_reduce_all_add` below for the
+# portable sized-reduction tests, and add equivalent sized portable replacements for the other
+# reductions on top of `shuffle_down` / `shuffle` if needed.
 
 
 def _init_field(field, n, dtype):

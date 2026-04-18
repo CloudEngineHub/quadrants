@@ -84,28 +84,9 @@ def reduce_all_add(value, log2_size: template()):
     return value
 
 
-def reduce_mul(value):
-    return impl.call_internal("subgroupMul", value, with_runtime_context=False)
-
-
-def reduce_min(value):
-    return impl.call_internal("subgroupMin", value, with_runtime_context=False)
-
-
-def reduce_max(value):
-    return impl.call_internal("subgroupMax", value, with_runtime_context=False)
-
-
-def reduce_and(value):
-    return impl.call_internal("subgroupAnd", value, with_runtime_context=False)
-
-
-def reduce_or(value):
-    return impl.call_internal("subgroupOr", value, with_runtime_context=False)
-
-
-def reduce_xor(value):
-    return impl.call_internal("subgroupXor", value, with_runtime_context=False)
+# reduce_mul / reduce_min / reduce_max / reduce_and / reduce_or / reduce_xor (no-arg, SPIR-V-only)
+# have been removed.  Build sized portable replacements on top of `shuffle_down` / `shuffle`
+# following the same pattern as `reduce_add` / `reduce_all_add` above when needed.
 
 
 def inclusive_add(value):
@@ -198,12 +179,6 @@ __all__ = [
     "broadcast_first",
     "reduce_add",
     "reduce_all_add",
-    "reduce_mul",
-    "reduce_min",
-    "reduce_max",
-    "reduce_and",
-    "reduce_or",
-    "reduce_xor",
     "inclusive_add",
     "inclusive_mul",
     "inclusive_min",
