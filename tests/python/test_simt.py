@@ -11,9 +11,11 @@ from tests import test_utils
 
 
 def _skip_if_f64_unsupported(dtype):
+    arch = qd.lang.impl.current_cfg().arch
+    if dtype in (qd.i64, qd.u64) and arch == qd.metal:
+        pytest.skip("64-bit integer types not supported on Metal")
     if dtype != qd.f64:
         return
-    arch = qd.lang.impl.current_cfg().arch
     if arch == qd.metal:
         pytest.skip("Metal does not support f64 in buffer-backed snode/kernel I/O")
     if arch == qd.vulkan and platform.system() == "Darwin":
