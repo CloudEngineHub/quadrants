@@ -106,8 +106,7 @@ Same sum as `reduce_add`, but broadcast to **every lane** in each
   the sum, or to branch on it uniformly). It costs exactly the same
   number of shuffles as `reduce_add` but leaves the answer in all lanes,
   so it replaces a `reduce_add` + `shuffle`/broadcast pair.
-- Uses `subgroup.shuffle` under the hood, so it does not depend on the
-  `shuffle_down` AMDGPU emulation and is fully native on all backends.
+- Uses `subgroup.shuffle` under the hood.
 
 ## Examples
 
