@@ -126,7 +126,7 @@ def test_clear_all_dual_field():
         assert y.dual[None] == 4.0
 
 
-@test_utils.test(debug=True)
+@test_utils.test(require=qd.extension.data64, debug=True)
 def test_dual_field_dtype_preserved_in_debug_mode():
     """Regression: debug-mode checkbit must not shadow the outer dtype."""
     x = qd.field(qd.f64, shape=(), needs_dual=True)
