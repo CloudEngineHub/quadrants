@@ -234,9 +234,24 @@ The pattern often hides inside in-place time-stepping updates like `x[i] = x[i] 
 
 ### Adstack overflow
 
-Each adstack has a capacity that is fixed at compile time and cannot be modified at runtime. When the compiler can prove the worst-case loop trip count, that value is used; otherwise it falls back to a conservative default. Pass `ad_stack_size=N` to `qd.init()` to override the fallback.
+Each adstack has a capacity that is fixed at compile time and cannot be modified at runtime. When the compiler can prove the worst-case loop trip count, that value is used; otherwise it falls back to a conservative default.
 
 If a kernel overflows its adstack at runtime, Quadrants raises a Python `RuntimeError` naming the overflow at the next `qd.sync()`.
+
+**Tuning the capacity.** Two `qd.init()` knobs control adstack sizing:
+
+- `default_ad_stack_size=N` (default `256`): the fallback capacity for loops whose trip count the compiler cannot prove statically. Every adstack whose max_size was not deducible shares this value. Prefer tuning this knob, since it only affects the branch where the compiler needed to guess.
+- `ad_stack_size=N` (default `0 = adaptive`): a hard override that forces every adstack in the program to exactly `N` slots, regardless of what the compiler proved. Prefer this knob only when a targeted experiment needs uniform sizing (e.g. stress-testing the runtime heap path).
+
+**How to pick `default_ad_stack_size`.** The reverse pass of a `K`-iteration dynamic loop emits `K + 2` pushes per adstack (the trip count plus two setup pushes: one for the initial adjoint slot and one for the primal's starting value). Size the default at the flat trip count of the deepest unprovable dynamic loop in the program, plus that headroom. Common shapes:
+
+- A single `qd.ndrange(n, m)` whose bounds come from a field: worst case is `n_max * m_max` iterations. Pick `N >= n_max * m_max + 2`. At `max_n_dofs_per_entity = 16`, 16 x 16 = 256 hits the default exactly.
+- Nested `for i in range(a[None]): for j in range(b[None]):`: worst case is `a_max * b_max`, same rule.
+- A single dynamic `for i in range(a[None])`: `N >= a_max + 2`.
+
+**Memory cost.** The backing slab is allocated on the heap (device storage on GPU, host RAM on CPU) and its size scales as `num_threads * per_thread_stride`, where `per_thread_stride` is the sum of `AdStackAllocaStmt::size_in_bytes()` over every adstack in the task (each adstack is `8 + 8 * max_size` bytes for an f32, `8 + 4 * max_size` for i32/u1). On GPU, `num_threads` is the grid size (can reach 10^5 - 10^6), so raising `default_ad_stack_size` to `1024` is a 4x allocation even for kernels that only need 30 slots - watch the device memory budget (`device_memory_fraction` / `device_memory_GB`) and Metal's `MTLDevice.maxBufferLength` (1 - 4 GB on Apple GPUs). On CPU the stride only multiplies by the thread pool size, so the cost is modest.
+
+**When the default is too small.** The runtime surfaces overflow as a `QuadrantsAssertionError` (LLVM backends) or `RuntimeError` (SPIR-V backends) on the next `qd.sync()`, and the message recommends bumping `default_ad_stack_size`. Pick `N` using the rules above and retry.
 
 ## Backend support
 
