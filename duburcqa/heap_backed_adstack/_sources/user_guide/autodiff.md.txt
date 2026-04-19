@@ -249,7 +249,20 @@ If a kernel overflows its adstack at runtime, Quadrants raises a Python `Runtime
 - Nested `for i in range(a[None]): for j in range(b[None]):`: worst case is `a_max * b_max`, same rule.
 - A single dynamic `for i in range(a[None])`: `N >= a_max + 2`.
 
-**Memory cost.** The backing slab is allocated on the heap (device storage on GPU, host RAM on CPU) and its size scales as `num_threads * per_thread_stride`, where `per_thread_stride` is the sum of `AdStackAllocaStmt::size_in_bytes()` over every adstack in the task. Each adstack's raw size is `8 + 2 * element_size * max_size` bytes (8-byte header plus a primal + adjoint slot per entry), so `8 + 8 * max_size` for f32 / i32 and `8 + 2 * max_size` for u1; on the LLVM backend those raw sizes are rounded up to 8-byte alignment before being summed. On GPU, `num_threads` is the grid size (can reach 10^5 - 10^6), so raising `default_ad_stack_size` to `1024` is a 4x allocation even for kernels that only need 30 slots - watch the device memory budget (`device_memory_fraction` / `device_memory_GB`) and Metal's `MTLDevice.maxBufferLength` (1 - 4 GB on Apple GPUs). On CPU the stride only multiplies by the thread pool size, so the cost is modest.
+**Memory cost.** The adstack pipeline allocates one small scratch buffer per loop-carried variable that the reverse pass has to remember. For example, a kernel whose dynamic loop reads and updates one float accumulator needs 1 adstack; a kernel whose loop updates four different floats needs 4. Integer counters and boolean branch flags used by the reverse pass also count (typically one each per dynamic `if` or nested loop). The total memory Quadrants allocates across all those buffers is roughly
+
+```
+num_threads * stack_size * bytes_per_element * num_loop_carried_variables
+```
+
+where `bytes_per_element` is 4 for f32 / i32 and 1 for bool. The buffer lives on the device on GPU and in host RAM on CPU. `num_threads` is the number of threads the kernel actually dispatches, not a worst-case grid: on CPU this is the thread pool size (tens of threads), so the memory footprint stays small; on GPU it is the dispatched ndrange. The buffer grows on demand to match the largest size any launch has needed so far and is then reused across subsequent launches, so you do not need to reserve memory up front.
+
+Two shapes blow up the cost:
+
+- A big `ndrange` on GPU. A kernel over `ndrange(1024, 1024)` with a `default_ad_stack_size` of `256` and four f32 loop-carried variables allocates roughly `1024 * 1024 * 256 * 4 * 4 bytes = 4 GB` - easy to overrun a consumer GPU's memory budget.
+- Doubling `default_ad_stack_size` doubles the backing buffer linearly, so it is the easiest knob to reach for when you hit an out-of-memory error.
+
+If the GPU driver returns an out-of-memory error, the order of remedies is: drop `default_ad_stack_size` toward the real worst-case trip count of your dynamic loops, reduce the number of loop-carried variables the reverse pass has to remember (split a kernel, checkpoint manually, or fold two accumulators into one), then raise `device_memory_fraction` or `device_memory_GB` at `qd.init()` if your GPU has headroom.
 
 **When the default is too small.** The runtime surfaces overflow as a `QuadrantsAssertionError` (LLVM backends) or `RuntimeError` (SPIR-V backends) on the next `qd.sync()`, and the message recommends bumping `default_ad_stack_size`. Pick `N` using the rules above and retry.
 
