@@ -43,8 +43,38 @@ def _coerce_backend(backend):
         ) from e
 
 
-def tensor(dtype, shape, *, backend=Backend.FIELD, **kwargs):
-    """Allocate a tensor on the chosen backend.
+def _layout_to_order(layout, ndim):
+    """Validate ``layout`` and translate it to the ``order=`` string accepted
+    by :func:`quadrants.field`.
+
+    ``layout`` is a tuple of ``ndim`` ints — a permutation of ``range(ndim)``
+    — listing the *canonical* axis index at each successive memory-nesting
+    level, outermost first. ``layout=(1, 0)`` for a 2-D tensor means axis 1
+    is the outer SNode, axis 0 is the inner one (i.e. transposed storage),
+    which translates to ``order='ji'``.
+
+    Returns ``None`` for the identity permutation, so the caller can omit
+    ``order=`` entirely (matches the unsuffixed default).
+    """
+    if not isinstance(layout, tuple):
+        layout = tuple(layout)
+    if len(layout) != ndim:
+        raise ValueError(
+            f"layout has {len(layout)} entries but shape has {ndim} "
+            f"dimensions; they must match"
+        )
+    if sorted(layout) != list(range(ndim)):
+        raise ValueError(
+            f"layout={layout!r} is not a permutation of range({ndim})"
+        )
+    if layout == tuple(range(ndim)):
+        return None  # identity layout — no order= needed
+    return "".join(chr(ord("i") + axis) for axis in layout)
+
+
+def tensor(dtype, shape, *, backend=Backend.FIELD, layout=None, **kwargs):
+    """Allocate a tensor on the chosen backend, optionally with a custom
+    physical layout.
 
     Thin dispatcher over :func:`quadrants.field` and :func:`quadrants.ndarray`
     that selects between the two via the :class:`Backend` enum.
@@ -55,9 +85,19 @@ def tensor(dtype, shape, *, backend=Backend.FIELD, **kwargs):
         shape: Shape of the tensor as an ``int`` or tuple of ``int``.
         backend (Backend, optional): Storage backend. Defaults to
             :attr:`Backend.FIELD`.
+        layout (tuple of int, optional): Permutation of canonical axes
+            describing the physical memory nesting order, outermost first.
+            For a rank-N tensor, must be a permutation of ``range(N)``.
+            ``None`` (default) and the identity permutation both mean
+            "natural row-major-like layout" (no ``order=`` is forwarded).
+
+            **Currently only supported for ``Backend.FIELD``.** Passing a
+            non-identity ``layout`` together with ``Backend.NDARRAY``
+            raises :class:`NotImplementedError`. Ndarray-side support
+            lands in a later release.
         **kwargs: Forwarded verbatim to the underlying ``qd.field`` or
-            ``qd.ndarray`` call. Each backend accepts a different set of
-            keyword arguments — see their docstrings for details.
+            ``qd.ndarray`` call. Cannot include ``order=`` — use ``layout=``
+            instead.
 
     Returns:
         A ``ScalarField`` when ``backend == Backend.FIELD``, or an
@@ -67,18 +107,39 @@ def tensor(dtype, shape, *, backend=Backend.FIELD, **kwargs):
 
         >>> import quadrants as qd
         >>> qd.init(arch=qd.x64)
-        >>> a = qd.tensor(qd.f32, shape=(4, 5))
-        >>> b = qd.tensor(qd.f32, shape=(4, 5), backend=qd.Backend.NDARRAY)
+        >>> a = qd.tensor(qd.f32, shape=(4, 5))                       # default layout
+        >>> b = qd.tensor(qd.f32, shape=(4, 5), layout=(1, 0))        # transposed storage
+        >>> c = qd.tensor(qd.f32, shape=(4, 5), backend=qd.Backend.NDARRAY)
 
     Raises:
-        ValueError: If ``backend`` is not a valid :class:`Backend` member.
+        ValueError: If ``backend`` is not a valid :class:`Backend` member,
+            or if ``layout`` is not a permutation of ``range(len(shape))``.
+        NotImplementedError: If a non-identity ``layout`` is requested
+            together with ``Backend.NDARRAY``.
     """
     backend = _coerce_backend(backend)
     from quadrants.lang import impl  # late import to break circular dependency
 
+    if "order" in kwargs:
+        raise TypeError(
+            "qd.tensor(...) does not accept order=; pass layout=(...) instead"
+        )
+
+    shape_t = (shape,) if isinstance(shape, int) else tuple(shape)
+    order = _layout_to_order(layout, len(shape_t)) if layout is not None else None
+
     if backend is Backend.FIELD:
+        if order is not None:
+            kwargs["order"] = order
         return impl.field(dtype, shape, **kwargs)
     if backend is Backend.NDARRAY:
+        if order is not None:
+            raise NotImplementedError(
+                "qd.tensor(..., backend=Backend.NDARRAY, layout=...) with a "
+                "non-identity layout is not yet supported. Identity layouts "
+                "(layout=None or layout=range(ndim)) work; non-identity "
+                "ndarray layout lands in a later release."
+            )
         return impl.ndarray(dtype, shape, **kwargs)
     raise AssertionError(f"unhandled Backend member: {backend!r}")
 

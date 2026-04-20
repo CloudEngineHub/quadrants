@@ -170,5 +170,61 @@ Gradient buffers always share the canonical shape of the primal, on both
 backends. The `needs_grad` keyword also passes through `qd.tensor_vec` and
 `qd.tensor_mat` for compound element types.
 
-Subsequent releases will add a `layout=` keyword for per-tensor physical-memory
-layout.
+## Controlling physical layout
+
+Different GPU kernels run best with different physical memory layouts —
+some prefer the batch dimension contiguous (innermost), others want it
+outermost. The `layout=` keyword lets you pick per-tensor:
+
+```python
+import quadrants as qd
+
+qd.init(arch=qd.x64)
+
+# Default (canonical) layout: same order as the canonical shape.
+a = qd.tensor(qd.f32, shape=(N, B))
+
+# Transposed storage: axis 1 (batch) becomes the outer SNode, axis 0 inner.
+b = qd.tensor(qd.f32, shape=(N, B), layout=(1, 0))
+```
+
+`layout` is a tuple of `int` listing the **canonical axis index at each
+successive memory-nesting level, outermost first**. It must be a permutation
+of `range(len(shape))`. The canonical (logical) shape that you pass and that
+`tensor.shape` returns is *not* affected by `layout`:
+
+```python
+b = qd.tensor(qd.f32, shape=(N, B), layout=(1, 0))
+assert b.shape == (N, B)        # canonical shape, unchanged
+b[i, j] = ...                   # canonical indexing in kernels still works
+```
+
+All permutations up to rank 4 are supported (rank limit is Quadrants'
+`quadrants_max_num_indices`, currently 12). `layout=None` and the identity
+permutation (`(0, 1, ..., N-1)`) are equivalent and forward no `order=` to
+the underlying `qd.field`.
+
+```{note}
+**Currently `layout=` is supported only for `Backend.FIELD`.** Passing a
+non-identity `layout` together with `Backend.NDARRAY` raises
+``NotImplementedError`` — ndarray layout requires an AST-level subscript
+rewrite that lands in a later release. Identity layouts on the ndarray
+backend (``layout=None`` or ``layout=range(ndim)``) work today.
+```
+
+`layout=` composes naturally with `needs_grad=True`: the grad SNode
+inherits the same physical permutation as the primal, and both expose the
+canonical shape.
+
+```python
+g = qd.tensor(qd.f32, shape=(4, 5), layout=(1, 0), needs_grad=True)
+assert g.grad.shape == (4, 5)   # canonical
+```
+
+Quadrants rejects mismatched / invalid layouts up front:
+
+```python
+qd.tensor(qd.f32, shape=(4, 5), layout=(0, 1, 2))   # ValueError: wrong length
+qd.tensor(qd.f32, shape=(4, 5), layout=(0, 0))      # ValueError: not a permutation
+qd.tensor(qd.f32, shape=(4, 5), order="ji")         # TypeError: use layout=
+```
