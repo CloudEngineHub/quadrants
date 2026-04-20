@@ -8,7 +8,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="viewport" content="width=device-width, initial-scale=1" />
 
-    <title>Quirks &#8212; Quadrants 0.6.4 documentation</title>
+    <title>Tensors &#8212; Quadrants 0.6.4 documentation</title>
   
   
   
@@ -55,12 +55,12 @@
     <script>var togglebuttonSelector = '.toggle, .admonition.dropdown';</script>
     <script src="../_static/design-tabs.js?v=f930bc37"></script>
     <script>var togglebuttonSelector = '.toggle, .admonition.dropdown';</script>
-    <script>DOCUMENTATION_OPTIONS.pagename = 'user_guide/quirks';</script>
+    <script>DOCUMENTATION_OPTIONS.pagename = 'user_guide/tensor';</script>
     <script>DOCUMENTATION_OPTIONS.search_as_you_type = false;</script>
     <link rel="index" title="Index" href="../genindex.html" />
     <link rel="search" title="Search" href="../search.html" />
-    <link rel="next" title="Troubleshooting" href="troubleshooting.html" />
-    <link rel="prev" title="Debug mode" href="debug.html" />
+    <link rel="next" title="Compound types" href="compound_types.html" />
+    <link rel="prev" title="Matrix and Vector" href="matrix_vector.html" />
   <meta name="viewport" content="width=device-width, initial-scale=1"/>
   <meta name="docsearch:language" content="en"/>
   <meta name="docsearch:version" content="0.6.4" />
@@ -282,11 +282,11 @@
 <li class="toctree-l1"><a class="reference internal" href="supported_systems.html">Supported systems</a></li>
 </ul>
 <p aria-level="2" class="caption" role="heading"><span class="caption-text">Core concepts</span></p>
-<ul class="nav bd-sidenav">
+<ul class="current nav bd-sidenav">
 <li class="toctree-l1"><a class="reference internal" href="tensor_types.html">Tensor types</a></li>
 <li class="toctree-l1"><a class="reference internal" href="scalar_tensors.html">Scalar tensors</a></li>
 <li class="toctree-l1"><a class="reference internal" href="matrix_vector.html">Matrix and Vector</a></li>
-<li class="toctree-l1"><a class="reference internal" href="tensor.html">Tensors</a></li>
+<li class="toctree-l1 current active"><a class="current reference internal" href="#">Tensors</a></li>
 <li class="toctree-l1"><a class="reference internal" href="compound_types.html">Compound types</a></li>
 <li class="toctree-l1"><a class="reference internal" href="static.html">qd.static</a></li>
 <li class="toctree-l1"><a class="reference internal" href="sub_functions.html">Sub-functions</a></li>
@@ -307,11 +307,11 @@
 <li class="toctree-l1"><a class="reference internal" href="perf_dispatch.html">Performance Dispatch</a></li>
 </ul>
 <p aria-level="2" class="caption" role="heading"><span class="caption-text">Reference</span></p>
-<ul class="current nav bd-sidenav">
+<ul class="nav bd-sidenav">
 <li class="toctree-l1"><a class="reference internal" href="unsupported_python.html">Python features in kernel scope</a></li>
 <li class="toctree-l1"><a class="reference internal" href="python_backend.html">Python backend</a></li>
 <li class="toctree-l1"><a class="reference internal" href="debug.html">Debug mode</a></li>
-<li class="toctree-l1 current active"><a class="current reference internal" href="#">Quirks</a></li>
+<li class="toctree-l1"><a class="reference internal" href="quirks.html">Quirks</a></li>
 <li class="toctree-l1"><a class="reference internal" href="troubleshooting.html">Troubleshooting</a></li>
 </ul>
 <p aria-level="2" class="caption" role="heading"><span class="caption-text">Internal</span></p>
@@ -360,7 +360,7 @@
     
     <li class="breadcrumb-item"><a href="index.html" class="nav-link">User guide</a></li>
     
-    <li class="breadcrumb-item active" aria-current="page"><span class="ellipsis">Quirks</span></li>
+    <li class="breadcrumb-item active" aria-current="page"><span class="ellipsis">Tensors</span></li>
   </ul>
 </nav>
 </div>
@@ -377,26 +377,52 @@
 <div id="searchbox"></div>
                 <article class="bd-article">
                   
-  <section class="tex2jax_ignore mathjax_ignore" id="quirks">
-<h1>Quirks<a class="headerlink" href="#quirks" title="Link to this heading">#</a></h1>
-<p>Things you may find surprising.</p>
-<section id="augmented-assigns-are-atomic">
-<h2>Augmented assigns are atomic<a class="headerlink" href="#augmented-assigns-are-atomic" title="Link to this heading">#</a></h2>
-<p>The following are atomic:</p>
-<ul class="simple">
-<li><p><code class="docutils literal notranslate"><span class="pre">+=</span></code></p></li>
-<li><p><code class="docutils literal notranslate"><span class="pre">-=</span></code></p></li>
-<li><p><code class="docutils literal notranslate"><span class="pre">*=</span></code></p></li>
-<li><p>etc …</p></li>
-</ul>
-<p>Since writing these to mean atomic doesn’t clearly express intent (did you write them intentionally meaning atomic? Or did you not realize they are atomic?), we recommend writing them out as atomics explicitly:</p>
-<ul class="simple">
-<li><p><code class="docutils literal notranslate"><span class="pre">qd.atomic_add</span></code></p></li>
-<li><p><code class="docutils literal notranslate"><span class="pre">qd.atomic_sub</span></code></p></li>
-<li><p><code class="docutils literal notranslate"><span class="pre">qd.atomic_mul</span></code></p></li>
-<li><p>etc …</p></li>
-</ul>
-<p>In the future, we may explicitly deprecate augmented assigns.</p>
+  <section class="tex2jax_ignore mathjax_ignore" id="tensors">
+<h1>Tensors<a class="headerlink" href="#tensors" title="Link to this heading">#</a></h1>
+<p>Quadrants offers two underlying tensor implementations, <code class="docutils literal notranslate"><span class="pre">qd.field</span></code>
+and <code class="docutils literal notranslate"><span class="pre">qd.ndarray</span></code>. They have different runtime/compile-time
+trade-offs, and different physical memory layouts can suit different kernels.</p>
+<p>The tensor API lets you pick both the <strong>backend</strong> and (in a future
+release) the <strong>physical layout</strong> on a per-tensor basis at allocation time.
+The rest of the system (kernels, fastcache, autograd) stays out of the way.</p>
+<p>This page documents the user-facing API as it lands. See
+<a class="reference internal" href="tensor_types.html"><span class="std std-doc"><code class="docutils literal notranslate"><span class="pre">tensor_types</span></code></span></a>, <a class="reference internal" href="scalar_tensors.html"><span class="std std-doc"><code class="docutils literal notranslate"><span class="pre">scalar_tensors</span></code></span></a>,
+and <a class="reference internal" href="matrix_vector.html"><span class="std std-doc"><code class="docutils literal notranslate"><span class="pre">matrix_vector</span></code></span></a> for the underlying tensor primitives.</p>
+<section id="choosing-a-backend-qd-backend">
+<h2>Choosing a backend: <code class="docutils literal notranslate"><span class="pre">qd.Backend</span></code><a class="headerlink" href="#choosing-a-backend-qd-backend" title="Link to this heading">#</a></h2>
+<p><code class="docutils literal notranslate"><span class="pre">qd.Backend</span></code> is an <code class="docutils literal notranslate"><span class="pre">IntEnum</span></code> with two members:</p>
+<div class="pst-scrollable-table-container"><table class="table">
+<thead>
+<tr class="row-odd"><th class="head"><p>Member</p></th>
+<th class="head"><p>Underlying type</p></th>
+<th class="head"><p>When to prefer</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">qd.Backend.FIELD</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">qd.field</span></code></p></td>
+<td><p>Faster at runtime; recompiles when any dimension size changes. Best for tensors whose shape is effectively static across a run.</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">qd.Backend.NDARRAY</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">qd.ndarray</span></code></p></td>
+<td><p>Slightly slower at runtime but avoids recompilation when sizes change. Best for tensors whose shape varies frequently (dynamic batch sizes, growing buffers).</p></td>
+</tr>
+</tbody>
+</table>
+</div>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">import</span><span class="w"> </span><span class="nn">quadrants</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">qd</span>
+
+<span class="n">qd</span><span class="o">.</span><span class="n">Backend</span><span class="o">.</span><span class="n">FIELD</span>       <span class="c1"># IntEnum member, value 0</span>
+<span class="n">qd</span><span class="o">.</span><span class="n">Backend</span><span class="o">.</span><span class="n">NDARRAY</span>     <span class="c1"># IntEnum member, value 1</span>
+
+<span class="nb">int</span><span class="p">(</span><span class="n">qd</span><span class="o">.</span><span class="n">Backend</span><span class="o">.</span><span class="n">FIELD</span><span class="p">)</span>  <span class="c1"># 0</span>
+<span class="n">qd</span><span class="o">.</span><span class="n">Backend</span><span class="p">[</span><span class="s2">&quot;FIELD&quot;</span><span class="p">]</span>    <span class="c1"># qd.Backend.FIELD</span>
+<span class="n">qd</span><span class="o">.</span><span class="n">Backend</span><span class="p">(</span><span class="mi">1</span><span class="p">)</span>          <span class="c1"># qd.Backend.NDARRAY</span>
+</pre></div>
+</div>
+<p>The choice is per tensor: a single program can freely mix backends.</p>
+<p>Subsequent releases will use this enum to drive the <code class="docutils literal notranslate"><span class="pre">qd.tensor(...)</span></code> factory
+and per-tensor layout selection.</p>
 </section>
 </section>
 
@@ -411,20 +437,20 @@
                   
 <div class="prev-next-area">
     <a class="left-prev"
-       href="debug.html"
+       href="matrix_vector.html"
        title="previous page">
       <i class="fa-solid fa-angle-left"></i>
       <div class="prev-next-info">
         <p class="prev-next-subtitle">previous</p>
-        <p class="prev-next-title">Debug mode</p>
+        <p class="prev-next-title">Matrix and Vector</p>
       </div>
     </a>
     <a class="right-next"
-       href="troubleshooting.html"
+       href="compound_types.html"
        title="next page">
       <div class="prev-next-info">
         <p class="prev-next-subtitle">next</p>
-        <p class="prev-next-title">Troubleshooting</p>
+        <p class="prev-next-title">Compound types</p>
       </div>
       <i class="fa-solid fa-angle-right"></i>
     </a>
@@ -447,14 +473,14 @@
   </div>
   <nav id="pst-page-toc-nav" class="page-toc" aria-labelledby="pst-page-navigation-heading-2">
     <ul class="pst-show_toc_level nav section-nav flex-column">
-<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#augmented-assigns-are-atomic">Augmented assigns are atomic</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#choosing-a-backend-qd-backend">Choosing a backend: <code class="docutils literal notranslate"><span class="pre">qd.Backend</span></code></a></li>
 </ul>
   </nav></div>
 
   <div class="sidebar-secondary-item">
 
   <div class="tocsection sourcelink">
-    <a href="../_sources/user_guide/quirks.md.txt">
+    <a href="../_sources/user_guide/tensor.md.txt">
       <i class="fa-solid fa-file-lines"></i> Show Source
     </a>
   </div>
