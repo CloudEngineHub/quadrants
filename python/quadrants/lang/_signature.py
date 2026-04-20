@@ -13,13 +13,17 @@ def get_func_signature(func: Callable) -> inspect.Signature:
 
     Annotation-evaluation failures (``NameError`` / ``AttributeError`` for
     unresolved references, ``SyntaxError`` for malformed string annotations
-    such as ``"NDArray["``, and ``TypeError`` for annotations that cannot be
-    evaluated as types) are re-raised as :class:`QuadrantsSyntaxError` with
-    the offending function's qualified name, so users get a Quadrants-flavored
-    error rather than a raw ``inspect`` traceback.
+    such as ``"NDArray["``) are re-raised as :class:`QuadrantsSyntaxError`
+    with the offending function's qualified name, so users get a
+    Quadrants-flavored error rather than a raw ``inspect`` traceback.
+
+    Note: ``TypeError`` is intentionally not caught here, since
+    ``inspect.signature`` itself raises ``TypeError`` for non-introspectable
+    objects -- wrapping that as "invalid type annotation" would be
+    misleading.
     """
     try:
         return inspect.signature(func, eval_str=True)
-    except (NameError, AttributeError, SyntaxError, TypeError) as e:
+    except (NameError, AttributeError, SyntaxError) as e:
         qualname = getattr(func, "__qualname__", repr(func))
         raise QuadrantsSyntaxError(f"Invalid type annotation in `{qualname}`: {e}") from e
