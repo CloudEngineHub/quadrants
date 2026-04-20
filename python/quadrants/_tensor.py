@@ -155,6 +155,7 @@ def tensor(dtype, shape, *, backend=Backend.FIELD, layout=None, **kwargs):
         # Non-identity layout: allocate at the physical (permuted) shape
         # and tag the result so the kernel-side subscript rewrite picks
         # up the canonical -> physical translation.
+        assert layout is not None  # implied by `order is not None`
         layout_t = tuple(layout)
         physical_shape = tuple(shape_t[axis] for axis in layout_t)
         arr = impl.ndarray(dtype, physical_shape, **kwargs)
