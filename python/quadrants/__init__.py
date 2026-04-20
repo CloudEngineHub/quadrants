@@ -59,6 +59,7 @@ __all__ = [
     "linalg",
     "math",
     "sparse",
+    "tensor",
     "tools",
     "types",
 ]

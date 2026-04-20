@@ -39,5 +39,44 @@ qd.Backend(1)          # qd.Backend.NDARRAY
 
 The choice is per tensor: a single program can freely mix backends.
 
-Subsequent releases will use this enum to drive the `qd.tensor(...)` factory
-and per-tensor layout selection.
+## Allocating a tensor with `qd.tensor()`
+
+`qd.tensor(dtype, shape, backend=...)` is a thin dispatcher over `qd.field` and
+`qd.ndarray`. It selects the underlying allocator based on the `backend=`
+keyword:
+
+```python
+import quadrants as qd
+
+qd.init(arch=qd.x64)
+
+a = qd.tensor(qd.f32, shape=(4, 5))                                 # field (default)
+b = qd.tensor(qd.f32, shape=(4, 5), backend=qd.Backend.NDARRAY)     # ndarray
+
+assert isinstance(a, qd.ScalarField)
+assert isinstance(b, qd.Ndarray)
+```
+
+The default backend is `qd.Backend.FIELD` to match the long-standing Quadrants
+default.
+
+Any extra keyword arguments are forwarded verbatim to the underlying
+`qd.field` or `qd.ndarray` call, so backend-specific options remain available:
+
+```python
+# Field-only kwargs like order= just pass through.
+c = qd.tensor(qd.f32, shape=(4, 5), order="ji")
+```
+
+Passing a non-`Backend` value raises `ValueError`:
+
+```python
+qd.tensor(qd.f32, shape=(3,), backend="field")  # ValueError
+```
+
+Integer values (`0`, `1`) are accepted because `Backend` is an `IntEnum`, but
+prefer the named members for clarity at call sites.
+
+Subsequent releases will add `qd.tensor_vec` / `qd.tensor_mat` for compound
+element types, a `qd.tensor_annotation(backend)` helper for kernel argument
+typing, and a `layout=` keyword for per-tensor physical-memory layout.
