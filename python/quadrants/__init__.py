@@ -25,6 +25,7 @@ from quadrants import (
     tools,
     types,
 )
+from quadrants._flexible import *
 from quadrants._funcs import *
 from quadrants._lib.utils import warn_restricted_version
 from quadrants._logging import *
@@ -51,6 +52,7 @@ warn_restricted_version()
 del warn_restricted_version
 
 __all__ = [
+    "Backend",
     "ad",
     "algorithms",
     "experimental",

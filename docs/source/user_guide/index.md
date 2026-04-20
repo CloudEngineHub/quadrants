@@ -17,6 +17,7 @@ supported_systems
 tensor_types
 scalar_tensors
 matrix_vector
+flexible_tensors
 compound_types
 static
 sub_functions
