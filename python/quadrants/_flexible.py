@@ -113,19 +113,22 @@ def tensor(dtype, shape, *, backend=Backend.FIELD, layout=None, **kwargs):
             describing the physical memory nesting order, outermost first.
             For a rank-N tensor, must be a permutation of ``range(N)``.
             ``None`` (default) and the identity permutation both mean
-            "natural row-major-like layout" (no ``order=`` is forwarded).
+            "natural row-major-like layout" (no permutation is applied).
 
-            **Currently only supported for ``Backend.FIELD``.** Passing a
-            non-identity ``layout`` together with ``Backend.NDARRAY``
-            raises :class:`NotImplementedError`. Ndarray-side support
-            lands in a later release.
+            ``shape`` is always interpreted as the **canonical** shape
+            (the shape you index inside kernels). The underlying
+            allocation is automatically sized to the permuted *physical*
+            shape, and kernel subscripts ``x[i, j, ...]`` are rewritten
+            to hit the right physical slot.
         **kwargs: Forwarded verbatim to the underlying ``qd.field`` or
             ``qd.ndarray`` call. Cannot include ``order=`` — use ``layout=``
             instead.
 
     Returns:
         A ``ScalarField`` when ``backend == Backend.FIELD``, or an
-        ``Ndarray`` when ``backend == Backend.NDARRAY``.
+        ``Ndarray`` when ``backend == Backend.NDARRAY``. In both cases
+        ``.shape`` reports the canonical shape; the physical layout is
+        managed transparently.
 
     Example::
 
@@ -134,12 +137,12 @@ def tensor(dtype, shape, *, backend=Backend.FIELD, layout=None, **kwargs):
         >>> a = qd.tensor(qd.f32, shape=(4, 5))                       # default layout
         >>> b = qd.tensor(qd.f32, shape=(4, 5), layout=(1, 0))        # transposed storage
         >>> c = qd.tensor(qd.f32, shape=(4, 5), backend=qd.Backend.NDARRAY)
+        >>> d = qd.tensor(qd.f32, shape=(4, 5), backend=qd.Backend.NDARRAY,
+        ...               layout=(1, 0))                              # transposed ndarray
 
     Raises:
         ValueError: If ``backend`` is not a valid :class:`Backend` member,
             or if ``layout`` is not a permutation of ``range(len(shape))``.
-        NotImplementedError: If a non-identity ``layout`` is requested
-            together with ``Backend.NDARRAY``.
     """
     backend = _coerce_backend(backend)
     from quadrants.lang import impl  # late import to break circular dependency
@@ -157,14 +160,15 @@ def tensor(dtype, shape, *, backend=Backend.FIELD, layout=None, **kwargs):
             kwargs["order"] = order
         return impl.field(dtype, shape, **kwargs)
     if backend is Backend.NDARRAY:
-        if order is not None:
-            raise NotImplementedError(
-                "qd.tensor(..., backend=Backend.NDARRAY, layout=...) with a "
-                "non-identity layout is not yet supported. Identity layouts "
-                "(layout=None or layout=range(ndim)) work; non-identity "
-                "ndarray layout lands in a later release."
-            )
-        return impl.ndarray(dtype, shape, **kwargs)
+        if order is None:
+            return impl.ndarray(dtype, shape, **kwargs)
+        # Non-identity layout: allocate at the physical (permuted) shape
+        # and tag the result so the kernel-side subscript rewrite picks
+        # up the canonical -> physical translation.
+        layout_t = tuple(layout)
+        physical_shape = tuple(shape_t[axis] for axis in layout_t)
+        arr = impl.ndarray(dtype, physical_shape, **kwargs)
+        return _with_layout(arr, layout_t)
     raise AssertionError(f"unhandled Backend member: {backend!r}")
 
 

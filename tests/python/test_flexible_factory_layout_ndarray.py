@@ -1,0 +1,242 @@
+"""Tests for ``qd.tensor(..., backend=NDARRAY, layout=...)`` (PR 13).
+
+PR 8 added the AST subscript-rewrite plumbing for layout-tagged
+``AnyArray``s; PR 13 wires it through the public factory so users no
+longer need the internal ``_with_layout`` helper.
+
+Contract verified here:
+
+- ``shape`` is the **canonical** shape the user indexes inside kernels.
+- The underlying allocation is sized to the *physical* (permuted) shape.
+- ``ndarray.shape`` continues to report the physical shape (the
+  underlying ``Ndarray`` does not yet expose a separate canonical view —
+  this is documented in the user guide).
+- The instance is auto-tagged with ``_qd_layout`` so kernel subscripts
+  ``x[i, j, ...]`` are rewritten correctly.
+- ``order=`` is still rejected as a keyword.
+- Identity layouts produce no tag and behave exactly like a plain
+  untagged ndarray.
+"""
+
+import itertools
+
+import numpy as np
+import pytest
+
+import quadrants as qd
+
+from tests import test_utils
+
+
+# ----------------------------------------------------------------------------
+# Identity / no-layout: behaviour is unchanged from PR 6.
+# ----------------------------------------------------------------------------
+
+
+def test_factory_no_layout_does_not_tag():
+    qd.init(arch=qd.x64)
+    a = qd.tensor(qd.i32, shape=(3, 4), backend=qd.Backend.NDARRAY)
+    assert getattr(a, "_qd_layout", None) is None
+    assert tuple(a.shape) == (3, 4)
+
+
+def test_factory_identity_layout_does_not_tag():
+    """Identity layout collapses to ``None`` (matches the FIELD path)."""
+    qd.init(arch=qd.x64)
+    a = qd.tensor(qd.i32, shape=(3, 4), backend=qd.Backend.NDARRAY, layout=(0, 1))
+    assert getattr(a, "_qd_layout", None) is None
+    assert tuple(a.shape) == (3, 4)
+
+
+def test_factory_rejects_order_kwarg():
+    qd.init(arch=qd.x64)
+    with pytest.raises(TypeError, match="order="):
+        qd.tensor(qd.i32, shape=(3, 4), backend=qd.Backend.NDARRAY, order="ji")
+
+
+# ----------------------------------------------------------------------------
+# Non-identity layout: factory allocates physical shape and tags.
+# ----------------------------------------------------------------------------
+
+
+def test_factory_non_identity_layout_allocates_physical_and_tags():
+    qd.init(arch=qd.x64)
+    a = qd.tensor(qd.i32, shape=(3, 4), backend=qd.Backend.NDARRAY, layout=(1, 0))
+    # Physical shape is (4, 3) — the canonical (3, 4) permuted.
+    assert tuple(a.shape) == (4, 3)
+    assert a._qd_layout == (1, 0)
+
+
+def test_factory_non_identity_rank3_layout_allocates_physical_and_tags():
+    qd.init(arch=qd.x64)
+    a = qd.tensor(qd.i32, shape=(2, 3, 4), backend=qd.Backend.NDARRAY, layout=(2, 0, 1))
+    # canonical (2, 3, 4), layout (2, 0, 1) => physical = (4, 2, 3)
+    assert tuple(a.shape) == (4, 2, 3)
+    assert a._qd_layout == (2, 0, 1)
+
+
+def test_factory_validates_layout_length():
+    qd.init(arch=qd.x64)
+    with pytest.raises(ValueError):
+        qd.tensor(qd.i32, shape=(3, 4), backend=qd.Backend.NDARRAY, layout=(0, 1, 2))
+
+
+def test_factory_validates_layout_is_permutation():
+    qd.init(arch=qd.x64)
+    with pytest.raises(ValueError):
+        qd.tensor(qd.i32, shape=(3, 4), backend=qd.Backend.NDARRAY, layout=(0, 0))
+
+
+# ----------------------------------------------------------------------------
+# End-to-end: factory-allocated ndarrays match the _with_layout reference.
+# ----------------------------------------------------------------------------
+
+
+@test_utils.test(arch=qd.cpu)
+def test_factory_layout_rank2_transpose_matches_direct_transpose():
+    """Same kernel + same canonical shape, two backends:
+    - direct (no layout) reports physical = canonical = (3, 4).
+    - factory-tagged (layout=(1, 0)) reports physical = (4, 3).
+    Their numpy views must be transposes of each other.
+    """
+    M, N = 3, 4
+    direct = qd.tensor(qd.i32, shape=(M, N), backend=qd.Backend.NDARRAY)
+    tagged = qd.tensor(qd.i32, shape=(M, N), backend=qd.Backend.NDARRAY, layout=(1, 0))
+
+    @qd.kernel
+    def fill(x: qd.types.ndarray()):
+        for i, j in qd.ndrange(M, N):
+            x[i, j] = i * 100 + j
+
+    fill(direct)
+    fill(tagged)
+
+    np.testing.assert_array_equal(direct.to_numpy(), tagged.to_numpy().T)
+
+
+@test_utils.test(arch=qd.cpu)
+def test_factory_layout_rank2_value_check():
+    M, N = 3, 4
+    a = qd.tensor(qd.i32, shape=(M, N), backend=qd.Backend.NDARRAY, layout=(1, 0))
+
+    @qd.kernel
+    def fill(x: qd.types.ndarray()):
+        for i, j in qd.ndrange(M, N):
+            x[i, j] = i * 100 + j
+
+    fill(a)
+    arr = a.to_numpy()
+    assert arr.shape == (N, M)
+    # canonical (i=2, j=3) -> physical (3, 2)
+    assert arr[3, 2] == 203
+    assert arr[1, 0] == 1
+    assert arr[0, 1] == 100
+
+
+@pytest.mark.parametrize("layout", list(itertools.permutations(range(3))))
+def test_factory_layout_rank3_all_permutations(layout):
+    qd.init(arch=qd.x64)
+    canonical = (2, 3, 4)
+    a = qd.tensor(qd.i32, shape=canonical, backend=qd.Backend.NDARRAY, layout=layout)
+
+    physical = tuple(canonical[axis] for axis in layout)
+    assert tuple(a.shape) == physical
+    # Identity layout collapses to no tag (matches the FIELD path).
+    if layout == tuple(range(3)):
+        assert getattr(a, "_qd_layout", None) is None
+    else:
+        assert a._qd_layout == layout
+
+    @qd.kernel
+    def fill(x: qd.types.ndarray()):
+        for i, j, k in qd.ndrange(2, 3, 4):
+            x[i, j, k] = i * 100 + j * 10 + k
+
+    fill(a)
+    arr = a.to_numpy()
+    canonical_idx = (1, 2, 3)
+    physical_idx = tuple(canonical_idx[axis] for axis in layout)
+    expected = canonical_idx[0] * 100 + canonical_idx[1] * 10 + canonical_idx[2]
+    assert arr[physical_idx] == expected
+
+
+# ----------------------------------------------------------------------------
+# AugAssign through the public factory.
+# ----------------------------------------------------------------------------
+
+
+@test_utils.test(arch=qd.cpu)
+def test_factory_layout_augassign():
+    M, N = 2, 3
+    a = qd.tensor(qd.i32, shape=(M, N), backend=qd.Backend.NDARRAY, layout=(1, 0))
+
+    @qd.kernel
+    def init(x: qd.types.ndarray()):
+        for i, j in qd.ndrange(M, N):
+            x[i, j] = i * 10 + j
+
+    @qd.kernel
+    def add(x: qd.types.ndarray()):
+        for i, j in qd.ndrange(M, N):
+            x[i, j] += 1000
+
+    init(a)
+    add(a)
+    arr = a.to_numpy()
+    assert arr.shape == (N, M)
+    # canonical (i=1, j=2) -> physical (2, 1)
+    assert arr[2, 1] == 1012
+    assert arr[0, 0] == 1000
+
+
+# ----------------------------------------------------------------------------
+# needs_grad propagates and grad inherits the layout.
+# ----------------------------------------------------------------------------
+
+
+@test_utils.test(arch=qd.cpu)
+def test_factory_layout_needs_grad_inherits_layout():
+    M, N = 2, 3
+    a = qd.tensor(
+        qd.f32,
+        shape=(M, N),
+        backend=qd.Backend.NDARRAY,
+        layout=(1, 0),
+        needs_grad=True,
+    )
+
+    @qd.kernel
+    def fill(x: qd.types.ndarray()):
+        for i, j in qd.ndrange(M, N):
+            x[i, j] = float(i * 10 + j)
+            x.grad[i, j] = float(i * 100 + j * 10)
+
+    fill(a)
+    primal = a.to_numpy()
+    grad = a.grad.to_numpy()
+    assert primal.shape == grad.shape == (N, M)
+    assert primal[2, 1] == 12.0
+    assert grad[2, 1] == 120.0
+
+
+# ----------------------------------------------------------------------------
+# Cache key still distinguishes layouts when the factory does the tagging.
+# ----------------------------------------------------------------------------
+
+
+@test_utils.test(arch=qd.cpu)
+def test_factory_layout_distinguishes_cache_entries():
+    @qd.kernel
+    def k(x: qd.types.ndarray()):
+        for i, j in qd.ndrange(2, 3):
+            x[i, j] = i * 10 + j
+
+    M, N = 2, 3
+    a_id = qd.tensor(qd.i32, shape=(M, N), backend=qd.Backend.NDARRAY)
+    a_swap = qd.tensor(qd.i32, shape=(M, N), backend=qd.Backend.NDARRAY, layout=(1, 0))
+
+    k(a_id)
+    assert len(k._primal.mapper.mapping) == 1
+
+    k(a_swap)
+    assert len(k._primal.mapper.mapping) == 2
