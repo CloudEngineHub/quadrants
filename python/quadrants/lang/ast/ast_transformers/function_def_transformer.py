@@ -61,7 +61,8 @@ class FunctionDefTransformer:
             ndim: int
             needs_grad: bool
             boundary: int
-            raw_element_type, ndim, needs_grad, boundary = this_arg_features
+            # Flexible-tensors layout is the trailing slot; None for legacy / identity.
+            raw_element_type, ndim, needs_grad, boundary, layout = this_arg_features
             return False, (
                 kernel_arguments.decl_ndarray_arg,
                 (
@@ -70,6 +71,7 @@ class FunctionDefTransformer:
                     full_name,
                     needs_grad,
                     BoundaryMode(boundary),
+                    layout,
                 ),
             )
         if isinstance(annotation, MatrixType):

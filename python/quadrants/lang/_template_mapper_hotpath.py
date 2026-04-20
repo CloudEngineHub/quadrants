@@ -104,13 +104,15 @@ def _extract_arg(raise_on_templated_floats: bool, arg: Any, annotation: Annotati
             # Convert singleton primitive dtype to int. This will dramatically speed up hashing later on.
             type_id = id(arg.element_type)
             element_type = type_id if type_id in primitive_types.type_ids else arg.element_type
-            return element_type, len(arg.shape), needs_grad, annotation.boundary
+            # Optional flexible-tensors layout (None for legacy / identity).
+            layout = getattr(arg, "_qd_layout", None)
+            return element_type, len(arg.shape), needs_grad, annotation.boundary, layout
         if isinstance(arg, AnyArray):
             ty = arg.get_type()
             if __debug__ and __builtins__["__debug__"]:
                 annotation.check_matched(ty, arg_name)
             assert arg.shape is not None
-            return ty.element_type, len(arg.shape), ty.needs_grad, annotation.boundary
+            return ty.element_type, len(arg.shape), ty.needs_grad, annotation.boundary, arg._qd_layout
         # external arrays
         shape = getattr(arg, "shape", None)
         if shape is None:
@@ -156,7 +158,7 @@ def _extract_arg(raise_on_templated_floats: bool, arg: Any, annotation: Annotati
             element_type = _qd_core.get_type_factory_instance().get_tensor_type(element_shape, dtype)
         else:
             element_type = arg.dtype
-        return element_type, len(shape) - len(element_shape), needs_grad, annotation.boundary
+        return element_type, len(shape) - len(element_shape), needs_grad, annotation.boundary, None
     # Inlining `dataclasses.is_dataclass` and `dataclasess.fields`, which are very slow due to extra runtime checks
     annotation_fields = getattr(annotation, _FIELDS, None)
     if annotation_fields is not None:

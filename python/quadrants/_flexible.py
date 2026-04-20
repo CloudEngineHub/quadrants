@@ -10,6 +10,30 @@ from enum import IntEnum
 
 __all__ = ["Backend", "tensor", "tensor_annotation", "tensor_mat", "tensor_vec"]
 
+# ----------------------------------------------------------------------------
+# Internal: attach layout metadata to an existing Ndarray.
+#
+# Public API for ndarray + non-identity layout lands in PR 13 (the
+# qd.tensor(..., backend=NDARRAY, layout=...) path is currently gated by
+# NotImplementedError). Until then, this private helper exists so the AST
+# subscript-rewrite plumbing can be exercised end-to-end in tests without
+# changing the user-facing factory signature.
+# ----------------------------------------------------------------------------
+
+
+def _with_layout(ndarray, layout):
+    """Tag ``ndarray`` with a canonical-axis permutation. Internal."""
+    layout = tuple(layout)
+    ndim = len(ndarray.shape)
+    if len(layout) != ndim:
+        raise ValueError(
+            f"layout has {len(layout)} entries but ndarray has {ndim} dims"
+        )
+    if sorted(layout) != list(range(ndim)):
+        raise ValueError(f"layout={layout!r} is not a permutation of range({ndim})")
+    ndarray._qd_layout = layout
+    return ndarray
+
 
 class Backend(IntEnum):
     """Tensor storage backend.

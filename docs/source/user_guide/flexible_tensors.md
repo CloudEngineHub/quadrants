@@ -205,11 +205,13 @@ permutation (`(0, 1, ..., N-1)`) are equivalent and forward no `order=` to
 the underlying `qd.field`.
 
 ```{note}
-**Currently `layout=` is supported only for `Backend.FIELD`.** Passing a
-non-identity `layout` together with `Backend.NDARRAY` raises
-``NotImplementedError`` — ndarray layout requires an AST-level subscript
-rewrite that lands in a later release. Identity layouts on the ndarray
-backend (``layout=None`` or ``layout=range(ndim)``) work today.
+**Public `qd.tensor(..., backend=NDARRAY, layout=...)` still raises
+``NotImplementedError`` for non-identity layouts.** The underlying
+infrastructure — the AST subscript rewrite that turns canonical kernel
+indexing into permuted physical access on layout-tagged ndarrays — is in
+place as of PR 8 and is exercised in the test suite via the internal
+``_with_layout`` helper. The user-facing factory is unblocked in PR 13
+together with the layout-aware torch interop.
 ```
 
 `layout=` composes naturally with `needs_grad=True`: the grad SNode

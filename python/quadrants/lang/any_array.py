@@ -15,12 +15,20 @@ class AnyArray:
         ptr (quadrants_python.Expr): A quadrants_python.Expr wrapping a quadrants_python.ExternalTensorExpression.
         element_shape (Tuple[Int]): () if scalar elements (default), (n) if vector elements, and (n, m) if matrix elements.
         layout (Layout): Memory layout.
+
+    Attributes:
+        _qd_layout (tuple of int | None): Optional canonical-axis permutation.
+            When set, ``build_Subscript`` permutes user-supplied canonical
+            indices into physical storage order before forwarding to the
+            underlying expression. ``None`` (the default) means identity —
+            no rewrite, behaviour identical to legacy AnyArray.
     """
 
-    def __init__(self, ptr):
+    def __init__(self, ptr, _qd_layout=None):
         assert ptr.is_external_tensor_expr()
         self.ptr = ptr
         self.ptr.type_check(impl.get_runtime().prog.config())
+        self._qd_layout = _qd_layout
 
     def element_shape(self):
         return _qd_core.get_external_tensor_element_shape(self.ptr)
@@ -42,7 +50,10 @@ class AnyArray:
     @quadrants_scope
     def grad(self):
         """Returns the gradient of this array."""
-        return AnyArray(_qd_core.make_external_tensor_grad_expr(self.ptr))
+        return AnyArray(
+            _qd_core.make_external_tensor_grad_expr(self.ptr),
+            _qd_layout=self._qd_layout,
+        )
 
     @property
     @quadrants_scope
