@@ -1,6 +1,6 @@
-"""Layout participates in the kernel cache key (PR 12).
+"""Layout participates in the kernel cache key.
 
-PR 8 plumbed the ``_qd_layout`` slot through ``TemplateMapper`` features,
+an earlier change plumbed the ``_qd_layout`` slot through ``TemplateMapper`` features,
 making it part of the kernel cache key automatically. This file pins
 that contract down via direct ``Kernel.mapper.mapping`` inspection so a
 future refactor that drops the slot would surface immediately.
@@ -12,7 +12,7 @@ different layout would either silently mis-index or crash.
 """
 
 import quadrants as qd
-from quadrants._flexible import _with_layout
+from quadrants._tensor import _with_layout
 
 from tests import test_utils
 

@@ -1,4 +1,4 @@
-"""Tests for ``qd.tensor_t``: value-dispatch kernel-argument annotation (PR 14).
+"""Tests for ``qd.tensor_t``: value-dispatch kernel-argument annotation.
 
 A kernel parameter annotated with ``qd.tensor_t`` accepts either a Field
 (handled like ``qd.template()``) or an Ndarray (handled like
@@ -10,7 +10,7 @@ import numpy as np
 import pytest
 
 import quadrants as qd
-from quadrants._flexible import _TensorTAnnotation
+from quadrants._tensor import _TensorTAnnotation
 
 from tests import test_utils
 
@@ -150,7 +150,7 @@ def test_tensor_t_layouts_keep_separate_cache_entries():
 
 def test_tensor_t_is_in_qd_namespace():
     assert qd.tensor_t is not None
-    # also reachable via import qd._flexible
-    from quadrants._flexible import tensor_t as direct
+    # also reachable via import qd._tensor
+    from quadrants._tensor import tensor_t as direct
 
     assert direct is qd.tensor_t

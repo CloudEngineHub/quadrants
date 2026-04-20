@@ -18,7 +18,7 @@ from typing import TYPE_CHECKING, Any, Callable, DefaultDict, Type
 
 import numpy as np
 
-from quadrants._flexible import _TensorTAnnotation
+from quadrants._tensor import _TensorTAnnotation
 from quadrants._lib import core as _qd_core
 from quadrants._lib.core.quadrants_python import KernelLaunchContext
 from quadrants.lang import _kernel_impl_dataclass, impl

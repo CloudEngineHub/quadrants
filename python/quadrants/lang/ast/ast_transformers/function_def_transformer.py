@@ -4,7 +4,7 @@ import ast
 import dataclasses
 from typing import Any, Callable
 
-from quadrants._flexible import (
+from quadrants._tensor import (
     _TENSOR_T_FIELD_MARKER,
     _TENSOR_T_NDARRAY_MARKER,
     _TensorTAnnotation,
@@ -91,7 +91,7 @@ class FunctionDefTransformer:
             ndim: int
             needs_grad: bool
             boundary: int
-            # Flexible-tensors layout is the trailing slot; None for legacy / identity.
+            # Tensors layout is the trailing slot; None for legacy / identity.
             raw_element_type, ndim, needs_grad, boundary, layout = this_arg_features
             return False, (
                 kernel_arguments.decl_ndarray_arg,

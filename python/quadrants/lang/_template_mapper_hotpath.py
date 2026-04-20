@@ -32,7 +32,7 @@ import weakref
 from dataclasses import _FIELD, _FIELDS
 from typing import Any, Union
 
-from quadrants._flexible import (
+from quadrants._tensor import (
     _TENSOR_T_FIELD_MARKER,
     _TENSOR_T_NDARRAY_MARKER,
     _TensorTAnnotation,
@@ -136,7 +136,7 @@ def _extract_arg(raise_on_templated_floats: bool, arg: Any, annotation: Annotati
             # Convert singleton primitive dtype to int. This will dramatically speed up hashing later on.
             type_id = id(arg.element_type)
             element_type = type_id if type_id in primitive_types.type_ids else arg.element_type
-            # Optional flexible-tensors layout (None for legacy / identity).
+            # Optional tensor layout (None for legacy / identity).
             layout = getattr(arg, "_qd_layout", None)
             return element_type, len(arg.shape), needs_grad, annotation.boundary, layout
         if isinstance(arg, AnyArray):
