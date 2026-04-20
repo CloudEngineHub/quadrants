@@ -410,6 +410,21 @@
     <span class="k">return</span> <span class="n">PrimitiveBase</span><span class="o">.</span><span class="n">_registry</span><span class="p">[</span><span class="n">dtype_cxx</span><span class="p">]</span>
 
 
+<span class="c1"># Wrap C++ helpers that take a DataTypeCxx so they also accept PrimitiveBase</span>
+<span class="c1"># Python wrapper classes (e.g. qd.i8). The C++ binding only accepts DataTypeCxx,</span>
+<span class="c1"># so we transparently unwrap PrimitiveBase subclasses to their .cxx attribute.</span>
+<span class="n">_orig_data_type_size</span> <span class="o">=</span> <span class="n">qd_python_core</span><span class="o">.</span><span class="n">data_type_size</span>
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">_data_type_size</span><span class="p">(</span><span class="n">dtype</span><span class="p">:</span> <span class="n">Any</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">int</span><span class="p">:</span>
+    <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">dtype</span><span class="p">,</span> <span class="nb">type</span><span class="p">)</span> <span class="ow">and</span> <span class="nb">issubclass</span><span class="p">(</span><span class="n">dtype</span><span class="p">,</span> <span class="n">PrimitiveBase</span><span class="p">):</span>
+        <span class="n">dtype</span> <span class="o">=</span> <span class="n">dtype</span><span class="o">.</span><span class="n">cxx</span>
+    <span class="k">return</span> <span class="n">_orig_data_type_size</span><span class="p">(</span><span class="n">dtype</span><span class="p">)</span>
+
+
+<span class="n">qd_python_core</span><span class="o">.</span><span class="n">data_type_size</span> <span class="o">=</span> <span class="n">_data_type_size</span>
+
+
 <span class="c1"># ========================================</span>
 <span class="c1"># Floating point types</span>
 <span class="c1"># ========================================</span>
