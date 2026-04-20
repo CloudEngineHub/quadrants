@@ -714,7 +714,10 @@ Module Contents
       :type keep_dims: bool, optional
       :param dtype: The desired data type of returned numpy array.
       :type dtype: DataType, optional
-      :param copy: ``None`` (default) prefers zero-copy, ``True`` forces a copy, ``False`` requires zero-copy or raises.
+      :param copy: ``None`` (default) and ``True`` return an independent copy. ``False`` requires zero-copy via DLPack
+                   (CPU backend + torch installed) or raises.  Note: zero-copy numpy arrays alias the field's underlying
+                   C++ runtime memory and become invalid after ``qd.reset()`` -- callers opting into ``copy=False`` are
+                   responsible for the buffer lifetime.
 
       :returns: The result NumPy array.
       :rtype: numpy.ndarray

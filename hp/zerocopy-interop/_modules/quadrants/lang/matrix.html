@@ -1759,42 +1759,38 @@
 <span class="sd">                When keep_dims=False, the resulting numpy array should skip the matrix dims with size 1.</span>
 <span class="sd">                For example, a 4x1 or 1x4 matrix field with 5x6x7 elements results in an array of shape 5x6x7x4.</span>
 <span class="sd">            dtype (DataType, optional): The desired data type of returned numpy array.</span>
-<span class="sd">            copy: ``None`` (default) prefers zero-copy, ``True`` forces a copy, ``False`` requires zero-copy or raises.</span>
+<span class="sd">            copy: ``None`` (default) and ``True`` return an independent copy. ``False`` requires zero-copy via DLPack</span>
+<span class="sd">                (CPU backend + torch installed) or raises.  Note: zero-copy numpy arrays alias the field&#39;s underlying</span>
+<span class="sd">                C++ runtime memory and become invalid after ``qd.reset()`` -- callers opting into ``copy=False`` are</span>
+<span class="sd">                responsible for the buffer lifetime.</span>
 
 <span class="sd">        Returns:</span>
 <span class="sd">            numpy.ndarray: The result NumPy array.</span>
 <span class="sd">        &quot;&quot;&quot;</span>
-        <span class="kn">from</span><span class="w"> </span><span class="nn">quadrants.lang._interop</span><span class="w"> </span><span class="kn">import</span> <span class="p">(</span>  <span class="c1"># pylint: disable=C0415</span>
-            <span class="n">can_zerocopy</span><span class="p">,</span>
-            <span class="n">current_arch_is_cpu</span><span class="p">,</span>
-            <span class="n">dlpack_to_torch</span><span class="p">,</span>
-        <span class="p">)</span>
+        <span class="k">if</span> <span class="n">copy</span> <span class="ow">is</span> <span class="kc">False</span><span class="p">:</span>
+            <span class="kn">from</span><span class="w"> </span><span class="nn">quadrants.lang._interop</span><span class="w"> </span><span class="kn">import</span> <span class="p">(</span>  <span class="c1"># pylint: disable=C0415</span>
+                <span class="n">can_zerocopy</span><span class="p">,</span>
+                <span class="n">current_arch_is_cpu</span><span class="p">,</span>
+                <span class="n">dlpack_to_torch</span><span class="p">,</span>
+            <span class="p">)</span>
 
-        <span class="k">if</span> <span class="n">copy</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">True</span> <span class="ow">and</span> <span class="n">can_zerocopy</span><span class="p">(</span><span class="n">is_field</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">dtype</span><span class="p">,</span> <span class="n">shape</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">shape</span><span class="p">):</span>
-            <span class="c1"># See ``ScalarField.to_numpy`` for why DLPack is restricted to CPU backends.</span>
-            <span class="k">if</span> <span class="n">current_arch_is_cpu</span><span class="p">():</span>
-                <span class="k">try</span><span class="p">:</span>
-                    <span class="n">tc</span> <span class="o">=</span> <span class="n">dlpack_to_torch</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span>
-                <span class="k">except</span> <span class="ne">ImportError</span><span class="p">:</span>
-                    <span class="k">if</span> <span class="n">copy</span> <span class="ow">is</span> <span class="kc">False</span><span class="p">:</span>
-                        <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s2">&quot;Zero-copy to numpy requires torch to be installed&quot;</span><span class="p">)</span>
-                    <span class="n">tc</span> <span class="o">=</span> <span class="kc">None</span>
-                <span class="k">if</span> <span class="n">tc</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
-                    <span class="n">as_vector</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">m</span> <span class="o">==</span> <span class="mi">1</span> <span class="ow">and</span> <span class="ow">not</span> <span class="n">keep_dims</span>
-                    <span class="n">shape_ext</span> <span class="o">=</span> <span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">n</span><span class="p">,)</span> <span class="k">if</span> <span class="n">as_vector</span> <span class="k">else</span> <span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">n</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">m</span><span class="p">)</span>
-                    <span class="n">expected</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">shape</span> <span class="o">+</span> <span class="n">shape_ext</span>
-                    <span class="n">np_arr</span> <span class="o">=</span> <span class="n">tc</span><span class="o">.</span><span class="n">numpy</span><span class="p">()</span>
-                    <span class="k">if</span> <span class="n">np_arr</span><span class="o">.</span><span class="n">shape</span> <span class="o">!=</span> <span class="n">expected</span><span class="p">:</span>
-                        <span class="n">np_arr</span> <span class="o">=</span> <span class="n">np_arr</span><span class="o">.</span><span class="n">reshape</span><span class="p">(</span><span class="n">expected</span><span class="p">)</span>
-                    <span class="k">if</span> <span class="n">dtype</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="ow">and</span> <span class="n">np_arr</span><span class="o">.</span><span class="n">dtype</span> <span class="o">!=</span> <span class="n">dtype</span><span class="p">:</span>
-                        <span class="k">if</span> <span class="n">copy</span> <span class="ow">is</span> <span class="kc">False</span><span class="p">:</span>
-                            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s2">&quot;copy=False is incompatible with dtype conversion&quot;</span><span class="p">)</span>
-                        <span class="k">return</span> <span class="n">np_arr</span><span class="o">.</span><span class="n">astype</span><span class="p">(</span><span class="n">dtype</span><span class="p">)</span>
-                    <span class="k">return</span> <span class="n">np_arr</span>
-            <span class="k">if</span> <span class="n">copy</span> <span class="ow">is</span> <span class="kc">False</span><span class="p">:</span>
+            <span class="k">if</span> <span class="ow">not</span> <span class="n">can_zerocopy</span><span class="p">(</span><span class="n">is_field</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">dtype</span><span class="p">,</span> <span class="n">shape</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">shape</span><span class="p">):</span>
+                <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s2">&quot;Zero-copy not available for this backend/type combination&quot;</span><span class="p">)</span>
+            <span class="k">if</span> <span class="ow">not</span> <span class="n">current_arch_is_cpu</span><span class="p">():</span>
                 <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s2">&quot;Zero-copy to numpy requires a CPU backend&quot;</span><span class="p">)</span>
-        <span class="k">elif</span> <span class="n">copy</span> <span class="ow">is</span> <span class="kc">False</span><span class="p">:</span>
-            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s2">&quot;Zero-copy not available for this backend/type combination&quot;</span><span class="p">)</span>
+            <span class="k">try</span><span class="p">:</span>
+                <span class="n">tc</span> <span class="o">=</span> <span class="n">dlpack_to_torch</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span>
+            <span class="k">except</span> <span class="ne">ImportError</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span>
+                <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s2">&quot;Zero-copy to numpy requires torch to be installed&quot;</span><span class="p">)</span> <span class="kn">from</span><span class="w"> </span><span class="nn">e</span>
+            <span class="n">as_vector</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">m</span> <span class="o">==</span> <span class="mi">1</span> <span class="ow">and</span> <span class="ow">not</span> <span class="n">keep_dims</span>
+            <span class="n">shape_ext</span> <span class="o">=</span> <span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">n</span><span class="p">,)</span> <span class="k">if</span> <span class="n">as_vector</span> <span class="k">else</span> <span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">n</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">m</span><span class="p">)</span>
+            <span class="n">expected</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">shape</span> <span class="o">+</span> <span class="n">shape_ext</span>
+            <span class="n">np_arr</span> <span class="o">=</span> <span class="n">tc</span><span class="o">.</span><span class="n">numpy</span><span class="p">()</span>
+            <span class="k">if</span> <span class="n">np_arr</span><span class="o">.</span><span class="n">shape</span> <span class="o">!=</span> <span class="n">expected</span><span class="p">:</span>
+                <span class="n">np_arr</span> <span class="o">=</span> <span class="n">np_arr</span><span class="o">.</span><span class="n">reshape</span><span class="p">(</span><span class="n">expected</span><span class="p">)</span>
+            <span class="k">if</span> <span class="n">dtype</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="ow">and</span> <span class="n">np_arr</span><span class="o">.</span><span class="n">dtype</span> <span class="o">!=</span> <span class="n">dtype</span><span class="p">:</span>
+                <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s2">&quot;copy=False is incompatible with dtype conversion&quot;</span><span class="p">)</span>
+            <span class="k">return</span> <span class="n">np_arr</span>
 
         <span class="k">if</span> <span class="n">dtype</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
             <span class="n">dtype</span> <span class="o">=</span> <span class="n">to_numpy_type</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">dtype</span><span class="p">)</span>

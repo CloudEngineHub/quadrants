@@ -543,7 +543,10 @@ reading it.</p>
 <dd><p>Converts this field to a <cite>numpy.ndarray</cite>.</p>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters<span class="colon">:</span></dt>
-<dd class="field-odd"><p><strong>copy</strong> – <code class="docutils literal notranslate"><span class="pre">None</span></code> (default) prefers zero-copy, <code class="docutils literal notranslate"><span class="pre">True</span></code> forces a copy, <code class="docutils literal notranslate"><span class="pre">False</span></code> requires zero-copy or raises.</p>
+<dd class="field-odd"><p><strong>copy</strong> – <code class="docutils literal notranslate"><span class="pre">None</span></code> (default) and <code class="docutils literal notranslate"><span class="pre">True</span></code> return an independent copy. <code class="docutils literal notranslate"><span class="pre">False</span></code> requires zero-copy via DLPack
+(CPU backend + torch installed) or raises.  Note: zero-copy numpy arrays alias the field’s underlying
+C++ runtime memory and become invalid after <code class="docutils literal notranslate"><span class="pre">qd.reset()</span></code> – callers opting into <code class="docutils literal notranslate"><span class="pre">copy=False</span></code> are
+responsible for the buffer lifetime.</p>
 </dd>
 </dl>
 </dd></dl>

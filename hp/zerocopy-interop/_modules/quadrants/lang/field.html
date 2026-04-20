@@ -624,41 +624,36 @@
 <span class="w">        </span><span class="sd">&quot;&quot;&quot;Converts this field to a `numpy.ndarray`.</span>
 
 <span class="sd">        Args:</span>
-<span class="sd">            copy: ``None`` (default) prefers zero-copy, ``True`` forces a copy, ``False`` requires zero-copy or raises.</span>
+<span class="sd">            copy: ``None`` (default) and ``True`` return an independent copy. ``False`` requires zero-copy via DLPack</span>
+<span class="sd">                (CPU backend + torch installed) or raises.  Note: zero-copy numpy arrays alias the field&#39;s underlying</span>
+<span class="sd">                C++ runtime memory and become invalid after ``qd.reset()`` -- callers opting into ``copy=False`` are</span>
+<span class="sd">                responsible for the buffer lifetime.</span>
 <span class="sd">        &quot;&quot;&quot;</span>
         <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">parent</span><span class="p">()</span><span class="o">.</span><span class="n">_snode</span><span class="o">.</span><span class="n">ptr</span><span class="o">.</span><span class="n">type</span> <span class="o">==</span> <span class="n">_qd_core</span><span class="o">.</span><span class="n">SNodeType</span><span class="o">.</span><span class="n">dynamic</span><span class="p">:</span>
             <span class="n">warn</span><span class="p">(</span>
                 <span class="s2">&quot;You are trying to convert a dynamic snode to a numpy array, be aware that inactive items in the snode will be converted to zeros in the resulting array.&quot;</span>
             <span class="p">)</span>
-        <span class="kn">from</span><span class="w"> </span><span class="nn">quadrants.lang._interop</span><span class="w"> </span><span class="kn">import</span> <span class="p">(</span>  <span class="c1"># pylint: disable=C0415</span>
-            <span class="n">can_zerocopy</span><span class="p">,</span>
-            <span class="n">current_arch_is_cpu</span><span class="p">,</span>
-            <span class="n">dlpack_to_torch</span><span class="p">,</span>
-        <span class="p">)</span>
+        <span class="k">if</span> <span class="n">copy</span> <span class="ow">is</span> <span class="kc">False</span><span class="p">:</span>
+            <span class="kn">from</span><span class="w"> </span><span class="nn">quadrants.lang._interop</span><span class="w"> </span><span class="kn">import</span> <span class="p">(</span>  <span class="c1"># pylint: disable=C0415</span>
+                <span class="n">can_zerocopy</span><span class="p">,</span>
+                <span class="n">current_arch_is_cpu</span><span class="p">,</span>
+                <span class="n">dlpack_to_torch</span><span class="p">,</span>
+            <span class="p">)</span>
 
-        <span class="k">if</span> <span class="n">copy</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">True</span> <span class="ow">and</span> <span class="n">can_zerocopy</span><span class="p">(</span><span class="n">is_field</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">dtype</span><span class="p">,</span> <span class="n">is_scalar_field</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">shape</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">shape</span><span class="p">):</span>
-            <span class="c1"># Only attempt DLPack export on CPU backends -- on GPU backends the DLPack-wrapped torch tensor cannot</span>
-            <span class="c1"># be zero-copied to numpy anyway, and caching it on the field can outlive a ``qd.reset()`` (the field&#39;s</span>
-            <span class="c1"># underlying device memory is freed by the reset, but the cached tensor&#39;s deleter later dereferences it).</span>
-            <span class="k">if</span> <span class="n">current_arch_is_cpu</span><span class="p">():</span>
-                <span class="k">try</span><span class="p">:</span>
-                    <span class="n">tc</span> <span class="o">=</span> <span class="n">dlpack_to_torch</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span>
-                <span class="k">except</span> <span class="ne">ImportError</span><span class="p">:</span>
-                    <span class="k">if</span> <span class="n">copy</span> <span class="ow">is</span> <span class="kc">False</span><span class="p">:</span>
-                        <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s2">&quot;Zero-copy to numpy requires torch to be installed&quot;</span><span class="p">)</span>
-                    <span class="n">tc</span> <span class="o">=</span> <span class="kc">None</span>
-                <span class="k">if</span> <span class="n">tc</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
-                    <span class="n">np_arr</span> <span class="o">=</span> <span class="n">tc</span><span class="o">.</span><span class="n">numpy</span><span class="p">()</span>
-                    <span class="k">if</span> <span class="n">dtype</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="ow">and</span> <span class="n">np_arr</span><span class="o">.</span><span class="n">dtype</span> <span class="o">!=</span> <span class="n">dtype</span><span class="p">:</span>
-                        <span class="k">if</span> <span class="n">copy</span> <span class="ow">is</span> <span class="kc">False</span><span class="p">:</span>
-                            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s2">&quot;copy=False is incompatible with dtype conversion&quot;</span><span class="p">)</span>
-                        <span class="n">np_dtype</span> <span class="o">=</span> <span class="n">to_numpy_type</span><span class="p">(</span><span class="n">dtype</span><span class="p">)</span> <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">dtype</span><span class="p">,</span> <span class="n">_qd_core</span><span class="o">.</span><span class="n">DataTypeCxx</span><span class="p">)</span> <span class="k">else</span> <span class="n">dtype</span>
-                        <span class="k">return</span> <span class="n">np_arr</span><span class="o">.</span><span class="n">astype</span><span class="p">(</span><span class="n">np_dtype</span><span class="p">)</span>
-                    <span class="k">return</span> <span class="n">np_arr</span>
-            <span class="k">if</span> <span class="n">copy</span> <span class="ow">is</span> <span class="kc">False</span><span class="p">:</span>
+            <span class="k">if</span> <span class="ow">not</span> <span class="n">can_zerocopy</span><span class="p">(</span><span class="n">is_field</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">dtype</span><span class="p">,</span> <span class="n">is_scalar_field</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">shape</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">shape</span><span class="p">):</span>
+                <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s2">&quot;Zero-copy not available for this backend/type combination&quot;</span><span class="p">)</span>
+            <span class="k">if</span> <span class="ow">not</span> <span class="n">current_arch_is_cpu</span><span class="p">():</span>
                 <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s2">&quot;Zero-copy to numpy requires a CPU backend&quot;</span><span class="p">)</span>
-        <span class="k">elif</span> <span class="n">copy</span> <span class="ow">is</span> <span class="kc">False</span><span class="p">:</span>
-            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s2">&quot;Zero-copy not available for this backend/type combination&quot;</span><span class="p">)</span>
+            <span class="k">try</span><span class="p">:</span>
+                <span class="n">tc</span> <span class="o">=</span> <span class="n">dlpack_to_torch</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span>
+            <span class="k">except</span> <span class="ne">ImportError</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span>
+                <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s2">&quot;Zero-copy to numpy requires torch to be installed&quot;</span><span class="p">)</span> <span class="kn">from</span><span class="w"> </span><span class="nn">e</span>
+            <span class="n">np_arr</span> <span class="o">=</span> <span class="n">tc</span><span class="o">.</span><span class="n">numpy</span><span class="p">()</span>
+            <span class="k">if</span> <span class="n">dtype</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+                <span class="n">np_dtype</span> <span class="o">=</span> <span class="n">to_numpy_type</span><span class="p">(</span><span class="n">dtype</span><span class="p">)</span> <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">dtype</span><span class="p">,</span> <span class="n">_qd_core</span><span class="o">.</span><span class="n">DataTypeCxx</span><span class="p">)</span> <span class="k">else</span> <span class="n">dtype</span>
+                <span class="k">if</span> <span class="n">np_arr</span><span class="o">.</span><span class="n">dtype</span> <span class="o">!=</span> <span class="n">np_dtype</span><span class="p">:</span>
+                    <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s2">&quot;copy=False is incompatible with dtype conversion&quot;</span><span class="p">)</span>
+            <span class="k">return</span> <span class="n">np_arr</span>
 
         <span class="k">if</span> <span class="n">dtype</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
             <span class="n">dtype</span> <span class="o">=</span> <span class="n">to_numpy_type</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">dtype</span><span class="p">)</span>
