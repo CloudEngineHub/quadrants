@@ -1,12 +1,12 @@
 """Aliasing of layout metadata across the supported Quadrants aliasing
-patterns (PR 10).
+patterns.
 
 Note: in-kernel rebinding (``y = x; y[i, j] = ...``) is **not** supported
 by Quadrants for any ndarray — that's an upstream limitation not specific
-to flexible-tensors (it raises ``QuadrantsTypeError: Invalid constant
+to tensor (it raises ``QuadrantsTypeError: Invalid constant
 scalar data type: <class 'quadrants.lang.any_array.AnyArray'>``). So this
 file pins down the aliasing patterns Quadrants *does* support and that
-flexible-tensors layout metadata must propagate through:
+tensor layout metadata must propagate through:
 
 1. Same ``Ndarray`` passed twice to the same kernel — two distinct
    ``AnyArray`` instances inside the kernel, both must carry the same
@@ -14,7 +14,7 @@ flexible-tensors layout metadata must propagate through:
 2. Same ``Ndarray`` shared across two consecutive kernel calls — the
    layout cannot leak or get lost between calls.
 3. Repeated access through ``.grad`` inside a single kernel — every call
-   must return an ``AnyArray`` with the same layout (PR 8 covered the
+   must return an ``AnyArray`` with the same layout (an earlier change covered the
    single-access path; this exercises the repeated-access cache).
 4. The same ``Ndarray`` via two different kernel signatures (one
    annotated as ``qd.types.ndarray()`` directly, one via a wrapper) —
@@ -25,7 +25,7 @@ flexible-tensors layout metadata must propagate through:
 import numpy as np
 
 import quadrants as qd
-from quadrants._flexible import _with_layout
+from quadrants._tensor import _with_layout
 
 from tests import test_utils
 
