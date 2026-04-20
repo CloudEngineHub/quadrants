@@ -1,3 +1,5 @@
+import pytest
+
 import quadrants as qd
 
 from tests import test_utils
@@ -126,17 +128,20 @@ def test_clear_all_dual_field():
         assert y.dual[None] == 4.0
 
 
+@pytest.mark.parametrize("dtype", [qd.f32, qd.f64])
 @test_utils.test(debug=True)
-def test_dual_field_dtype_preserved_in_debug_mode():
+def test_dual_field_dtype_preserved_in_debug_mode(dtype):
     """Regression: debug-mode checkbit must not shadow the outer dtype.
 
-    Uses ``f32`` (supported on every backend) and picks values whose dual
-    is a non-integer exactly representable in ``f32``: under the old bug
-    the dual field was created as ``u8`` (or ``i32`` on Vulkan), which
-    would truncate ``2.5`` to ``2`` and fail the assertion.
+    Picks values whose dual is a non-integer exactly representable in
+    both ``f32`` and ``f64`` (``x=1.25`` -> ``dual=2.5``): under the old
+    bug the dual field was created as ``u8`` (or ``i32`` on Vulkan),
+    which would truncate ``2.5`` to ``2`` and fail the assertion.
     """
-    x = qd.field(qd.f32, shape=(), needs_dual=True)
-    loss = qd.field(qd.f32, shape=(), needs_dual=True)
+    test_utils.skip_if_f64_unsupported(dtype)
+
+    x = qd.field(dtype, shape=(), needs_dual=True)
+    loss = qd.field(dtype, shape=(), needs_dual=True)
 
     x[None] = 1.25
 
