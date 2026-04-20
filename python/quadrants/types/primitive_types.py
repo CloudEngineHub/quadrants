@@ -61,6 +61,9 @@ class PrimitiveMeta(type):
         except AttributeError:
             raise AttributeError(f"type object '{cls.__name__}' has no attribute '{name}'") from None
 
+    def __call__(cls, value):
+        return cls.cxx(value)
+
 
 class PrimitiveBase(metaclass=PrimitiveMeta):
     """Base class for all primitive dtype classes.
