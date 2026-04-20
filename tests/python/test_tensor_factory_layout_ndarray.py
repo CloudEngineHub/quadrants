@@ -1,7 +1,7 @@
-"""Tests for ``qd.tensor(..., backend=NDARRAY, layout=...)`` (PR 13).
+"""Tests for ``qd.tensor(..., backend=NDARRAY, layout=...)``.
 
-PR 8 added the AST subscript-rewrite plumbing for layout-tagged
-``AnyArray``s; PR 13 wires it through the public factory so users no
+an earlier change added the AST subscript-rewrite plumbing for layout-tagged
+``AnyArray``s; an earlier change wires it through the public factory so users no
 longer need the internal ``_with_layout`` helper.
 
 Contract verified here:
@@ -29,7 +29,7 @@ from tests import test_utils
 
 
 # ----------------------------------------------------------------------------
-# Identity / no-layout: behaviour is unchanged from PR 6.
+# Identity / no-layout: behaviour is unchanged from an earlier change.
 # ----------------------------------------------------------------------------
 
 

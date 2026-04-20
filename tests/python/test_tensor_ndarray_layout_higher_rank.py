@@ -1,7 +1,7 @@
-"""Higher-rank coverage for layout-tagged ndarrays (PR 11).
+"""Higher-rank coverage for layout-tagged ndarrays.
 
-PR 8's parametrized rank-3 test exercises every permutation, but only on
-a single canonical cell. PR 11 widens that to:
+an earlier change's parametrized rank-3 test exercises every permutation, but only on
+a single canonical cell. an earlier change widens that to:
 
 - Rank 4: every permutation, full-grid value comparison.
 - Rank 5 and 6: spot checks (24 / 720 perms is too many to enumerate).
@@ -19,7 +19,7 @@ import numpy as np
 import pytest
 
 import quadrants as qd
-from quadrants._flexible import _with_layout
+from quadrants._tensor import _with_layout
 
 from tests import test_utils
 

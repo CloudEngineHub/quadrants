@@ -1,8 +1,8 @@
-"""Tests for ``layout=`` on the ``qd.tensor()`` factory (PR 6).
+"""Tests for ``layout=`` on the ``qd.tensor()`` factory.
 
 Phase 2 ships layout support for the field backend only. Non-identity
 layouts on the ndarray backend raise NotImplementedError until the AST
-rewrite lands in PR 13.
+rewrite lands in an earlier change.
 """
 
 import itertools
@@ -111,8 +111,8 @@ def test_order_kwarg_rejected():
 
 
 # ----------------------------------------------------------------------------
-# Ndarray non-identity layout: enabled in PR 13.
-# These cases are exercised in depth in test_flexible_factory_layout_ndarray.py;
+# Ndarray non-identity layout: enabled in an earlier change.
+# These cases are exercised in depth in test_tensor_factory_layout_ndarray.py;
 # this file just pins the smoke "factory does not raise" contract that
 # replaces the PR-6-era NotImplementedError gating.
 # ----------------------------------------------------------------------------
