@@ -9,18 +9,34 @@ Shuffle ops live under `qd.simt.subgroup` and are written so the same Python sou
 | Op                             | CUDA | AMDGPU | SPIR-V (Vulkan) | dtypes                       |
 |--------------------------------|------|--------|-----------------|------------------------------|
 | `subgroup.shuffle(v, idx)`     | yes  | yes    | yes             | i32, u32, f32, f64, i64, u64 |
+| `subgroup.shuffle_down(v, n)`  | yes  | yes\*  | yes             | i32, u32, f32, f64, i64, u64 |
 
-Other flavours (`shuffle_up`, `shuffle_down`, `shuffle_xor`) are exposed in the Python module but are not yet implemented across backends. Calling them will fail at codegen. Use `shuffle` with an explicit lane index in the meantime — every shuffle pattern can be expressed that way.
+\* AMDGPU `shuffle_down` is currently emulated via `ds_bpermute` (~50 cycle latency).
+
+The remaining flavours (`shuffle_up`, `shuffle_xor`) are exposed in the Python module but are not yet implemented across backends. Calling them will fail at codegen. Use `shuffle` with an explicit lane index in the meantime — every shuffle pattern can be expressed that way.
 
 ## Semantics
 
-`shuffle(value, index)` — each lane returns the `value` held by the lane whose subgroup-local id equals `index`. It does not move data through memory and does not synchronise across subgroups — only the lanes within one subgroup participate.
+Both ops operate within a single subgroup: they do not move data through memory and do not synchronise across subgroups.
+
+### `shuffle(value, index)`
+
+Each lane returns the `value` held by the lane whose subgroup-local id equals `index`.
 
 - `value` is a scalar in a register. Supported dtypes are 32-bit and 64-bit signed/unsigned ints and `f32`/`f64`. (64-bit types are split into two 32-bit shuffles on AMDGPU; CUDA dispatches to its native 64-bit helpers.)
 - `index` is a `u32`. If `index` is out of range for the active subgroup the result is implementation-defined, so pass `subgroup.invocation_id()`-derived values or known-good lane ids.
-- The op is issued under a full active mask on CUDA (`0xFFFFFFFF`). Call it from uniform control flow; calling from divergent control flow is undefined on most backends. (this means: all threads have to execute the shuffle)
 
-Subgroup size varies by backend (32 on NVIDIA, 32 or 64 on AMD, 32 in Vulkan compute on most GPUs).
+### `shuffle_down(value, offset)`
+
+Lane `i` returns the `value` held by lane `i + offset`. Lanes near the top of the subgroup — where `i + offset >= subgroup_size` — receive an implementation-defined value (typically their own `value`), so reduction patterns must only trust lane 0's final result, or mask out the out-of-range lanes.
+
+- `value` and `offset` dtypes: same as `shuffle` above; `offset` is a `u32`.
+- Maps to `__shfl_down_sync` on CUDA and `OpGroupNonUniformShuffleDown` on SPIR-V. On AMDGPU it is currently emulated with `ds_bpermute` (see the support matrix above).
+
+### Common to both
+
+- Ops are issued under a full active mask on CUDA (`0xFFFFFFFF`). Call them from uniform control flow; calling from divergent control flow is undefined on most backends. (this means: all threads have to execute the shuffle)
+- Subgroup size varies by backend (32 on NVIDIA, 32 or 64 on AMD, 32 in Vulkan compute on most GPUs).
 
 ## Examples
 
@@ -85,10 +101,28 @@ def reverse4(src: qd.types.ndarray(dtype=qd.f32, ndim=1),
 
 Within each group of 4 contiguous lanes the values are reversed.
 
+### Tree reduction with `shuffle_down`
+
+Classic warp-level sum of 4 values — after the second step, lane 0 of each group of 4 holds the total:
+
+```python
+@qd.kernel
+def reduce4(src: qd.types.ndarray(dtype=qd.f32, ndim=1),
+            dst: qd.types.ndarray(dtype=qd.f32, ndim=1)):
+    qd.loop_config(block_dim=64)
+    for i in range(src.shape[0]):
+        val = src[i]
+        val = val + subgroup.shuffle_down(val, qd.u32(2))
+        val = val + subgroup.shuffle_down(val, qd.u32(1))
+        dst[i] = val
+```
+
+Extend the pattern (offsets 16, 8, 4, 2, 1, ...) to reduce a full subgroup; only lane 0's final value is meaningful, because the lanes near the top read past the end of the subgroup.
+
 ## Performance notes
 
-- Shuffles are register-to-register on CUDA (`__shfl_sync`) and on SPIR-V where the GPU has hardware support — typically a handful of cycles, no memory traffic.
-- AMDGPU `shuffle` uses `ds_permute`/`ds_bpermute` (LDS-routed, roughly tens of cycles).
+- Shuffles are register-to-register on CUDA (`__shfl_sync`, `__shfl_down_sync`) and on SPIR-V where the GPU has hardware support — typically a handful of cycles, no memory traffic.
+- AMDGPU `shuffle` and `shuffle_down` both go through `ds_permute`/`ds_bpermute` today (LDS-routed, roughly tens of cycles).
 - 64-bit dtypes (`i64`, `u64`, `f64`) are emulated as two 32-bit shuffles on AMDGPU. Prefer 32-bit values when you have a choice.
 
 ## Related
