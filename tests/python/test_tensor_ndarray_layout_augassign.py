@@ -1,6 +1,6 @@
-"""Extended AugAssign coverage for layout-tagged ndarrays (PR 9).
+"""Extended AugAssign coverage for layout-tagged ndarrays.
 
-PR 8 already covered the basic ``x[i, j] += scalar`` case. This file
+an earlier change already covered the basic ``x[i, j] += scalar`` case. This file
 exercises the trickier paths:
 - every augmented operator (+=, -=, *=, //=, etc.)
 - read-and-write on the same call (``x[i, j] = x[i, j] * 2 + x[i, j]``)
@@ -12,7 +12,7 @@ exercises the trickier paths:
 import numpy as np
 
 import quadrants as qd
-from quadrants._flexible import _with_layout
+from quadrants._tensor import _with_layout
 
 from tests import test_utils
 
