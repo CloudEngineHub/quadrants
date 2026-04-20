@@ -1,4 +1,4 @@
-from typing import ClassVar, Union
+from typing import Any, ClassVar, Union
 
 from quadrants._lib import core as qd_python_core
 from quadrants._lib.core.quadrants_python import DataTypeCxx
@@ -61,6 +61,9 @@ class PrimitiveMeta(type):
         except AttributeError:
             raise AttributeError(f"type object '{cls.__name__}' has no attribute '{name}'") from None
 
+    def __call__(cls, value):
+        return cls.cxx(value)
+
 
 class PrimitiveBase(metaclass=PrimitiveMeta):
     """Base class for all primitive dtype classes.
@@ -72,6 +75,13 @@ class PrimitiveBase(metaclass=PrimitiveMeta):
     cxx: ClassVar[DataTypeCxx]
     _registry: ClassVar[dict[DataTypeCxx, "type[PrimitiveBase]"]] = {}
 
+    # NOTE: __init__ is never executed at runtime because PrimitiveMeta.__call__
+    # short-circuits class instantiation and returns cls.cxx(value) directly.
+    # This stub exists purely so pyright recognises ``f32(value)`` etc. as a
+    # legal call site (pyright uses __init__/__new__ signatures, not metaclass
+    # __call__, when type-checking class instantiation).
+    def __init__(self, value: Any = None) -> None: ...
+
     def __init_subclass__(cls, **kwargs):
         super().__init_subclass__(**kwargs)
         if hasattr(cls, "cxx"):
@@ -81,6 +91,21 @@ class PrimitiveBase(metaclass=PrimitiveMeta):
 def cxx_to_py(dtype_cxx: DataTypeCxx) -> "type[PrimitiveBase]":
     """Convert a DataTypeCxx to its corresponding Python dtype class."""
     return PrimitiveBase._registry[dtype_cxx]
+
+
+# Wrap C++ helpers that take a DataTypeCxx so they also accept PrimitiveBase
+# Python wrapper classes (e.g. qd.i8). The C++ binding only accepts DataTypeCxx,
+# so we transparently unwrap PrimitiveBase subclasses to their .cxx attribute.
+_orig_data_type_size = qd_python_core.data_type_size
+
+
+def _data_type_size(dtype: Any) -> int:
+    if isinstance(dtype, type) and issubclass(dtype, PrimitiveBase):
+        dtype = dtype.cxx
+    return _orig_data_type_size(dtype)
+
+
+qd_python_core.data_type_size = _data_type_size
 
 
 # ========================================
