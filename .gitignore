@@ -96,3 +96,4 @@ imgui.ini
 stubs/quadrants/_lib/
 CHANGELOG.md
 python/quadrants/_version.py
+env.sh
