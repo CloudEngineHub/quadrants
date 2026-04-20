@@ -5,8 +5,8 @@
 
 # Flexible tensors
 
-Quadrants offers two underlying tensor implementations, [`qd.field`](#fields)
-and [`qd.ndarray`](#ndarrays). They have different runtime/compile-time
+Quadrants offers two underlying tensor implementations, `qd.field`
+and `qd.ndarray`. They have different runtime/compile-time
 trade-offs, and different physical memory layouts can suit different kernels.
 
 The flexible-tensors API lets you pick both the **backend** and (in a future
