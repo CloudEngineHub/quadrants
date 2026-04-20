@@ -183,3 +183,15 @@ t = qd.simt.Tile16x16.zeros(dtype=qd.f64)
 | `t -= qd.outer(a, b)` | General rank-1 subtract |
 | `t.cholesky_(eps)` | In-place Cholesky factorization |
 | `L.solve_triangular_(B)` | Triangular solve (in-place on B) |
+
+## Example: blocked Cholesky
+
+See [`misc/demos/cholesky_blocked.py`](../../../misc/demos/cholesky_blocked.py) for a complete blocked Cholesky factorization using Tile16x16, benchmarked against scalar-Crout baselines (shared memory with 64 threads, and blocked shared memory with 16 threads).
+
+Results on RTX PRO 6000 Blackwell, 4096 environments, N=92, f32:
+
+| Kernel | Threads | Time (us) | vs baseline |
+|--------|--------:|----------:|------------:|
+| baseline (scalar Crout, shared mem) | 64 | 2766 | 1.00x |
+| blocked (scalar Crout, shared mem) | 16 | 2556 | 1.08x |
+| **tile16 (Tile16x16, no shared memory)** | 16 | 533 | **5.19x** |
