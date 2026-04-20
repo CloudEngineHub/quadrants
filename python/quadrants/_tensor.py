@@ -6,6 +6,10 @@ This module is the user-facing entry point for selecting a tensor backend
 See ``docs/source/user_guide/tensor.md`` for the user guide.
 """
 
+# pylint: disable=import-outside-toplevel
+# (Late imports below are intentional, to break circular import cycles
+# between the tensor entry point and the lang/types subpackages.)
+
 from enum import IntEnum
 
 __all__ = ["Backend", "tensor", "tensor_annotation", "tensor_mat", "tensor_vec"]
