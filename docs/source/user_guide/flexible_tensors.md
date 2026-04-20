@@ -102,6 +102,40 @@ m = qd.tensor_mat(2, 2, qd.f32, shape=(3,))
 These match the existing `qd.Vector.*` / `qd.Matrix.*` factories one-for-one;
 `qd.tensor_vec` / `qd.tensor_mat` simply add the per-tensor `backend=` knob.
 
-Subsequent releases will add a `qd.tensor_annotation(backend)` helper for
-kernel argument typing, and a `layout=` keyword for per-tensor physical-memory
+## Annotating kernel arguments: `qd.tensor_annotation`
+
+Kernel parameter annotations differ between the two backends — fields use
+`qd.template()` and ndarrays use `qd.types.ndarray()`. To avoid sprinkling
+`if`/`else` blocks across every kernel signature, pick the annotation **once**
+at module load time:
+
+```python
+import quadrants as qd
+
+# Choose your run-wide backend in one place.
+BACKEND = qd.Backend.NDARRAY
+V_ANNOTATION = qd.tensor_annotation(BACKEND)
+
+qd.init(arch=qd.x64)
+
+@qd.kernel
+def fill(x: V_ANNOTATION):
+    for i in range(x.shape[0]):
+        x[i] = i
+
+a = qd.tensor(qd.i32, shape=(4,), backend=BACKEND)
+fill(a)
+```
+
+The returned object is interchangeable with its direct equivalent:
+
+| `backend` | `qd.tensor_annotation(backend)` returns | Equivalent to |
+|---|---|---|
+| `qd.Backend.FIELD` | `qd.template()` instance | `def k(x: qd.template()): ...` |
+| `qd.Backend.NDARRAY` | `qd.types.ndarray()` instance | `def k(x: qd.types.ndarray()): ...` |
+
+This mirrors the one-liner Genesis already uses to switch backends; the
+helper just makes the pattern first-class.
+
+Subsequent releases will add a `layout=` keyword for per-tensor physical-memory
 layout.

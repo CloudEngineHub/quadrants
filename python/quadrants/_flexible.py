@@ -8,7 +8,7 @@ See ``docs/source/user_guide/flexible_tensors.md`` for the user guide.
 
 from enum import IntEnum
 
-__all__ = ["Backend", "tensor", "tensor_mat", "tensor_vec"]
+__all__ = ["Backend", "tensor", "tensor_annotation", "tensor_mat", "tensor_vec"]
 
 
 class Backend(IntEnum):
@@ -149,4 +149,45 @@ def tensor_mat(n, m, dtype, shape, *, backend=Backend.FIELD, **kwargs):
         return Matrix.field(n, m, dtype, shape, **kwargs)
     if backend is Backend.NDARRAY:
         return Matrix.ndarray(n, m, dtype, shape, **kwargs)
+    raise AssertionError(f"unhandled Backend member: {backend!r}")
+
+
+def tensor_annotation(backend):
+    """Return the kernel-argument annotation appropriate for ``backend``.
+
+    Mirrors the Genesis ``V_ANNOTATION = qd.types.ndarray() if use_ndarray
+    else qd.template`` pattern as a single first-class call. Use it once, at
+    module load time, to build a uniform annotation that you then attach to
+    every tensor kernel argument:
+
+    .. code-block:: python
+
+        V_ANNOTATION = qd.tensor_annotation(qd.Backend.FIELD)
+
+        @qd.kernel
+        def fill(x: V_ANNOTATION):
+            for i in qd.ndrange(x.shape[0]):
+                x[i] = 1.0
+
+    Args:
+        backend (Backend): The backend whose tensors will be passed to
+            kernels annotated with the returned object.
+
+    Returns:
+        An object suitable for use as a kernel-argument type annotation:
+
+        - For ``Backend.FIELD``: an instance of ``qd.template()``.
+        - For ``Backend.NDARRAY``: an instance of ``qd.types.ndarray()``.
+
+        Both forms are interchangeable with their direct equivalents — the
+        helper just hides the conditional behind one call.
+    """
+    backend = _coerce_backend(backend)
+    from quadrants import types as _types  # late import
+    from quadrants.types.annotations import template  # late import
+
+    if backend is Backend.FIELD:
+        return template()
+    if backend is Backend.NDARRAY:
+        return _types.ndarray()
     raise AssertionError(f"unhandled Backend member: {backend!r}")
