@@ -7,7 +7,8 @@ from .. import _logging
 from . import impl
 from ._exceptions import raise_exception
 from ._quadrants_callable import QuadrantsCallable
-from .exception import QuadrantsRuntimeError, QuadrantsSyntaxError, get_func_signature
+from ._signature import get_func_signature
+from .exception import QuadrantsRuntimeError, QuadrantsSyntaxError
 
 NUM_WARMUP: int = 3
 NUM_ACTIVE: int = 1
