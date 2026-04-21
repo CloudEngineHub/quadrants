@@ -60,8 +60,6 @@ __all__ = [
     "math",
     "sparse",
     "tensor",
-    "tensor_mat",
-    "tensor_vec",
     "tools",
     "types",
 ]
