@@ -61,8 +61,6 @@ __all__ = [
     "sparse",
     "tensor",
     "tensor_annotation",
-    "tensor_mat",
-    "tensor_vec",
     "tools",
     "types",
 ]
