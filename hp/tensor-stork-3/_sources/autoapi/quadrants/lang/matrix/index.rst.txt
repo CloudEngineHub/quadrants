@@ -454,6 +454,36 @@ Module Contents
 
 
 
+   .. py:method:: tensor(n, m, dtype, shape, **kwargs)
+      :classmethod:
+
+
+      Allocate a tensor whose elements are ``n``-by-``m`` matrices.
+
+      Per-tensor backend dispatcher, equivalent to scalar ``qd.tensor()``
+      for matrix-valued elements. Selects between ``qd.Matrix.field`` and
+      ``qd.Matrix.ndarray`` based on the ``backend=`` keyword.
+
+      :param n: Number of rows of each matrix element.
+      :type n: int
+      :param m: Number of columns of each matrix element.
+      :type m: int
+      :param dtype: Element data type (e.g. ``qd.f32``).
+      :param shape: Shape of the tensor (excluding the matrix dimensions) as
+                    an ``int`` or tuple of ``int``.
+      :param backend: Storage backend. Defaults to
+                      ``qd.Backend.FIELD``.
+      :type backend: qd.Backend, optional
+      :param \*\*kwargs: Forwarded verbatim to the underlying
+                         ``qd.Matrix.field`` / ``qd.Matrix.ndarray`` call.
+
+      Example::
+
+          >>> a = qd.Matrix.tensor(2, 3, qd.f32, shape=(4,))
+          >>> b = qd.Matrix.tensor(2, 3, qd.f32, shape=(4,), backend=qd.Backend.NDARRAY)
+
+
+
    .. py:method:: rows(rows)
       :staticmethod:
 
@@ -640,6 +670,34 @@ Module Contents
       The code below shows how a Quadrants ndarray with vector elements can be declared and defined::
 
           >>> x = qd.Vector.ndarray(3, qd.f32, shape=(16, 8))
+
+
+
+   .. py:method:: tensor(n, dtype, shape, **kwargs)
+      :classmethod:
+
+
+      Allocate a tensor whose elements are length-``n`` vectors.
+
+      Per-tensor backend dispatcher, equivalent to scalar ``qd.tensor()``
+      for vector-valued elements. Selects between ``qd.Vector.field`` and
+      ``qd.Vector.ndarray`` based on the ``backend=`` keyword.
+
+      :param n: Length of each vector element.
+      :type n: int
+      :param dtype: Element data type (e.g. ``qd.f32``).
+      :param shape: Shape of the tensor (excluding the vector dimension) as
+                    an ``int`` or tuple of ``int``.
+      :param backend: Storage backend. Defaults to
+                      ``qd.Backend.FIELD``.
+      :type backend: qd.Backend, optional
+      :param \*\*kwargs: Forwarded verbatim to the underlying
+                         ``qd.Vector.field`` / ``qd.Vector.ndarray`` call.
+
+      Example::
+
+          >>> v = qd.Vector.tensor(3, qd.f32, shape=(4,))
+          >>> u = qd.Vector.tensor(3, qd.f32, shape=(4,), backend=qd.Backend.NDARRAY)
 
 
 
