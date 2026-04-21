@@ -118,17 +118,13 @@ def test_layout_rank6_spot_checks(layout):
     @qd.kernel
     def fill(x: qd.types.ndarray()):
         for i, j, k, l, m, n in qd.ndrange(2, 2, 2, 2, 2, 2):
-            x[i, j, k, l, m, n] = (
-                i * 100000 + j * 10000 + k * 1000 + l * 100 + m * 10 + n
-            )
+            x[i, j, k, l, m, n] = i * 100000 + j * 10000 + k * 1000 + l * 100 + m * 10 + n
 
     fill(a)
     arr = a.to_numpy()
     assert arr.shape == physical
     for ci in itertools.product(*[range(d) for d in canonical]):
-        expected = (
-            ci[0] * 100000 + ci[1] * 10000 + ci[2] * 1000 + ci[3] * 100 + ci[4] * 10 + ci[5]
-        )
+        expected = ci[0] * 100000 + ci[1] * 10000 + ci[2] * 1000 + ci[3] * 100 + ci[4] * 10 + ci[5]
         assert arr[_canonical_to_physical(ci, layout)] == expected
 
 
