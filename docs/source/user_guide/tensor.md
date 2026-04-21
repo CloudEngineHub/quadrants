@@ -47,7 +47,7 @@ sizes change.
 ## Vector and matrix tensors
 
 For tensors whose elements are vectors or matrices, use `qd.Vector.tensor`
-and `qd.Matrix.tensor`. They dispatch over `qd.Vector.field` /
+or `qd.Matrix.tensor`. They dispatch over `qd.Vector.field` /
 `qd.Vector.ndarray` and `qd.Matrix.field` / `qd.Matrix.ndarray` respectively,
 with the same `backend=` keyword:
 
