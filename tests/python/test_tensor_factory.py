@@ -13,9 +13,9 @@ from tests import test_utils
 
 
 @test_utils.test(arch=qd.cpu)
-def test_tensor_default_backend_is_field():
+def test_tensor_default_backend_is_ndarray():
     a = qd.tensor(qd.f32, shape=(4, 5))
-    assert isinstance(a, qd.ScalarField)
+    assert isinstance(a, qd.Ndarray)
     assert a.shape == (4, 5)
 
 
@@ -44,7 +44,7 @@ def test_tensor_int_backend_value_accepted():
 
 @test_utils.test(arch=qd.cpu)
 def test_tensor_dtype_propagation():
-    a = qd.tensor(qd.i32, shape=(4,))
+    a = qd.tensor(qd.i32, shape=(4,), backend=qd.Backend.FIELD)
     b = qd.tensor(qd.i32, shape=(4,), backend=qd.Backend.NDARRAY)
     assert a.dtype == qd.i32
     assert b.dtype == qd.i32
@@ -53,7 +53,7 @@ def test_tensor_dtype_propagation():
 @test_utils.test(arch=qd.cpu)
 def test_tensor_int_shape_normalised():
     """Passing an int as shape works the same as a 1-tuple."""
-    a = qd.tensor(qd.f32, shape=8)
+    a = qd.tensor(qd.f32, shape=8, backend=qd.Backend.FIELD)
     b = qd.tensor(qd.f32, shape=8, backend=qd.Backend.NDARRAY)
     assert a.shape == (8,)
     assert b.shape == (8,)
@@ -68,16 +68,24 @@ def test_tensor_invalid_backend_raises():
 
 
 @test_utils.test(arch=qd.cpu)
-def test_tensor_kwargs_pass_through_to_field():
-    """Field-only kwargs like ``order=`` reach the underlying ``qd.field``."""
-    a = qd.tensor(qd.f32, shape=(4, 5), order="ji")
-    assert isinstance(a, qd.ScalarField)
-    assert a.shape == (4, 5)
+def test_tensor_rejects_unknown_kwarg():
+    """Backend-specific knobs and typos are rejected up front; users who
+    genuinely need a backend-specific knob must drop down to ``qd.field``
+    or ``qd.ndarray`` directly. Only kwargs that are never going to be
+    accepted are listed here — branch-specific kwargs (``needs_grad=``
+    on PR 5, ``layout=`` on PR 6) get their own acceptance + rejection
+    tests on the branch where they land."""
+    with pytest.raises(TypeError, match="unexpected keyword"):
+        qd.tensor(qd.f32, shape=(4, 5), order="ji")
+    with pytest.raises(TypeError, match="unexpected keyword"):
+        qd.tensor(qd.f32, shape=(4, 5), offset=(1, 1))
+    with pytest.raises(TypeError, match="unexpected keyword"):
+        qd.tensor(qd.f32, shape=(4, 5), nonsense=42)
 
 
 @test_utils.test(arch=qd.cpu)
 def test_tensor_field_then_kernel_roundtrip():
-    a = qd.tensor(qd.i32, shape=(4,))
+    a = qd.tensor(qd.i32, shape=(4,), backend=qd.Backend.FIELD)
 
     @qd.kernel
     def fill(x: qd.template()):
