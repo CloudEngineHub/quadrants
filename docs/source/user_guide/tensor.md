@@ -42,8 +42,7 @@ assert isinstance(b, qd.ScalarField)
 ```
 
 The default backend is `qd.Backend.NDARRAY`: it avoids recompilation when
-sizes change. Opt into `qd.Backend.FIELD` when a tensor's shape is genuinely
-fixed for a run and you want the runtime speedup.
+sizes change.
 
 ## Vector and matrix tensors
 
