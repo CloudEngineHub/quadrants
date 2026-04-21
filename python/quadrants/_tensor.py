@@ -72,8 +72,8 @@ def tensor(dtype, shape, *, backend=Backend.FIELD, **kwargs):
         ValueError: If ``backend`` is not a valid :class:`Backend` member.
     """
     backend = _coerce_backend(backend)
-    # late import to break circular dependency
-    from quadrants.lang import impl  # pylint: disable=import-outside-toplevel
+    # pylint: disable=import-outside-toplevel
+    from quadrants.lang import impl  # late import to break circular dependency
 
     if backend is Backend.FIELD:
         return impl.field(dtype, shape, **kwargs)
