@@ -126,15 +126,12 @@ def _validate_kwargs(kwargs, *, factory_name, accepted):
     # Special-case ``order=``: it's the most likely typo for users coming
     # from ``qd.field``, so give them a directly actionable hint.
     if "order" in kwargs:
-        raise TypeError(
-            f"{factory_name}(...) does not accept order=; pass layout=(...) instead"
-        )
+        raise TypeError(f"{factory_name}(...) does not accept order=; pass layout=(...) instead")
     extra = set(kwargs) - accepted
     if extra:
         accepted_str = ", ".join(sorted(accepted | {"dtype", "shape"}))
         raise TypeError(
-            f"{factory_name}() got unexpected keyword argument(s) "
-            f"{sorted(extra)!r}; accepted: {accepted_str}"
+            f"{factory_name}() got unexpected keyword argument(s) " f"{sorted(extra)!r}; accepted: {accepted_str}"
         )
 
 
