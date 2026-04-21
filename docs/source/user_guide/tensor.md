@@ -18,8 +18,8 @@ and [`matrix_vector`](matrix_vector.md) for the underlying tensor primitives.
 
 | Member | Underlying type | When to prefer |
 |---|---|---|
-| `qd.Backend.FIELD` | `qd.field` | Faster at runtime; recompiles when any dimension size changes. Best for tensors whose shape is effectively static across a run. |
-| `qd.Backend.NDARRAY` | `qd.ndarray` | Slightly slower at runtime but avoids recompilation when sizes change. Best for tensors whose shape varies frequently (dynamic batch sizes, growing buffers). |
+| `qd.Backend.FIELD` | `qd.field` | Faster at runtime; recompiles when any dimension size changes. |
+| `qd.Backend.NDARRAY` | `qd.ndarray` | Slightly slower at runtime but avoids recompilation when sizes change. |
 
 ```python
 import quadrants as qd
