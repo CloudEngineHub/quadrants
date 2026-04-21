@@ -26,9 +26,7 @@ def _with_layout(ndarray, layout):
     layout = tuple(layout)
     ndim = len(ndarray.shape)
     if len(layout) != ndim:
-        raise ValueError(
-            f"layout has {len(layout)} entries but ndarray has {ndim} dims"
-        )
+        raise ValueError(f"layout has {len(layout)} entries but ndarray has {ndim} dims")
     if sorted(layout) != list(range(ndim)):
         raise ValueError(f"layout={layout!r} is not a permutation of range({ndim})")
     ndarray._qd_layout = layout
