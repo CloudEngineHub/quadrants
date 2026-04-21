@@ -152,9 +152,7 @@ fill(a)   # field branch
 fill(b)   # ndarray branch
 ```
 
-Each backend gets its own kernel-cache entry, so swapping backends triggers
-recompilation only for the branch that changed. Layout-tagged ndarrays are
-respected too:
+Layout-tagged ndarrays are respected too:
 
 ```python
 c = qd.tensor(qd.f32, shape=(2, 3), backend=qd.Backend.NDARRAY, layout=(1, 0))
