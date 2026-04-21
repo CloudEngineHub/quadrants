@@ -34,92 +34,39 @@ import quadrants as qd
 
 qd.init(arch=qd.x64)
 
-a = qd.tensor(qd.f32, shape=(4, 5))                                 # field (default)
-b = qd.tensor(qd.f32, shape=(4, 5), backend=qd.Backend.NDARRAY)     # ndarray
+a = qd.tensor(qd.f32, shape=(4, 5))                                 # ndarray (default)
+b = qd.tensor(qd.f32, shape=(4, 5), backend=qd.Backend.FIELD)       # field
 
-assert isinstance(a, qd.ScalarField)
-assert isinstance(b, qd.Ndarray)
+assert isinstance(a, qd.Ndarray)
+assert isinstance(b, qd.ScalarField)
 ```
 
-The default backend is `qd.Backend.FIELD` to match the long-standing Quadrants
-default.
-
-Any extra keyword arguments are forwarded verbatim to the underlying
-`qd.field` or `qd.ndarray` call, so backend-specific options remain available:
-
-```python
-# Field-only kwargs like order= just pass through.
-c = qd.tensor(qd.f32, shape=(4, 5), order="ji")
-```
-
-Passing a non-`Backend` value raises `ValueError`:
-
-```python
-qd.tensor(qd.f32, shape=(3,), backend="field")  # ValueError
-```
-
-Integer values (`0`, `1`) are accepted because `Backend` is an `IntEnum`, but
-prefer the named members for clarity at call sites.
+The default backend is `qd.Backend.NDARRAY`: it avoids recompilation when
+sizes change, which matters more in practice than the slightly higher per-
+launch cost. Opt into `qd.Backend.FIELD` when a tensor's shape is genuinely
+fixed for a run and you want the runtime speedup.
 
 ## Vector and matrix tensors
 
-For tensors whose elements are vectors or matrices, use `qd.tensor_vec` and
-`qd.tensor_mat`. They dispatch over `qd.Vector.field` / `qd.Vector.ndarray`
-and `qd.Matrix.field` / `qd.Matrix.ndarray` respectively, with the same
-`backend=` keyword:
+For tensors whose elements are vectors or matrices, use `qd.Vector.tensor`
+and `qd.Matrix.tensor`. They dispatch over `qd.Vector.field` /
+`qd.Vector.ndarray` and `qd.Matrix.field` / `qd.Matrix.ndarray` respectively,
+with the same `backend=` keyword:
 
 ```python
 import quadrants as qd
 
 qd.init(arch=qd.x64)
 
-# A 1-D tensor of 4 length-3 vectors, on the field backend (default).
-v = qd.tensor_vec(3, qd.f32, shape=(4,))
+# A 1-D tensor of 4 length-3 vectors (ndarray backend, default).
+v = qd.Vector.tensor(3, qd.f32, shape=(4,))
 
-# Same shape, on the ndarray backend.
-u = qd.tensor_vec(3, qd.f32, shape=(4,), backend=qd.Backend.NDARRAY)
+# Same shape, on the field backend.
+u = qd.Vector.tensor(3, qd.f32, shape=(4,), backend=qd.Backend.FIELD)
 
-# A 1-D tensor of 3 (2x2) matrices, on the field backend.
-m = qd.tensor_mat(2, 2, qd.f32, shape=(3,))
+# A 1-D tensor of 3 (2x2) matrices, ndarray backend.
+m = qd.Matrix.tensor(2, 2, qd.f32, shape=(3,))
 ```
-
-These match the existing `qd.Vector.*` / `qd.Matrix.*` factories one-for-one;
-`qd.tensor_vec` / `qd.tensor_mat` simply add the per-tensor `backend=` knob.
-
-## Annotating kernel arguments: `qd.tensor_annotation`
-
-Kernel parameter annotations differ between the two backends — fields use
-`qd.template()` and ndarrays use `qd.types.ndarray()`. To avoid sprinkling
-`if`/`else` blocks across every kernel signature, pick the annotation **once**
-at module load time:
-
-```python
-import quadrants as qd
-
-# Choose your run-wide backend in one place.
-BACKEND = qd.Backend.NDARRAY
-V_ANNOTATION = qd.tensor_annotation(BACKEND)
-
-qd.init(arch=qd.x64)
-
-@qd.kernel
-def fill(x: V_ANNOTATION):
-    for i in range(x.shape[0]):
-        x[i] = i
-
-a = qd.tensor(qd.i32, shape=(4,), backend=BACKEND)
-fill(a)
-```
-
-The returned object is interchangeable with its direct equivalent:
-
-| `backend` | `qd.tensor_annotation(backend)` returns | Equivalent to |
-|---|---|---|
-| `qd.Backend.FIELD` | `qd.template()` instance | `def k(x: qd.template()): ...` |
-| `qd.Backend.NDARRAY` | `qd.types.ndarray()` instance | `def k(x: qd.types.ndarray()): ...` |
-
-This mirrors the one-liner Genesis already uses to switch backends; the
-helper just makes the pattern first-class.
 
 ## Gradients
 
@@ -132,17 +79,17 @@ import quadrants as qd
 
 qd.init(arch=qd.x64)
 
-# Field-backed primal + grad.
+# Ndarray-backed primal + grad (default backend).
 a = qd.tensor(qd.f32, shape=(4,), needs_grad=True)
 assert a.grad is not None
 
-# Same on the ndarray backend.
-b = qd.tensor(qd.f32, shape=(4,), backend=qd.Backend.NDARRAY, needs_grad=True)
+# Same on the field backend.
+b = qd.tensor(qd.f32, shape=(4,), backend=qd.Backend.FIELD, needs_grad=True)
 assert b.grad is not None
 
 # Kernels write through canonical indices on both primal and grad.
 @qd.kernel
-def write_grad(x: qd.template()):
+def write_grad(x: qd.Tensor):
     for i in range(4):
         x.grad[i] = i * 100.0
 
@@ -151,14 +98,12 @@ print(a.grad.to_numpy())   # [0., 100., 200., 300.]
 ```
 
 Gradient buffers always share the canonical shape of the primal, on both
-backends. The `needs_grad` keyword also passes through `qd.tensor_vec` and
-`qd.tensor_mat` for compound element types.
+backends. The `needs_grad` keyword also passes through `qd.Vector.tensor`
+and `qd.Matrix.tensor` for compound element types.
 
 ## Controlling physical layout
 
-Different GPU kernels run best with different physical memory layouts —
-some prefer the batch dimension contiguous (innermost), others want it
-outermost. The `layout=` keyword lets you pick per-tensor:
+The `layout=` keyword lets you pick per-tensor:
 
 ```python
 import quadrants as qd
@@ -183,59 +128,14 @@ assert b.shape == (N, B)        # canonical shape, unchanged
 b[i, j] = ...                   # canonical indexing in kernels still works
 ```
 
-All permutations up to rank 4 are supported (rank limit is Quadrants'
-`quadrants_max_num_indices`, currently 12). `layout=None` and the identity
-permutation (`(0, 1, ..., N-1)`) are equivalent and forward no `order=` to
-the underlying `qd.field`.
+Any permutation is supported, up to Quadrants' `quadrants_max_num_indices`
+(currently 12). `layout=None` and the identity permutation
+(`(0, 1, ..., N-1)`) are equivalent and forward no permutation to the
+underlying allocator.
 
-### `layout=` on the ndarray backend
+## Annotating kernel arguments: `qd.Tensor`
 
-`layout=` works the same way on `qd.Backend.NDARRAY`:
-
-```python
-a = qd.tensor(qd.f32, shape=(N, B), backend=qd.Backend.NDARRAY, layout=(1, 0))
-b = qd.tensor(qd.f32, shape=(2, 3, 4), backend=qd.Backend.NDARRAY, layout=(2, 0, 1))
-```
-
-`shape=` is the **canonical** shape — what you index inside kernels.
-The factory allocates the underlying ndarray at the *physical* (permuted)
-shape and tags it so kernel subscripts are translated automatically:
-
-```python
-a = qd.tensor(qd.i32, shape=(3, 4), backend=qd.Backend.NDARRAY, layout=(1, 0))
-
-@qd.kernel
-def fill(x: qd.types.ndarray()):
-    for i, j in qd.ndrange(3, 4):       # canonical iteration
-        x[i, j] = i * 100 + j           # rewritten to physical x[j, i]
-
-fill(a)
-a.to_numpy().shape == (4, 3)            # physical shape (canonical permuted)
-```
-
-```{note}
-On the ndarray backend, `tensor.shape` currently reports the **physical**
-shape (the underlying `Ndarray` does not yet expose a separate canonical
-view). The `to_numpy()` view is similarly physical. This asymmetry
-between the FIELD and NDARRAY backends will be tightened in a future
-release; the kernel-side semantics are already canonical on both.
-```
-
-`layout=` composes naturally with `needs_grad=True`: the grad SNode
-inherits the same physical permutation as the primal, and both expose the
-canonical shape.
-
-```python
-g = qd.tensor(qd.f32, shape=(4, 5), layout=(1, 0), needs_grad=True)
-assert g.grad.shape == (4, 5)   # canonical
-```
-
-## Polymorphic kernel arguments: `qd.tensor_t`
-
-`qd.tensor_annotation(backend)` lets you pick **one** annotation per run. For
-the rarer case where you'd like the **same kernel object** to accept either
-backend (e.g. for backend-sweep benchmarks, or library code that doesn't want
-to know how its callers allocated their tensors), use `qd.tensor_t`:
+Kernel parameter annotations use `qd.Tensor` regardless of backend:
 
 ```python
 import quadrants as qd
@@ -243,18 +143,18 @@ import quadrants as qd
 qd.init(arch=qd.x64)
 
 @qd.kernel
-def fill(x: qd.tensor_t):
+def fill(x: qd.Tensor):
     for i in range(x.shape[0]):
         x[i] = i
 
 a = qd.tensor(qd.f32, shape=(4,), backend=qd.Backend.FIELD)
 b = qd.tensor(qd.f32, shape=(4,), backend=qd.Backend.NDARRAY)
 
-fill(a)   # field branch — compiled like qd.template()
-fill(b)   # ndarray branch — compiled like qd.types.ndarray()
+fill(a)   # field branch
+fill(b)   # ndarray branch
 ```
 
-Each branch gets its own kernel-cache entry, so swapping backends triggers
+Each backend gets its own kernel-cache entry, so swapping backends triggers
 recompilation only for the branch that changed. Layout-tagged ndarrays are
 respected too:
 
@@ -262,11 +162,6 @@ respected too:
 c = qd.tensor(qd.f32, shape=(2, 3), backend=qd.Backend.NDARRAY, layout=(1, 0))
 fill_2d(c)   # ndarray branch + layout-aware subscript rewrite
 ```
-
-Genesis-style code that already picks a backend at module load should keep
-using `qd.tensor_annotation(backend)` — it has zero runtime dispatch and
-matches today's homogeneous-per-run usage. Reach for `qd.tensor_t` when you
-genuinely need both branches alive at once.
 
 Quadrants rejects mismatched / invalid layouts up front:
 
