@@ -32,12 +32,12 @@ import weakref
 from dataclasses import _FIELD, _FIELDS
 from typing import Any, Union
 
+from quadrants._lib import core as _qd_core
 from quadrants._tensor import (
     _TENSOR_T_FIELD_MARKER,
     _TENSOR_T_NDARRAY_MARKER,
     _TensorTAnnotation,
 )
-from quadrants._lib import core as _qd_core
 from quadrants.lang._dataclass_util import create_flat_name
 from quadrants.lang._ndarray import Ndarray
 from quadrants.lang.any_array import AnyArray
@@ -93,9 +93,7 @@ def _extract_arg(raise_on_templated_floats: bool, arg: Any, annotation: Annotati
         # entry is distinct from the ndarray branch above.
         annotation = template
         annotation_type = type(template)
-        return (_TENSOR_T_FIELD_MARKER,) + (
-            _extract_arg(raise_on_templated_floats, arg, template, arg_name),
-        )
+        return (_TENSOR_T_FIELD_MARKER,) + (_extract_arg(raise_on_templated_floats, arg, template, arg_name),)
     if annotation is template or annotation_type is template:
         if arg_type is SNode:
             return arg.ptr

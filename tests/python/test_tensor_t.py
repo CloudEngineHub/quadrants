@@ -7,13 +7,11 @@ entries for each branch.
 """
 
 import numpy as np
-import pytest
 
 import quadrants as qd
 from quadrants._tensor import _TensorTAnnotation
 
 from tests import test_utils
-
 
 # ----------------------------------------------------------------------------
 # Singleton + identity

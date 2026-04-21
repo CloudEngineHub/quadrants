@@ -4,14 +4,14 @@ import ast
 import dataclasses
 from typing import Any, Callable
 
+from quadrants._lib.core.quadrants_python import (
+    BoundaryMode,
+    DataTypeCxx,
+)
 from quadrants._tensor import (
     _TENSOR_T_FIELD_MARKER,
     _TENSOR_T_NDARRAY_MARKER,
     _TensorTAnnotation,
-)
-from quadrants._lib.core.quadrants_python import (
-    BoundaryMode,
-    DataTypeCxx,
 )
 from quadrants.lang import (
     _ndarray,
