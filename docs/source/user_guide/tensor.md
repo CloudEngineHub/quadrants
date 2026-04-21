@@ -139,6 +139,39 @@ qd.tensor(qd.f32, shape=(4, 5), layout=(0, 0))      # ValueError: not a permutat
 qd.tensor(qd.f32, shape=(4, 5), order="ji")         # TypeError: use layout=
 ```
 
+## Interop with NumPy and PyTorch
+
+Every Python-side accessor — `tensor.shape`, `tensor.to_numpy()`,
+`tensor.from_numpy(...)`, `tensor.to_dlpack()` (and therefore anything
+built on top of it like `torch.utils.dlpack.from_dlpack`) — returns the
+**canonical view**: the shape you passed at allocation time, indexed in
+canonical axis order.
+
+`layout=` is purely an internal performance hint. The data lives in
+permuted physical storage, but Python callers never have to reason
+about that:
+
+```python
+a = qd.tensor(qd.f32, shape=(N, B), layout=(1, 0))
+assert a.shape == (N, B)                 # canonical
+assert a.to_numpy().shape == (N, B)      # canonical view of the same data
+
+# Round-trips work in canonical-shape terms.
+src = np.zeros((N, B), dtype=np.float32)
+a.from_numpy(src)
+assert (a.to_numpy() == src).all()
+
+# DLPack carries the canonical shape with permuted strides; the
+# resulting torch tensor is a transposed view of the underlying buffer
+# (no data movement until you call ``.contiguous()``).
+import torch
+t = torch.utils.dlpack.from_dlpack(a.to_dlpack())
+assert tuple(t.shape) == (N, B)
+```
+
+Gradient buffers behave identically: `a.grad.to_numpy()` returns the
+canonical view of the gradient.
+
 ## Annotating kernel arguments: `qd.Tensor`
 
 Kernel parameter annotations use `qd.Tensor` regardless of backend:

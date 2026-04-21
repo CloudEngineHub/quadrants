@@ -46,7 +46,7 @@ def _canonical_to_physical(idx, layout):
 def test_layout_rank4_all_permutations_full_grid(layout):
     qd.init(arch=qd.x64)
     canonical = (2, 2, 3, 2)
-    a, physical = _allocate_with_layout(canonical, layout)
+    a, _ = _allocate_with_layout(canonical, layout)
 
     @qd.kernel
     def fill(x: qd.types.ndarray()):
@@ -55,11 +55,11 @@ def test_layout_rank4_all_permutations_full_grid(layout):
 
     fill(a)
     arr = a.to_numpy()
-    assert arr.shape == physical
+    # to_numpy() returns the canonical view regardless of layout.
+    assert arr.shape == canonical
     for ci in itertools.product(*[range(d) for d in canonical]):
         expected = ci[0] * 1000 + ci[1] * 100 + ci[2] * 10 + ci[3]
-        physical_idx = _canonical_to_physical(ci, layout)
-        assert arr[physical_idx] == expected, (layout, ci, physical_idx, arr[physical_idx], expected)
+        assert arr[ci] == expected, (layout, ci, arr[ci], expected)
 
 
 # ----------------------------------------------------------------------------
@@ -80,7 +80,7 @@ _RANK5_LAYOUTS = [
 def test_layout_rank5_spot_checks(layout):
     qd.init(arch=qd.x64)
     canonical = (2, 2, 2, 2, 2)
-    a, physical = _allocate_with_layout(canonical, layout)
+    a, _ = _allocate_with_layout(canonical, layout)
 
     @qd.kernel
     def fill(x: qd.types.ndarray()):
@@ -89,12 +89,10 @@ def test_layout_rank5_spot_checks(layout):
 
     fill(a)
     arr = a.to_numpy()
-    assert arr.shape == physical
-    # Spot-check every cell — 32 of them, cheap.
+    assert arr.shape == canonical
     for ci in itertools.product(*[range(d) for d in canonical]):
         expected = ci[0] * 10000 + ci[1] * 1000 + ci[2] * 100 + ci[3] * 10 + ci[4]
-        physical_idx = _canonical_to_physical(ci, layout)
-        assert arr[physical_idx] == expected
+        assert arr[ci] == expected
 
 
 # ----------------------------------------------------------------------------
@@ -113,7 +111,7 @@ def test_layout_rank5_spot_checks(layout):
 def test_layout_rank6_spot_checks(layout):
     qd.init(arch=qd.x64)
     canonical = (2, 2, 2, 2, 2, 2)
-    a, physical = _allocate_with_layout(canonical, layout)
+    a, _ = _allocate_with_layout(canonical, layout)
 
     @qd.kernel
     def fill(x: qd.types.ndarray()):
@@ -122,10 +120,10 @@ def test_layout_rank6_spot_checks(layout):
 
     fill(a)
     arr = a.to_numpy()
-    assert arr.shape == physical
+    assert arr.shape == canonical
     for ci in itertools.product(*[range(d) for d in canonical]):
         expected = ci[0] * 100000 + ci[1] * 10000 + ci[2] * 1000 + ci[3] * 100 + ci[4] * 10 + ci[5]
-        assert arr[_canonical_to_physical(ci, layout)] == expected
+        assert arr[ci] == expected
 
 
 # ----------------------------------------------------------------------------
@@ -137,7 +135,7 @@ def test_layout_rank6_spot_checks(layout):
 def test_layout_rank4_augassign_and_grad():
     layout = (3, 0, 2, 1)
     canonical = (2, 3, 2, 2)
-    a, physical = _allocate_with_layout(canonical, layout, dtype=qd.f32, needs_grad=True)
+    a, _ = _allocate_with_layout(canonical, layout, dtype=qd.f32, needs_grad=True)
 
     @qd.kernel
     def init(x: qd.types.ndarray()):
@@ -156,13 +154,12 @@ def test_layout_rank4_augassign_and_grad():
 
     primal = a.to_numpy()
     grad = a.grad.to_numpy()
-    assert primal.shape == grad.shape == physical
+    assert primal.shape == grad.shape == canonical
     for ci in itertools.product(*[range(d) for d in canonical]):
-        physical_idx = _canonical_to_physical(ci, layout)
         expected_p = ci[0] * 1000 + ci[1] * 100 + ci[2] * 10 + ci[3] + 1
         expected_g = ci[0] * 10 + ci[1] + 100
-        assert primal[physical_idx] == expected_p
-        assert grad[physical_idx] == expected_g
+        assert primal[ci] == expected_p
+        assert grad[ci] == expected_g
 
 
 # ----------------------------------------------------------------------------
@@ -200,4 +197,11 @@ def test_layout_rank4_tagged_matches_direct_permuted():
 
     fill_tagged(tagged)
     fill_direct(direct)
-    np.testing.assert_array_equal(tagged.to_numpy(), direct.to_numpy())
+    # ``tagged.to_numpy()`` is canonical-shaped (M, N, ...); ``direct``
+    # holds the same canonical data but laid out at the *physical* shape.
+    # Transposing ``direct`` by the inverse permutation recovers the
+    # canonical view, which must then equal ``tagged.to_numpy()``.
+    invperm = [0] * len(layout)
+    for src, dst in enumerate(layout):
+        invperm[dst] = src
+    np.testing.assert_array_equal(tagged.to_numpy(), np.transpose(direct.to_numpy(), invperm))

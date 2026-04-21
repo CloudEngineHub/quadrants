@@ -28,6 +28,27 @@ if TYPE_CHECKING:
     TensorNdarray = Union["ScalarNdarray", VectorNdarray, MatrixNdarray]
 
 
+def _invert_layout(layout):
+    """Return the inverse permutation of ``layout`` as a tuple.
+
+    ``layout`` lists the *canonical* axis index at each successive
+    physical-memory axis (outermost first). The inverse maps each
+    canonical axis back to the physical-memory axis it lives on, which
+    is exactly what numpy's ``transpose(axes=)`` and DLPack's
+    ``shape`` / ``strides`` arrays consume.
+    """
+    n = len(layout)
+    inv = [0] * n
+    for src, dst in enumerate(layout):
+        inv[dst] = src
+    return tuple(inv)
+
+
+def _is_identity_layout(layout):
+    """``True`` if ``layout`` is ``None`` or the identity permutation."""
+    return layout is None or layout == tuple(range(len(layout)))
+
+
 class Ndarray:
     """Quadrants ndarray class.
 
@@ -65,9 +86,20 @@ class Ndarray:
                     prog.delete_ndarray(arr)
 
     def to_dlpack(self):
+        """Export this ndarray as a DLPack capsule.
+
+        The returned capsule carries the *canonical* shape and a
+        permuted strides array on layout-tagged ndarrays, so consumers
+        (`torch.utils.dlpack.from_dlpack`, etc.) see a transposed view
+        of the physical buffer with no data movement. On untagged
+        ndarrays this is byte-identical to the legacy export.
+        """
         if impl.current_cfg().arch == _arch_metal:
             impl.get_runtime().sync()
-        return impl.get_runtime().prog.ndarray_to_dlpack(self, self.arr)
+        layout = getattr(self, "_qd_layout", None)
+        if _is_identity_layout(layout):
+            return impl.get_runtime().prog.ndarray_to_dlpack(self, self.arr)
+        return impl.get_runtime().prog.ndarray_to_dlpack(self, self.arr, list(layout))
 
     def _reset(self):
         """
@@ -93,18 +125,17 @@ class Ndarray:
         On an untagged ndarray (no layout, or identity layout) physical
         and canonical coincide and this returns the physical shape.
 
-        ``to_numpy()`` deliberately keeps returning the *physical* view —
-        it is the explicit physical-view escape hatch.
+        ``to_numpy()`` / ``to_torch()`` / ``to_dlpack()`` also return
+        canonical views (with ``_qd_layout`` reflected as a non-identity
+        stride pattern on the DLPack side); the layout is purely an
+        internal performance hint.
         """
         phys = self._physical_shape
         layout = getattr(self, "_qd_layout", None)
         if phys is None or layout is None:
             return phys
-        n = len(phys)
-        inv = [0] * n
-        for src_axis, dst_axis in enumerate(layout):
-            inv[dst_axis] = src_axis
-        return tuple(phys[inv[i]] for i in range(n))
+        inv = _invert_layout(layout)
+        return tuple(phys[inv[i]] for i in range(len(phys)))
 
     def get_type(self):
         return NdarrayTypeMetadata(self.element_type, self._physical_shape, self.grad is not None)
@@ -164,14 +195,23 @@ class Ndarray:
     def _ndarray_to_numpy(self):
         """Converts ndarray to a numpy array.
 
+        Returns the *canonical* view: on a layout-tagged ndarray the
+        underlying buffer is read at its physical shape and the result
+        is transposed back into canonical axis order so callers always
+        see the shape they passed to ``qd.tensor(..., shape=)``. On an
+        untagged ndarray this is a no-op transpose (identity layout).
+
         Returns:
-            numpy.ndarray: The result numpy array.
+            numpy.ndarray: The result numpy array, in canonical axis order.
         """
         arr = np.zeros(shape=self.arr.total_shape(), dtype=to_numpy_type(self.dtype))
         from quadrants._kernels import ndarray_to_ext_arr  # pylint: disable=C0415
 
         ndarray_to_ext_arr(self, arr)
         impl.get_runtime().sync()
+        layout = getattr(self, "_qd_layout", None)
+        if not _is_identity_layout(layout):
+            arr = np.transpose(arr, _invert_layout(layout))
         return arr
 
     @python_scope
@@ -195,13 +235,25 @@ class Ndarray:
     def _ndarray_from_numpy(self, arr):
         """Loads all values from a numpy array.
 
+        ``arr.shape`` is validated against the *canonical* shape (what
+        ``self.shape`` reports). On a layout-tagged ndarray the input is
+        permuted into the underlying physical-storage axis order before
+        being staged into the buffer, so callers don't have to reason
+        about the physical layout at all.
+
         Args:
-            arr (numpy.ndarray): The source numpy array.
+            arr (numpy.ndarray): The source numpy array, in canonical
+                axis order.
         """
         if not isinstance(arr, np.ndarray):
             raise TypeError(f"{np.ndarray} expected, but {type(arr)} provided")
-        if tuple(self.arr.total_shape()) != tuple(arr.shape):
-            raise ValueError(f"Mismatch shape: {tuple(self.arr.shape)} expected, but {tuple(arr.shape)} provided")
+        canonical_shape = tuple(self.shape)
+        if canonical_shape != tuple(arr.shape):
+            raise ValueError(f"Mismatch shape: {canonical_shape} expected, but {tuple(arr.shape)} provided")
+        layout = getattr(self, "_qd_layout", None)
+        if not _is_identity_layout(layout):
+            # canonical -> physical: see _invert_layout docstring for the derivation.
+            arr = np.transpose(arr, layout)
         if not arr.flags.c_contiguous:
             arr = np.ascontiguousarray(arr)
 

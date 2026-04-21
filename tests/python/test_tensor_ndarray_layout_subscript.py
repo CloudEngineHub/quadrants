@@ -1,19 +1,19 @@
 """Tests for the AnyArray subscript-rewrite.
 
-Covers the metadata-flow + AST-rewrite plumbing only — the user-facing
-``qd.tensor(..., backend=NDARRAY, layout=...)`` enable-and-physical-shape
-remapping lands in an earlier change. To exercise the rewrite end-to-end without
-that, this file uses the internal ``_with_layout`` helper to tag an
+Covers the metadata-flow + AST-rewrite plumbing only. To exercise the
+rewrite end-to-end without going through the public ``qd.tensor``
+factory, this file uses the internal ``_with_layout`` helper to tag an
 ndarray allocated at the *physical* shape with a canonical-axis layout.
 
-Conventions (read carefully — user-facing semantics will be different in an earlier change):
+Conventions:
 - The ndarray is allocated at the **physical** shape, then tagged.
-- ``ndarray.shape`` continues to report the physical shape (an earlier change will
-  switch this to canonical).
+- ``ndarray.shape`` reports the **canonical** shape (the inverse
+  permutation of the physical shape under the tag).
 - Inside a kernel, indices are interpreted as **canonical**: ``x[i, j]``
   means logical index ``(i, j)`` and the rewrite turns it into physical
   ``(j, i)`` for ``layout=(1, 0)``.
-- ``to_numpy()`` returns the physical buffer.
+- ``to_numpy()`` returns the **canonical** view (a transposed view of
+  the underlying physical buffer; no data movement on the kernel side).
 """
 
 import itertools
@@ -73,12 +73,13 @@ def test_subscript_identity_layout_is_byte_identical():
 def test_subscript_rank2_transpose_layout_matches_transposed_storage():
     """layout=(1, 0): canonical x[i, j] -> physical[j, i].
 
-    Allocate two ndarrays of mirrored physical shape:
-    - direct: physical (3, 4); kernel writes x[i, j] in canonical (3, 4) order.
+    Allocate two ndarrays:
+    - direct: canonical (3, 4); kernel writes x[i, j] in canonical order.
     - tagged: physical (4, 3); tagged with layout=(1, 0) so canonical shape is (3, 4).
       Kernel iterates the canonical (3, 4) range and writes x[i, j].
       Rewrite turns this into physical[j, i].
-    Therefore tagged.to_numpy() == direct.to_numpy().T.
+    Both ``to_numpy()`` calls return the canonical view, so the two arrays
+    must compare equal element-for-element.
     """
     M, N = 3, 4
     direct = qd.tensor(qd.i32, shape=(M, N), backend=qd.Backend.NDARRAY)
@@ -92,12 +93,12 @@ def test_subscript_rank2_transpose_layout_matches_transposed_storage():
 
     fill(direct)
     fill(tagged_phys)
-    np.testing.assert_array_equal(direct.to_numpy(), tagged_phys.to_numpy().T)
+    np.testing.assert_array_equal(direct.to_numpy(), tagged_phys.to_numpy())
 
 
 @test_utils.test(arch=qd.cpu)
 def test_subscript_rank2_transpose_layout_explicit_value_check():
-    """Spot-check exact physical positions after a layout=(1, 0) rewrite."""
+    """Spot-check exact canonical positions after a layout=(1, 0) rewrite."""
     M, N = 3, 4
     a_phys = qd.tensor(qd.i32, shape=(N, M), backend=qd.Backend.NDARRAY)
     _with_layout(a_phys, (1, 0))
@@ -109,11 +110,11 @@ def test_subscript_rank2_transpose_layout_explicit_value_check():
 
     fill(a_phys)
     arr = a_phys.to_numpy()
-    assert arr.shape == (N, M)
-    # canonical (i=2, j=3) -> physical (3, 2) holds 203
-    assert arr[3, 2] == 203
-    assert arr[1, 0] == 1
-    assert arr[0, 1] == 100
+    # Canonical view: shape and indices match what the kernel wrote.
+    assert arr.shape == (M, N)
+    assert arr[2, 3] == 203
+    assert arr[0, 1] == 1
+    assert arr[1, 0] == 100
 
 
 @pytest.mark.parametrize("layout", list(itertools.permutations(range(3))))
@@ -134,12 +135,11 @@ def test_subscript_rank3_all_permutations(layout):
 
     fill(a_phys)
     arr = a_phys.to_numpy()
-    assert arr.shape == physical_shape
-    # Check every cell.
+    # to_numpy() returns the canonical view regardless of layout.
+    assert arr.shape == canonical_shape
     canonical_idx = (1, 2, 3)
-    physical_idx = tuple(canonical_idx[axis] for axis in layout)
     expected = canonical_idx[0] * 100 + canonical_idx[1] * 10 + canonical_idx[2]
-    assert arr[physical_idx] == expected
+    assert arr[canonical_idx] == expected
 
 
 # ----------------------------------------------------------------------------
@@ -167,9 +167,9 @@ def test_subscript_layout_augassign_rank2():
     init(a_phys)
     add(a_phys)
     arr = a_phys.to_numpy()
-    assert arr.shape == (N, M)
-    # canonical (i=1, j=2) -> physical (2, 1) initially 12, after += 1000 -> 1012
-    assert arr[2, 1] == 1012
+    # Canonical view; canonical (i=1, j=2) initially 12, after += 1000 -> 1012.
+    assert arr.shape == (M, N)
+    assert arr[1, 2] == 1012
     assert arr[0, 0] == 1000
 
 
@@ -194,10 +194,10 @@ def test_subscript_layout_grad_inherits_layout():
     fill(a_phys)
     primal = a_phys.to_numpy()
     grad = a_phys.grad.to_numpy()
-    assert primal.shape == grad.shape == (N, M)
-    # canonical (1, 2) -> physical (2, 1)
-    assert primal[2, 1] == 12.0
-    assert grad[2, 1] == 120.0
+    # Canonical view on both primal and grad.
+    assert primal.shape == grad.shape == (M, N)
+    assert primal[1, 2] == 12.0
+    assert grad[1, 2] == 120.0
 
 
 # ----------------------------------------------------------------------------

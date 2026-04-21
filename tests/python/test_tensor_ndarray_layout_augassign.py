@@ -69,12 +69,11 @@ def test_layout_augassign_add_sub_mul_floordiv():
     floordiv(a)
 
     arr = a.to_numpy()
-    # canonical (i, j) -> physical (j, i); value progression:
-    # ((i+1)*100 + j + 7 - 3) * 2 // 4
+    # to_numpy() returns the canonical view; index canonically.
     for i in range(M):
         for j in range(N):
             expected = (((i + 1) * 100 + j + 7 - 3) * 2) // 4
-            assert arr[j, i] == expected, (i, j, arr[j, i], expected)
+            assert arr[i, j] == expected, (i, j, arr[i, j], expected)
 
 
 # ----------------------------------------------------------------------------
@@ -103,7 +102,7 @@ def test_layout_read_write_same_index():
     arr = a.to_numpy()
     for i in range(M):
         for j in range(N):
-            assert arr[j, i] == (i * 10 + j) * 3
+            assert arr[i, j] == (i * 10 + j) * 3
 
 
 # ----------------------------------------------------------------------------
@@ -133,11 +132,11 @@ def test_layout_neighbour_dependence_along_canonical_j():
     cumulate(a)
 
     arr = a.to_numpy()
-    # arr is physical shape (N, M); canonical (i, j) lives at arr[j, i].
+    # to_numpy() returns the canonical view; index canonically.
     expected_j = [1, 3, 6, 10, 15]
     for i in range(M):
         for j in range(N):
-            assert arr[j, i] == expected_j[j]
+            assert arr[i, j] == expected_j[j]
 
 
 # ----------------------------------------------------------------------------
@@ -170,9 +169,11 @@ def test_layout_mixed_with_untagged_in_same_kernel():
 
     src_np = src.to_numpy()
     dst_np = dst.to_numpy()
+    # Both ``to_numpy()`` return canonical views, so the two arrays
+    # compare equal element-for-element regardless of dst's tag.
     assert src_np.shape == (M, N)
-    assert dst_np.shape == (N, M)
-    np.testing.assert_array_equal(src_np, dst_np.T)
+    assert dst_np.shape == (M, N)
+    np.testing.assert_array_equal(src_np, dst_np)
 
 
 # ----------------------------------------------------------------------------
@@ -209,10 +210,10 @@ def test_layout_three_tagged_operands_one_expression():
     expr(a, b, c, out)
 
     arr = out.to_numpy()
-    assert arr.shape == (N, M)
+    assert arr.shape == (M, N)
     for i in range(M):
         for j in range(N):
-            assert arr[j, i] == (i + 1) + (j + 1) * (i + 1) * (j + 1)
+            assert arr[i, j] == (i + 1) + (j + 1) * (i + 1) * (j + 1)
 
 
 # ----------------------------------------------------------------------------

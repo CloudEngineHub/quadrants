@@ -9,9 +9,9 @@ Contract verified here:
 - ``shape`` is the **canonical** shape the user indexes inside kernels;
   ``Ndarray.shape`` inverts the layout permutation when ``_qd_layout``
   is set so the user-facing contract is consistent across backends.
-- The underlying allocation is sized to the *physical* (permuted) shape;
-  ``to_numpy()`` is the explicit physical-view escape hatch and still
-  returns the physical shape.
+- The underlying allocation is sized to the *physical* (permuted) shape
+  (``_physical_shape``), but ``to_numpy()`` permutes back to the
+  canonical view so callers never have to reason about the layout.
 - The instance is auto-tagged with ``_qd_layout`` so kernel subscripts
   ``x[i, j, ...]`` are rewritten correctly.
 - ``order=`` is still rejected as a keyword.
@@ -95,11 +95,12 @@ def test_factory_validates_layout_is_permutation():
 
 
 @test_utils.test(arch=qd.cpu)
-def test_factory_layout_rank2_transpose_matches_direct_transpose():
+def test_factory_layout_rank2_transpose_matches_direct_canonical():
     """Same kernel + same canonical shape, two ndarrays:
     - direct (no layout): canonical == physical == (3, 4).
     - factory-tagged (layout=(1, 0)): canonical == (3, 4), physical == (4, 3).
-    Their numpy views must be transposes of each other.
+    ``to_numpy()`` returns the canonical view in both cases, so the two
+    numpy arrays must compare equal element-for-element.
     """
     M, N = 3, 4
     direct = qd.tensor(qd.i32, shape=(M, N), backend=qd.Backend.NDARRAY)
@@ -113,7 +114,7 @@ def test_factory_layout_rank2_transpose_matches_direct_transpose():
     fill(direct)
     fill(tagged)
 
-    np.testing.assert_array_equal(direct.to_numpy(), tagged.to_numpy().T)
+    np.testing.assert_array_equal(direct.to_numpy(), tagged.to_numpy())
 
 
 @test_utils.test(arch=qd.cpu)
@@ -128,11 +129,12 @@ def test_factory_layout_rank2_value_check():
 
     fill(a)
     arr = a.to_numpy()
-    assert arr.shape == (N, M)
-    # canonical (i=2, j=3) -> physical (3, 2)
-    assert arr[3, 2] == 203
-    assert arr[1, 0] == 1
-    assert arr[0, 1] == 100
+    # to_numpy() returns the canonical view: shape and indices match
+    # what the kernel wrote, regardless of physical layout.
+    assert arr.shape == (M, N)
+    assert arr[2, 3] == 203
+    assert arr[0, 1] == 1
+    assert arr[1, 0] == 100
 
 
 @pytest.mark.parametrize("layout", list(itertools.permutations(range(3))))
@@ -158,10 +160,12 @@ def test_factory_layout_rank3_all_permutations(layout):
 
     fill(a)
     arr = a.to_numpy()
+    # to_numpy() returns the canonical view, so canonical indices work
+    # directly regardless of layout.
+    assert arr.shape == canonical
     canonical_idx = (1, 2, 3)
-    physical_idx = tuple(canonical_idx[axis] for axis in layout)
     expected = canonical_idx[0] * 100 + canonical_idx[1] * 10 + canonical_idx[2]
-    assert arr[physical_idx] == expected
+    assert arr[canonical_idx] == expected
 
 
 # ----------------------------------------------------------------------------
@@ -189,9 +193,9 @@ def test_factory_layout_augassign():
     init(a)
     add(a)
     arr = a.to_numpy()
-    assert arr.shape == (N, M)
-    # canonical (i=1, j=2) -> physical (2, 1)
-    assert arr[2, 1] == 1012
+    # to_numpy() returns the canonical view.
+    assert arr.shape == (M, N)
+    assert arr[1, 2] == 1012
     assert arr[0, 0] == 1000
 
 
@@ -223,10 +227,11 @@ def test_factory_layout_needs_grad_inherits_layout():
     fill(a)
     primal = a.to_numpy()
     grad = a.grad.to_numpy()
-    # to_numpy returns the physical view (the explicit escape hatch).
-    assert primal.shape == grad.shape == (N, M)
-    assert primal[2, 1] == 12.0
-    assert grad[2, 1] == 120.0
+    # to_numpy() returns the canonical view; both primal and grad
+    # report canonical shape and canonical-indexed values.
+    assert primal.shape == grad.shape == (M, N)
+    assert primal[1, 2] == 12.0
+    assert grad[1, 2] == 120.0
 
 
 # ----------------------------------------------------------------------------

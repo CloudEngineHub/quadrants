@@ -296,7 +296,10 @@ pybind11::capsule field_to_dlpack(Program *program, SNode *snode, int element_nd
   return capsule;
 }
 
-pybind11::capsule ndarray_to_dlpack(Program *program, pybind11::object owner, Ndarray *ndarray) {
+pybind11::capsule ndarray_to_dlpack(Program *program,
+                                    pybind11::object owner,
+                                    Ndarray *ndarray,
+                                    const std::vector<int> &layout) {
   Arch arch = program->compile_config().arch;
   validate_arch(arch);
 
@@ -315,16 +318,50 @@ pybind11::capsule ndarray_to_dlpack(Program *program, pybind11::object owner, Nd
   void *raw_ptr = nullptr;
   std::tie(raw_ptr, device_type) = get_raw_ptr(arch, program, devalloc);
 
+  // ``ndarray_shape`` is the *physical* (storage) shape of the buffer.
+  // When ``layout`` is non-empty it lists the canonical-axis index at
+  // each successive physical-memory axis (outermost first). We expose
+  // a *canonical* view to DLPack consumers by permuting both the
+  // shape and the strides via the inverse permutation, leaving the
+  // raw pointer and byte offset untouched (no data movement).
   std::vector<int> ndarray_shape = ndarray->total_shape();
   int ndim = ndarray_shape.size();
 
-  int64_t *shape = nullptr;
-  if (ndim > 0) {
-    shape = new int64_t[ndim];
-    std::copy(ndarray_shape.begin(), ndarray_shape.end(), shape);
+  if (!layout.empty() && static_cast<int>(layout.size()) != ndim) {
+    QD_ERROR("ndarray_to_dlpack: layout has wrong size for this ndarray");
   }
 
-  int64_t *strides = calc_strides(shape, ndim);
+  int64_t *shape = nullptr;
+  int64_t *strides = nullptr;
+  if (ndim > 0) {
+    int64_t *phys_shape = new int64_t[ndim];
+    std::copy(ndarray_shape.begin(), ndarray_shape.end(), phys_shape);
+    int64_t *phys_strides = calc_strides(phys_shape, ndim);
+
+    if (layout.empty()) {
+      shape = phys_shape;
+      strides = phys_strides;
+    } else {
+      // Build the inverse permutation: invperm[layout[i]] = i.
+      std::vector<int> invperm(ndim, 0);
+      for (int i = 0; i < ndim; i++) {
+        if (layout[i] < 0 || layout[i] >= ndim) {
+          delete[] phys_shape;
+          delete[] phys_strides;
+          QD_ERROR("ndarray_to_dlpack: layout entry out of range");
+        }
+        invperm[layout[i]] = i;
+      }
+      shape = new int64_t[ndim];
+      strides = new int64_t[ndim];
+      for (int j = 0; j < ndim; j++) {
+        shape[j] = phys_shape[invperm[j]];
+        strides[j] = phys_strides[invperm[j]];
+      }
+      delete[] phys_shape;
+      delete[] phys_strides;
+    }
+  }
 
   DataType ndarray_data_type = ndarray->get_element_data_type();
   uint8_t data_type_code = kDLInt;

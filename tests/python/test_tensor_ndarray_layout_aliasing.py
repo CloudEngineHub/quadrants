@@ -56,10 +56,10 @@ def test_layout_same_ndarray_passed_twice():
 
     write_via_two_handles(a, a)
     arr = a.to_numpy()
-    assert arr.shape == (N, M)
+    assert arr.shape == (M, N)
     for i in range(M):
         for j in range(N):
-            assert arr[j, i] == 7 + i * 10 + j
+            assert arr[i, j] == 7 + i * 10 + j
 
 
 # ----------------------------------------------------------------------------
@@ -85,9 +85,10 @@ def test_layout_persists_across_kernel_calls():
     init(a)
     add(a)
     arr = a.to_numpy()
+    assert arr.shape == (M, N)
     for i in range(M):
         for j in range(N):
-            assert arr[j, i] == 1000 + i * 10 + j
+            assert arr[i, j] == 1000 + i * 10 + j
 
 
 # ----------------------------------------------------------------------------
@@ -110,10 +111,10 @@ def test_layout_repeated_grad_access_in_kernel():
 
     write_grad_repeatedly(a)
     grad = a.grad.to_numpy()
-    assert grad.shape == (N, M)
+    assert grad.shape == (M, N)
     for i in range(M):
         for j in range(N):
-            assert grad[j, i] == i * 100 + j * 10 + 1
+            assert grad[i, j] == i * 100 + j * 10 + 1
 
 
 # ----------------------------------------------------------------------------
@@ -140,9 +141,10 @@ def test_layout_consistent_across_different_kernel_signatures():
     kernel_a(a)
     kernel_b(a)
     arr_np = a.to_numpy()
+    assert arr_np.shape == (M, N)
     for i in range(M):
         for j in range(N):
-            assert arr_np[j, i] == 100 + i * 10 + j
+            assert arr_np[i, j] == 100 + i * 10 + j
 
 
 # ----------------------------------------------------------------------------
@@ -165,7 +167,11 @@ def test_layout_isolated_between_args():
             t[i, j] = i * 10 + j  # rewrite to t[j, i]
 
     k(untagged, tagged)
-    np.testing.assert_array_equal(untagged.to_numpy(), tagged.to_numpy().T)
+    # Both ndarrays were filled by the same kernel writing canonical
+    # values; both ``to_numpy()`` calls return canonical views, so the
+    # numpy arrays compare equal element-for-element regardless of the
+    # tagged ndarray's physical layout.
+    np.testing.assert_array_equal(untagged.to_numpy(), tagged.to_numpy())
 
 
 # ----------------------------------------------------------------------------

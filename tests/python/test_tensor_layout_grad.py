@@ -22,25 +22,21 @@ BACKEND_IDS = ["field", "ndarray"]
 def _to_numpy_shape(canonical, layout, backend):
     """Shape of ``a.to_numpy()`` after a layout-tagged allocation.
 
-    FIELD's ``to_numpy()`` returns the canonical shape regardless of
-    physical storage; NDARRAY's ``to_numpy()`` returns the physical
-    (permuted) view (the explicit physical-view escape hatch).
-
-    Note: ``a.shape`` itself is canonical on both backends — this helper
-    is specifically for reading back from the numpy buffer, which is
-    where the FIELD/NDARRAY asymmetry lives.
+    Both FIELD and NDARRAY return the canonical view from ``to_numpy()``;
+    the layout is purely an internal storage hint. The signature is kept
+    for backwards compatibility with the rest of this file.
     """
-    if backend is qd.Backend.FIELD:
-        return canonical
-    return tuple(canonical[i] for i in layout)
+    del layout, backend  # the canonical view is the same on both backends
+    return canonical
 
 
 def _to_numpy_idx(canonical_idx, layout, backend):
-    """Translate a canonical multi-index to the index needed to read
-    ``a.to_numpy()``, accounting for the FIELD vs NDARRAY asymmetry."""
-    if backend is qd.Backend.FIELD:
-        return canonical_idx
-    return tuple(canonical_idx[i] for i in layout)
+    """Translate a canonical multi-index to the numpy-readback index.
+
+    Both backends return canonical views, so this is the identity.
+    """
+    del layout, backend
+    return canonical_idx
 
 
 # ----------------------------------------------------------------------------
