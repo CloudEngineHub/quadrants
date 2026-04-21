@@ -112,7 +112,9 @@ def test_layout_ndarray_grad_tag_propagates_rank2():
 @test_utils.test(arch=qd.cpu)
 def test_layout_ndarray_grad_canonical_kernel_roundtrip_rank2():
     """Write primal and grad through a kernel using canonical indices on a
-    transposed-storage ndarray. Both must read back canonically."""
+    transposed-storage ndarray. Both must land at the correct physical slot
+    (Ndarray.to_numpy() returns the physical, permuted view — see
+    ``test_factory_layout_rank2_value_check``)."""
     a = qd.tensor(qd.f32, shape=(4, 5), backend=qd.Backend.NDARRAY, layout=(1, 0), needs_grad=True)
 
     @qd.kernel
@@ -129,10 +131,13 @@ def test_layout_ndarray_grad_canonical_kernel_roundtrip_rank2():
     write_grad(a)
     primal = a.to_numpy()
     grad = a.grad.to_numpy()
-    assert primal[1, 2] == 12.0
-    assert grad[1, 2] == 120.0
-    assert primal[3, 4] == 34.0
-    assert grad[3, 4] == 340.0
+    assert primal.shape == grad.shape == (5, 4)
+    # canonical (i=1, j=2) -> physical (j, i) = (2, 1)
+    assert primal[2, 1] == 12.0
+    assert grad[2, 1] == 120.0
+    # canonical (i=3, j=4) -> physical (4, 3)
+    assert primal[4, 3] == 34.0
+    assert grad[4, 3] == 340.0
 
 
 @pytest.mark.parametrize("layout", list(itertools.permutations(range(3))))
@@ -159,5 +164,12 @@ def test_layout_ndarray_grad_all_rank3_permutations(layout):
     fill(a)
     primal = a.to_numpy()
     grad = a.grad.to_numpy()
-    assert primal[1, 2, 3] == 123.0
-    assert grad[1, 2, 3] == 1123.0
+    # Ndarray.to_numpy() returns the physical (permuted) view — translate
+    # canonical (1, 2, 3) -> physical via the layout permutation.
+    canonical_idx = (1, 2, 3)
+    physical_idx = tuple(canonical_idx[axis] for axis in layout_t)
+    physical_shape = tuple((2, 3, 4)[axis] for axis in layout_t)
+    assert primal.shape == physical_shape
+    assert grad.shape == physical_shape
+    assert primal[physical_idx] == 123.0
+    assert grad[physical_idx] == 1123.0
