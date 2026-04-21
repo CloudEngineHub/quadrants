@@ -57,14 +57,9 @@ def _layout_to_order(layout, ndim):
     if not isinstance(layout, tuple):
         layout = tuple(layout)
     if len(layout) != ndim:
-        raise ValueError(
-            f"layout has {len(layout)} entries but shape has {ndim} "
-            f"dimensions; they must match"
-        )
+        raise ValueError(f"layout has {len(layout)} entries but shape has {ndim} " f"dimensions; they must match")
     if sorted(layout) != list(range(ndim)):
-        raise ValueError(
-            f"layout={layout!r} is not a permutation of range({ndim})"
-        )
+        raise ValueError(f"layout={layout!r} is not a permutation of range({ndim})")
     if layout == tuple(range(ndim)):
         return None  # identity layout — no order= needed
     return "".join(chr(ord("i") + axis) for axis in layout)
@@ -120,9 +115,7 @@ def tensor(dtype, shape, *, backend=Backend.FIELD, layout=None, **kwargs):
     from quadrants.lang import impl
 
     if "order" in kwargs:
-        raise TypeError(
-            "qd.tensor(...) does not accept order=; pass layout=(...) instead"
-        )
+        raise TypeError("qd.tensor(...) does not accept order=; pass layout=(...) instead")
 
     shape_t = (shape,) if isinstance(shape, int) else tuple(shape)
     order = _layout_to_order(layout, len(shape_t)) if layout is not None else None
