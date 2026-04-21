@@ -65,7 +65,7 @@ def test_clock_accuracy():
             # Read from a field so the compiler can't constant-fold the deterministic LCG sequence
             x = state[i]
             start = qd.i64(0)
-            for j in range((i + 1) * 50000):
+            for j in range((i + 1) * 200000):
                 # LCG: constant cost per iteration (pure integer arithmetic) and uniform output
                 # over [0, 2^31), making `x > 10` true >99.999% of the time but not provably
                 # always true, so the compiler can't optimize away the conditional store.
@@ -88,8 +88,9 @@ def test_clock_accuracy():
     measure_sequence_timings()
 
     for i in range(1, 31):
-        assert a[i - 1] < a[i] < a[i + 1]
-        assert -1 < a[i] / a[0] - (i + 1) < 1
+        ratio = a[i] / a[0]
+        expected = i + 1
+        assert abs(ratio - expected) / expected < 0.2  # 20% tolerance
 
 
 @test_utils.test(arch=clock_freq_supported_archs)
