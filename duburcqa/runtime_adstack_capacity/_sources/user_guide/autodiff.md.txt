@@ -232,44 +232,64 @@ The pattern often hides inside in-place time-stepping updates like `x[i] = x[i] 
 
 `qd.static(range(...))` loops are unrolled at compile time and never need the adstack either.
 
-### Adstack sizing
+### Adstack overflow
 
-**LLVM backends (CPU / CUDA / AMDGPU).** Each adstack's capacity is derived automatically. The compiler builds a symbolic upper-bound expression (`SizeExpr`) for every adstack alloca at compile time, and the host launcher evaluates that expression against the live field state + the launch context's ndarray args right before each kernel dispatch. The per-thread heap is grown on demand to match the largest size any launch has needed; there is no static capacity knob to tune and no runtime overflow path to hit for shapes the grammar covers.
+Each adstack has a capacity fixed at compile time. When the compiler can prove the worst-case loop trip count, that value is used; otherwise it falls back to a conservative default. If a kernel exceeds its adstack capacity at runtime, Quadrants raises a Python exception on the next `qd.sync()` — `QuadrantsAssertionError` on LLVM backends, `RuntimeError` on SPIR-V — and the message recommends bumping `default_ad_stack_size`. See [Under the hood: adstack capacity and memory](#under-the-hood-adstack-capacity-and-memory) for the sizing formula and memory-footprint details.
 
-The `SizeExpr` grammar covers the loop shapes real-world reverse-mode kernels produce:
+### Under the hood: adstack capacity and memory
 
-- integer constants and `add` / `sub` / `mul` / `max` arithmetic over them;
-- scalar `i32` / `i64` field loads (at constant indices, or at loop-index indices that get wrapped in a launch-time `max` reduction);
-- ndarray-argument shapes (`arr.shape[axis]`) and scalar ndarray reads (`arr[i]`);
-- loop indices of both `for i in range(...)` range-fors and the outermost parallel-for (including dynamic-end offloads whose end was stashed into the kernel's global-temporary buffer by a prep task);
-- stash-and-reload through an adstack: frontends that write `i_l = qd.cast(i_l_, qd.i32)` and later read `arr[i_l]` produce a `load_top(stash_of_i_l)`-indexed ndarray read in the reverse pass, which the pre-pass walks through back to the original loop index.
+*You do not need to read this section to use reverse-mode AD. Skip to [Backend support](#backend-support) unless you hit an overflow error at runtime or an out-of-memory error on GPU.*
 
-Loop shapes outside this grammar trigger a hard compile error naming the source location of the offending adstack alloca, so silent over-allocation is not possible. The error message lists the grammar shapes; restructuring the reverse-mode loop to match one of them, or extending the grammar in `quadrants/transforms/determine_ad_stack_size.cpp`, are the two fix paths. Setting `QD_DUMP_IR=1` before compile additionally dumps the full kernel IR for the first unresolved alloca into `/tmp/ir_adstack_unresolved/unresolved_alloca_<id>.ll` for offline inspection.
+**Tuning.** Two `qd.init()` knobs control adstack sizing, both measured in slots per adstack (not bytes):
 
-> Note: `default_ad_stack_size` and `ad_stack_size` are ignored on LLVM backends. They remain in `qd.init()` for SPIR-V backwards compatibility.
+- `default_ad_stack_size=N` (default `256`): the fallback capacity for loops whose trip count the compiler cannot prove statically. Every adstack whose size was not deducible shares this value. Prefer this knob — it only affects the branch where the compiler had to guess.
+- `ad_stack_size=N` (default `0 = adaptive`): hard override forcing every adstack in the program to exactly `N` slots regardless of what the compiler proved. Use only for targeted experiments, for example stress-testing the runtime heap path.
 
-**SPIR-V backends (Metal / Vulkan).** Adstacks are still sized at codegen time. The pre-pass resolves shapes that fold to a compile-time constant through the same `SizeExpr` grammar described above; dynamic shapes currently trigger a hard compile error because runtime metadata evaluation on SPIR-V is future work. Until that lands:
+**Sizing rule.** The reverse pass of a `K`-iteration dynamic loop pushes `K + 2` entries per adstack: one per forward iteration, plus two setup pushes — one for the initial adjoint slot and one for the primal's starting value. Size `default_ad_stack_size` at the worst-case trip count of the deepest unprovable dynamic loop in the program, plus that `+ 2`.
 
-- `default_ad_stack_size=N` (default `256`) still sets the fallback capacity for any Bellman-Ford-proven stack the structural pre-pass cannot further refine.
-- `ad_stack_size=N` still forces every adstack in the program to exactly `N` slots.
-- Runtime overflow surfaces as a `RuntimeError` at the next `qd.sync()`, and the message recommends bumping `default_ad_stack_size`. Size the default at the flat trip count of the deepest dynamic loop in the program plus two (the reverse pass of a `K`-iteration loop pushes `K + 2` entries per adstack). For a single `qd.ndrange(n, m)` that means `N >= n_max * m_max + 2`.
+| Loop shape | Required `default_ad_stack_size` |
+| --- | --- |
+| single dynamic `for i in range(a[None])` | `a_max + 2` |
+| nested `for i in range(a[None]): for j in range(b[None])` | `a_max * b_max + 2` |
+| `qd.ndrange(n, m)` with field-derived `n`, `m` | `n_max * m_max + 2` |
 
-**Memory cost.** The adstack pipeline allocates one small scratch buffer per loop-carried variable that the reverse pass has to remember. For example, a kernel whose dynamic loop reads and updates one float accumulator needs 1 adstack; a kernel whose loop updates four different floats needs 4. Integer counters and boolean branch flags used by the reverse pass also count (typically one each per dynamic `if` or nested loop). The total memory Quadrants allocates across all those buffers is roughly
+At `max_n_dofs_per_entity = 16`, a 16 x 16 ndrange hits the default exactly (`256`).
+
+**Memory footprint.** The pipeline allocates one scratch buffer per piece of reverse-pass state. That count includes every [loop-carried variable](#examples-of-dynamic-loops-that-need-it) the reverse pass has to replay, plus any integer counter and any boolean branch flag it has to read back. Total memory across all buffers is approximately
 
 ```
-num_threads * stack_size * bytes_per_element * num_loop_carried_variables
+num_threads * default_ad_stack_size * bytes_per_slot * num_buffers
 ```
 
-where `bytes_per_element` depends on the element type and the backend. On the LLVM backends (CPU / CUDA / AMDGPU) each adstack slot stores both a primal and an adjoint value, so f32 costs 8, i32 costs 8, and bool costs 2 bytes per slot. On the SPIR-V backends (Metal / Vulkan) integer adstacks only store the primal (the reverse pass does not accumulate integer adjoints), and bool is widened to i32 at storage time because SPIR-V has no defined layout for `OpTypeBool`, so f32 costs 8, i32 costs 4, and bool costs 4 bytes per slot. The buffer lives on the device on GPU and in host RAM on CPU. `num_threads` is the number of threads the kernel actually dispatches, not a worst-case grid: on CPU this is the thread pool size (tens of threads), so the memory footprint stays small; on GPU it is the dispatched ndrange. The buffer grows on demand to match the largest size any launch has needed so far and is then reused across subsequent launches, so you do not need to reserve memory up front.
+where `num_threads` is the number of threads the kernel actually dispatches — tens on CPU (the thread pool size), up to the full ndrange on GPU — and `bytes_per_slot` scales with the element's storage size.
 
-On LLVM backends, `stack_size` in the formula above is the per-launch resolved value - the pre-pass's `SizeExpr` tightens to the actual field state at each launch, so an ndarray-shape-bounded loop that iterates 16 times at one dispatch and 1024 times at another allocates only as many slots as each dispatch needs. On SPIR-V backends `stack_size` is the fixed codegen-time value (capped at `default_ad_stack_size` or `ad_stack_size` as above).
+On LLVM backends (CPU / CUDA / AMDGPU), each adstack slot stores both a primal and an adjoint value, so `bytes_per_slot = 2 * sizeof(T)` for every element type `T`. Common cases:
 
-Two shapes still blow up the cost on SPIR-V:
+| T | LLVM bytes/slot |
+| --- | --- |
+| f32 | 8 |
+| f64 | 16 |
+| i32 / u32 | 8 |
+| i64 / u64 | 16 |
+| bool | 2 |
 
-- A big `ndrange` on GPU. A kernel over `ndrange(1024, 1024)` with a `default_ad_stack_size` of `256` and four f32 loop-carried variables allocates roughly `1024 * 1024 * 256 * 8 * 4 bytes = 8 GB` - easy to overrun a consumer GPU's memory budget.
-- Doubling `default_ad_stack_size` doubles the backing buffer linearly, so it is the easiest knob to reach for when you hit an out-of-memory error.
+On SPIR-V backends (Metal / Vulkan), integer adstacks only store the primal because the reverse pass does not accumulate integer adjoints, so `bytes_per_slot = sizeof(T)` for integer `T` and `bytes_per_slot = 2 * sizeof(T)` for real `T`. SPIR-V has no defined layout for `OpTypeBool`, so booleans are widened to i32 at storage time:
 
-If a SPIR-V driver returns an out-of-memory error, the order of remedies is: drop `default_ad_stack_size` toward the real worst-case trip count of your dynamic loops, reduce the number of loop-carried variables the reverse pass has to remember (split a kernel, checkpoint manually, or fold two accumulators into one), then raise `device_memory_fraction` or `device_memory_GB` at `qd.init()` if your GPU has headroom.
+| T | SPIR-V bytes/slot |
+| --- | --- |
+| f32 | 8 |
+| f64 | 16 |
+| i32 / u32 | 4 |
+| i64 / u64 | 8 |
+| bool | 4 |
+
+Adstack buffers live on the device on GPU and in host RAM on CPU. The buffer grows on demand to match the largest size any launch has needed so far and is reused across subsequent launches, so you do not need to reserve memory up front.
+
+**Avoiding OOM on GPU.** A big `ndrange` combined with several loop-carried f32 variables adds up fast: `ndrange(1024, 1024)` with `default_ad_stack_size=256` and four f32 buffers allocates roughly `1024 * 1024 * 256 * 8 * 4 bytes ≈ 8 GB`, enough to exhaust a consumer GPU. Doubling `default_ad_stack_size` doubles the backing buffer linearly, so it is the simplest knob to reach for on out-of-memory. Remedies, in order:
+
+1. Drop `default_ad_stack_size` toward the real worst-case trip count of your dynamic loops.
+2. Reduce the number of loop-carried variables the reverse pass has to replay (split the kernel, checkpoint manually, or fold two accumulators into one).
+3. Raise `device_memory_fraction` or `device_memory_GB` in `qd.init()` if the GPU has headroom.
 
 ## Backend support
 
@@ -279,7 +299,7 @@ The adstack pipeline is behind `ad_stack_experimental_enabled=True`. Enable it w
 
 ## Known limitations
 
-- Adstack overflow does not exist on LLVM backends for kernels the pre-pass can bound (every shape in the grammar listed under "Adstack sizing"). For SPIR-V backends the compile-time-sized capacity can still be exceeded at runtime; overflow is reported as a Python-level exception asynchronously - the offending kernel writes to a host-polled SSBO flag during execution, and the next `qd.sync()` (explicit, or implicit via a host read like `to_numpy()` / `to_torch()`) reads the flag and raises. This follows the same pattern as CUDA async errors so every launch does not pay a per-launch sync. If you want the exception to land exactly at the offending kernel rather than at the next sync, call `qd.sync()` right after the kernel.
+- Adstack overflow is reported as a Python-level exception on every backend, but asynchronously: the offending kernel writes to a host-polled SSBO flag during execution, and the next `qd.sync()` (explicit, or implicit via a host read like `to_numpy()` / `to_torch()`) reads the flag and raises. This follows the same pattern as CUDA async errors so every launch does not pay a per-launch sync. If you want the exception to land exactly at the offending kernel rather than at the next sync, call `qd.sync()` right after the kernel, or enable `qd.init(debug=True)` on LLVM backends to poll after every launch.
 - Adstack trades compile time for generality. Kernels with many loop-carried variables, nested dynamic loops, or large inner-loop bodies produce visibly slow compile times - seconds stretching into minutes, and on SPIR-V backends sometimes into the territory where the driver's shader compiler gives up. Budget compile-time accordingly when migrating existing reverse-mode AD workloads.
 - Reverse-mode AD does not propagate gradients through integer casts or non-real operations. No error is raised; the gradient simply stops at the cast and silently reads as zero upstream. Cast to `qd.f32` / `qd.f64` before the differentiable section.
 - Backward passes on non-trivial kernels run noticeably slower than the corresponding forward pass, sometimes by an order of magnitude on SPIR-V.
