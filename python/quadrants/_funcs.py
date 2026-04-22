@@ -455,8 +455,30 @@ def _sym_eig3x3(A, dt):
     else:
         u = t * t
     error = 256.0 * DBL_EPSILON * u * u
-    Q = Matrix.zero(dt, 3, 3)
+
+    # Call dsyevq3 (the QL-with-implicit-shift fallback) unconditionally. The
+    # result is only USED when the main-path Cardano construction of Q below
+    # degenerates (i.e. a column's norm is below `error`). Hoisting this call
+    # out of the degeneracy-test branches is a workaround for an NVIDIA
+    # proprietary Vulkan driver shader-compiler bug: when dsyevq3 (which
+    # contains nested unbounded `while True` structured loops) is emitted as
+    # a function call / inlined body *inside* a structured conditional, the
+    # driver's SPIR-V->NVVM compiler crashes (SIGSEGV inside
+    # libnvidia-gpucomp.so / libnvidia-glvkspirv.so during
+    # vkCreateComputePipelines) on otherwise spec-valid SPIR-V. Hoisting the
+    # call out to unconditional top-level flow avoids the pattern and lets
+    # NVIDIA's driver compile the kernel. dsyevq3's runtime cost is a few
+    # QL sweeps on a 3x3 tridiagonal and is negligible; the cost of the
+    # always-on fallback is much smaller than the value of having sym_eig
+    # work on Vulkan at all. On CUDA / CPU / Metal this hoist is equivalent
+    # in behavior to the previous conditional version because the selection
+    # logic below still picks the main-path result whenever the Cardano
+    # construction is well-conditioned.
     Q_final = Matrix.zero(dt, 3, 3)
+    eigenvalues_final = Vector([0.0, 0.0, 0.0], dt=dt)
+    Q_final, eigenvalues_final = dsyevq3(A, Q_final, eigenvalues_final, dt)
+
+    Q = Matrix.zero(dt, 3, 3)
     Q[0, 1] = A[0, 1] * A[1, 2] - A[0, 2] * A[1, 1]
     Q[1, 1] = A[0, 2] * A[0, 1] - A[1, 2] * A[0, 0]
     Q[2, 1] = A[0, 1] * A[0, 1]
@@ -467,7 +489,6 @@ def _sym_eig3x3(A, dt):
     norm = Q[0, 0] * Q[0, 0] + Q[1, 0] * Q[1, 0] + Q[2, 0] * Q[2, 0]
     early_ret = 0
     if norm <= error:
-        Q_final, eigenvalues_final = dsyevq3(A, Q, eigenvalues, dt)
         early_ret = 1
     else:
         norm = ops.sqrt(1.0 / norm)
@@ -475,13 +496,11 @@ def _sym_eig3x3(A, dt):
         Q[1, 0] *= norm
         Q[2, 0] *= norm
 
-    if not early_ret:
         Q[0, 1] = Q[0, 1] + A[0, 2] * eigenvalues[1]
         Q[1, 1] = Q[1, 1] + A[1, 2] * eigenvalues[1]
         Q[2, 1] = (A[0, 0] - eigenvalues[1]) * (A[1, 1] - eigenvalues[1]) - Q[2, 1]
         norm = Q[0, 1] * Q[0, 1] + Q[1, 1] * Q[1, 1] + Q[2, 1] * Q[2, 1]
         if norm <= error:
-            Q_final, eigenvalues_final = dsyevq3(A, Q, eigenvalues, dt)
             early_ret = 1
         else:
             norm = ops.sqrt(1.0 / norm)
@@ -489,9 +508,9 @@ def _sym_eig3x3(A, dt):
             Q[1, 1] *= norm
             Q[2, 1] *= norm
 
-        Q[0, 2] = Q[1, 0] * Q[2, 1] - Q[2, 0] * Q[1, 1]
-        Q[1, 2] = Q[2, 0] * Q[0, 1] - Q[0, 0] * Q[2, 1]
-        Q[2, 2] = Q[0, 0] * Q[1, 1] - Q[1, 0] * Q[0, 1]
+            Q[0, 2] = Q[1, 0] * Q[2, 1] - Q[2, 0] * Q[1, 1]
+            Q[1, 2] = Q[2, 0] * Q[0, 1] - Q[0, 0] * Q[2, 1]
+            Q[2, 2] = Q[0, 0] * Q[1, 1] - Q[1, 0] * Q[0, 1]
 
     if early_ret:
         Q = Q_final
