@@ -1108,13 +1108,35 @@ class ASTTransformer(Builder):
                 build_stmts(ctx, node.body)
                 ctx.ast_builder.end_frontend_struct_for()
             else:
-                _vars = []
-                for name in targets:
-                    var = expr.Expr(ctx.ast_builder.make_id_expr(""))
-                    _vars.append(var)
-                    ctx.create_variable(name, var)
                 loop_var = node.iter.ptr
-                expr_group = expr.make_expr_group(*_vars)
+                # Layout-tagged tensors (ndarray with ``_qd_layout`` or
+                # field that came through ``qd.tensor(layout=...)``):
+                # the runtime fills the loop-target slots with *physical*
+                # indices but the user spelled them with canonical names
+                # (``for i, j in x`` where ``i`` is canonical axis 0).
+                # Allocate hidden physical slots and rebind each user
+                # name to the physical slot whose runtime value is the
+                # canonical-axis value the user expects.
+                #
+                # See :func:`build_Subscript` for the symmetric
+                # canonical->physical translation on ``x[i, j]`` reads
+                # and writes inside the loop body.
+                layout = getattr(loop_var, "_qd_layout", None)
+                if layout is not None and len(layout) == len(targets):
+                    phys_vars = [expr.Expr(ctx.ast_builder.make_id_expr("")) for _ in targets]
+                    invperm = [0] * len(layout)
+                    for k, axis in enumerate(layout):
+                        invperm[axis] = k
+                    for canon_idx, name in enumerate(targets):
+                        ctx.create_variable(name, phys_vars[invperm[canon_idx]])
+                    expr_group = expr.make_expr_group(*phys_vars)
+                else:
+                    _vars = []
+                    for name in targets:
+                        var = expr.Expr(ctx.ast_builder.make_id_expr(""))
+                        _vars.append(var)
+                        ctx.create_variable(name, var)
+                    expr_group = expr.make_expr_group(*_vars)
                 impl.begin_frontend_struct_for(ctx.ast_builder, expr_group, loop_var)
                 ctx.loop_depth += 1
                 build_stmts(ctx, node.body)

@@ -492,34 +492,36 @@ def test_grouped_struct_for_vector_subscript_rank3_all_permutations(backend, lay
 
 
 # ----------------------------------------------------------------------------
-# Multi-target struct-for ``for i, j in x`` on a layout-tagged ndarray is a
-# known limitation of the current implementation: ``build_struct_for``
-# canonicalises the loop indices for the grouped form (``for I in
-# qd.grouped(x)``), but not for the direct multi-target form, which binds
-# the runtime-delivered physical indices straight to the user names.
-#
-# This test pins that limitation as ``xfail`` so that unrelated refactors
-# surface if the limitation is accidentally lifted (strict=True flips the
-# test red when it starts passing, prompting us to promote it).
+# Multi-target ``for i, j in x`` on a layout-tagged tensor: the runtime
+# delivers *physical* loop indices, but ``build_struct_for`` rebinds the
+# user names to canonical positions via the inverse permutation, so the
+# user's ``i`` is always canonical-axis-0 regardless of layout. Mirrors
+# the canonical->physical translation in :func:`build_Subscript`.
+# Verified on both backends so ``GS_ENABLE_NDARRAY``-style switching is
+# transparent.
 # ----------------------------------------------------------------------------
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason="multi-target `for i, j in x` on layout-tagged ndarrays "
-    "isn't canonicalised yet; use `for I in qd.grouped(x)` or "
-    "`for i, j in qd.ndrange(*x.shape)` instead.",
-)
+@pytest.mark.parametrize("backend", BACKENDS, ids=BACKEND_IDS)
+@pytest.mark.parametrize("layout", _LAYOUTS_RANK2)
 @test_utils.test(arch=qd.cpu)
-def test_multi_target_struct_for_on_layout_tagged_ndarray_xfail():
+def test_multi_target_struct_for_on_layout_tagged_tensor(backend, layout):
     canonical = (3, 4)
-    layout = (1, 0)
-    a = qd.tensor(qd.i32, shape=canonical, backend=qd.Backend.NDARRAY, layout=layout)
+    a = qd.tensor(qd.i32, shape=canonical, backend=backend, layout=layout)
 
-    @qd.kernel
-    def fill(x: qd.types.ndarray()):
-        for i, j in x:
-            x[i, j] = i * 100 + j
+    if backend is qd.Backend.FIELD:
+
+        @qd.kernel
+        def fill(x: qd.template()):
+            for i, j in x:
+                x[i, j] = i * 100 + j
+
+    else:
+
+        @qd.kernel
+        def fill(x: qd.types.ndarray()):
+            for i, j in x:
+                x[i, j] = i * 100 + j
 
     fill(a)
     arr = a.to_numpy()
