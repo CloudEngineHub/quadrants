@@ -1,22 +1,33 @@
-"""``Tensor`` wrapper — POC for ``hp/tensor-stork-17``.
+"""``Tensor`` wrapper — full surface (``hp/tensor-stork-18``).
 
 A thin Python wrapper around an underlying ``Ndarray`` or ``ScalarField``
-impl. The point is to make backend symmetry a *type* property rather than
-something we police test by test:
+impl. Makes backend symmetry a *type* property rather than something we
+police test by test: the wrapper exposes a fixed whitelisted surface
+uniformly, regardless of which impl it contains.
 
-- The wrapper exposes a fixed whitelisted surface; anything not on the
-  whitelist is invisible to users (the upstream impl keeps its full
-  surface for internal Quadrants use).
-- Layout is owned by the wrapper, not the impl. The impl-side
-  ``_qd_layout`` attribute survives only as the AST-rewrite trigger on
-  ndarrays.
-- Pickle, ``to_torch``, ``to_dlpack``, ``to_numpy`` all delegate to the
-  impl, which is already symmetric across backends after stork-16.
+Scope of this file (stork-18):
 
-For stork-17 this is **opt-in only**, exposed under a private name so we
-don't disturb existing call sites. ``qd.tensor(...)`` still returns the
-raw impl. The wrapper is exercised by the cache-fragmentation and host
-indexing tests in stork-17 to de-risk the full migration in stork-18+.
+- Skeleton introspection (``shape``, ``dtype``, ``layout``, ``_unwrap``).
+- Layout-aware host-side ``__getitem__`` / ``__setitem__`` — permutes the
+  canonical user key to the physical slot on layout-tagged ndarrays.
+  Fixes gotcha B from the design doc (§8.11).
+- Symmetric pickle via ``__reduce__`` — round-trips through
+  ``to_numpy()`` so it works uniformly on both backends (Field, which
+  never supported pickle upstream, now picklable through the wrapper).
+- Forwards for ``to_numpy`` / ``from_numpy`` / ``to_torch`` /
+  ``from_torch`` / ``to_dlpack`` / ``fill`` / ``copy_from``. These are
+  already layout-aware on both backends after stork-15/16, so the
+  wrapper just delegates.
+- Lazy-wrapped ``.grad`` — returns a ``Tensor`` wrapping ``impl.grad``
+  (identity-stable via ``functools.cached_property``).
+- ``VectorTensor`` / ``MatrixTensor`` subclasses carrying
+  ``element_shape``.
+
+Out of scope for stork-18:
+- Class-name promotion (``qd._Tensor`` → ``qd.Tensor``). The existing
+  ``qd.Tensor`` annotation is untouched; the wrapper stays private.
+  That flip + the factory default flip are stork-19.
+- Genesis migration (stork-20).
 
 See ``perso_hugh/doc/quadrants-tensor.md`` §8.11.
 """
@@ -24,14 +35,14 @@ See ``perso_hugh/doc/quadrants-tensor.md`` §8.11.
 from __future__ import annotations
 
 import typing
-
-# Late imports below intentionally deferred to method bodies to break
-# the circular dependency through ``quadrants.lang``.
-# pylint: disable=import-outside-toplevel
+from functools import cached_property
 
 
 __all__ = [
     "Tensor",
+    "VectorTensor",
+    "MatrixTensor",
+    "wrap",
 ]
 
 
@@ -41,32 +52,21 @@ def _is_identity(layout: typing.Optional[typing.Tuple[int, ...]]) -> bool:
     return tuple(layout) == tuple(range(len(layout)))
 
 
-def _invert_perm(perm: typing.Tuple[int, ...]) -> typing.Tuple[int, ...]:
-    """Inverse of a permutation: ``perm[invperm[i]] == i``."""
-    inv = [0] * len(perm)
-    for i, p in enumerate(perm):
-        inv[p] = i
-    return tuple(inv)
-
-
 class Tensor:
-    """Backend-agnostic tensor wrapper. POC, opt-in only.
+    """Backend-agnostic tensor wrapper. POC — opt-in only.
 
-    Holds a reference to an underlying impl (either an ``Ndarray`` or a
-    ``ScalarField``) and forwards a whitelisted set of operations. The
-    canonical layout permutation is owned by the wrapper; the impl-side
-    ``_qd_layout`` tag is preserved only so the existing AST rewrite in
-    ``ast_transformer.py`` keeps firing for ndarray-backed kernel code.
+    Holds a reference to an underlying impl (``Ndarray`` or ``Field``)
+    and forwards a whitelisted surface. Layout-aware host-side indexing
+    lives here: the AST-level canonical->physical rewrite only fires
+    inside ``@qd.kernel`` bodies, so ``t[i, j]`` at host scope on a
+    layout-tagged ndarray would otherwise hit the physical slot.
 
-    Constructed explicitly via ``Tensor(impl)`` — there's no factory yet.
-    The factory flip lives in stork-19.
+    Construct explicitly via ``Tensor(impl)``. There's no factory yet.
     """
 
-    __slots__ = ("_impl",)
+    # ``cached_property`` requires ``__dict__``, so no ``__slots__``.
 
     def __init__(self, impl: typing.Any) -> None:
-        # Validate that ``impl`` is something we know how to wrap. Keep the
-        # check string-based to avoid pulling lang imports into module load.
         from quadrants.lang._ndarray import Ndarray
         from quadrants.lang.field import Field
 
@@ -74,8 +74,7 @@ class Tensor:
             raise TypeError(
                 f"Tensor(impl) requires an Ndarray or Field; got {type(impl).__name__}"
             )
-        # Use object.__setattr__ to play nice with __slots__.
-        object.__setattr__(self, "_impl", impl)
+        self._impl = impl
 
     # ------------------------------------------------------------------
     # Identity / debug
@@ -94,8 +93,14 @@ class Tensor:
 
         return "NDARRAY" if isinstance(self._impl, Ndarray) else "FIELD"
 
+    def _backend_enum(self) -> typing.Any:
+        from quadrants._tensor import Backend
+        from quadrants.lang._ndarray import Ndarray
+
+        return Backend.NDARRAY if isinstance(self._impl, Ndarray) else Backend.FIELD
+
     # ------------------------------------------------------------------
-    # Whitelisted introspection (no behavior change vs impl)
+    # Whitelisted introspection
     # ------------------------------------------------------------------
 
     @property
@@ -108,9 +113,8 @@ class Tensor:
 
     @property
     def layout(self) -> typing.Optional[typing.Tuple[int, ...]]:
-        # Forwards to the impl's ``layout`` property, which is symmetric
-        # across backends after stork-16 (Ndarray reads ``_qd_layout``,
-        # Field reads ``_qd_field_layout``).
+        # Forwards to the impl's ``layout`` property (symmetric across
+        # backends after stork-16).
         return self._impl.layout
 
     # ------------------------------------------------------------------
@@ -119,7 +123,306 @@ class Tensor:
 
     def _unwrap(self) -> typing.Any:
         """Return the underlying impl. Used by the kernel-arg unwrap hook
-        so ``@qd.kernel`` continues to see raw ``Ndarray`` / ``Field``
-        types and the JIT cache key stays stable.
+        in ``Kernel.__call__`` so the JIT cache keys off impl identity.
         """
         return self._impl
+
+    # ------------------------------------------------------------------
+    # Layout-aware host indexing (fixes gotcha B)
+    # ------------------------------------------------------------------
+
+    def _host_physical_layout(self) -> typing.Optional[typing.Tuple[int, ...]]:
+        """Return the permutation to apply to canonical host keys.
+
+        Only ``Ndarray`` needs it: its Python-scope ``__getitem__`` /
+        ``__setitem__`` pass the key directly to the host accessor, and
+        the canonical->physical rewrite only fires inside ``@qd.kernel``.
+
+        ``Field`` already translates canonical indices via the SNode
+        hierarchy (``order=``) on every host access, so we return ``None``
+        and fall through to a plain delegation.
+        """
+        from quadrants.lang._ndarray import Ndarray
+
+        if not isinstance(self._impl, Ndarray):
+            return None
+        layout = getattr(self._impl, "_qd_layout", None)
+        if _is_identity(layout):
+            return None
+        return tuple(layout)
+
+    @staticmethod
+    def _permute_key(key: typing.Any, layout: typing.Tuple[int, ...]) -> typing.Tuple[int, ...]:
+        """Translate a user-supplied canonical key to physical coords.
+
+        ``physical[p] = canonical[layout[p]]`` by the convention that
+        ``layout[p]`` is the canonical axis at physical nesting level
+        ``p`` (outermost first). Only full-rank keys are supported at
+        host scope; partial / slice indexing is out of scope for the
+        wrapper and would fall out of ``Ndarray``'s own API anyway.
+        """
+        if isinstance(key, int):
+            # Rank-1 only; for rank>1 we require a tuple/list.
+            if len(layout) != 1:
+                raise TypeError(
+                    f"layout-tagged Tensor requires a full tuple key; got int for rank {len(layout)}"
+                )
+            return (key,)
+        key_t = tuple(key)
+        if len(key_t) != len(layout):
+            raise TypeError(
+                f"layout-tagged Tensor key has {len(key_t)} entries but rank is {len(layout)}"
+            )
+        return tuple(key_t[layout[p]] for p in range(len(layout)))
+
+    def __getitem__(self, key: typing.Any) -> typing.Any:
+        layout = self._host_physical_layout()
+        if layout is None:
+            return self._impl[key]
+        return self._impl[self._permute_key(key, layout)]
+
+    def __setitem__(self, key: typing.Any, value: typing.Any) -> None:
+        layout = self._host_physical_layout()
+        if layout is None:
+            self._impl[key] = value
+            return
+        self._impl[self._permute_key(key, layout)] = value
+
+    # ------------------------------------------------------------------
+    # Interop forwards (layout-aware on both impls already)
+    # ------------------------------------------------------------------
+
+    def to_numpy(self, dtype: typing.Any = None) -> typing.Any:
+        if dtype is None:
+            return self._impl.to_numpy()
+        return self._impl.to_numpy(dtype=dtype)
+
+    def from_numpy(self, arr: typing.Any) -> None:
+        self._impl.from_numpy(arr)
+
+    def to_torch(self, device: typing.Any = None) -> typing.Any:
+        if device is None:
+            return self._impl.to_torch()
+        return self._impl.to_torch(device=device)
+
+    def from_torch(self, arr: typing.Any) -> None:
+        self._impl.from_torch(arr)
+
+    def to_dlpack(self) -> typing.Any:
+        return self._impl.to_dlpack()
+
+    def fill(self, value: typing.Any) -> None:
+        self._impl.fill(value)
+
+    def copy_from(self, other: typing.Any) -> None:
+        # Accept either another ``Tensor`` or a bare impl (convenience:
+        # lets Genesis-style code pass raw fields during the migration).
+        if isinstance(other, Tensor):
+            other = other._impl
+        self._impl.copy_from(other)
+
+    # ------------------------------------------------------------------
+    # Gradient: lazy wrap so ``t.grad`` is identity-stable.
+    # ------------------------------------------------------------------
+
+    @cached_property
+    def grad(self) -> typing.Optional["Tensor"]:
+        g = getattr(self._impl, "grad", None)
+        if g is None:
+            return None
+        return wrap(g)
+
+    # ------------------------------------------------------------------
+    # Pickle (symmetric across backends)
+    # ------------------------------------------------------------------
+
+    def __reduce__(self) -> typing.Tuple[typing.Any, typing.Tuple[typing.Any, ...]]:
+        """Serialize via canonical-view numpy + backend metadata.
+
+        Works uniformly on both backends: the upstream ``Field`` never
+        supported pickle because it needs runtime-allocated SNodes, but
+        the wrapper bypasses that by reconstructing via ``qd.tensor(...)``
+        + ``from_numpy(...)`` on the other side — ``qd.tensor`` handles
+        the SNode allocation through the usual factory path.
+
+        Only *scalar* tensors are supported here. Vector/matrix wrappers
+        override this (they need to encode element shape too).
+        """
+        backend_int = int(self._backend_enum())
+        shape = tuple(self._impl.shape)
+        layout = self.layout  # ``None`` for identity, else permutation tuple
+        data = self._impl.to_numpy()
+        return (
+            _rebuild_scalar_tensor,
+            (backend_int, self._impl.dtype, shape, layout, data),
+        )
+
+
+def _element_shape_of(impl: typing.Any) -> typing.Tuple[int, ...]:
+    """Return the per-element shape of a vector/matrix impl.
+
+    ``VectorNdarray`` / ``MatrixNdarray`` expose ``element_shape``
+    directly. ``MatrixField`` (which backs ``qd.Vector.field`` via
+    ``m == 1, ndim == 1`` and ``qd.Matrix.field`` via ``ndim == 2``)
+    doesn't, so we derive it from its ``n``/``m``/``ndim`` attributes.
+    """
+    from quadrants.lang.matrix import MatrixField
+
+    if isinstance(impl, MatrixField):
+        if impl.ndim == 0:
+            return ()
+        if impl.ndim == 1:
+            return (impl.n,)
+        return (impl.n, impl.m)
+    return tuple(impl.element_shape)
+
+
+class VectorTensor(Tensor):
+    """Wrapper for vector-element tensors (``qd.Vector.tensor(...)`` output).
+
+    Accepts either a ``VectorNdarray`` or a ``MatrixField`` allocated via
+    ``qd.Vector.field(...)`` (``m == 1, ndim == 1``). ``element_shape``
+    is ``(n,)``.
+    """
+
+    def __init__(self, impl: typing.Any) -> None:
+        from quadrants.lang.matrix import MatrixField, VectorNdarray
+
+        if isinstance(impl, VectorNdarray):
+            pass
+        elif isinstance(impl, MatrixField) and impl.ndim == 1:
+            pass
+        else:
+            raise TypeError(
+                f"VectorTensor requires a vector-element impl; got {type(impl).__name__}"
+            )
+        self._impl = impl
+
+    @property
+    def element_shape(self) -> typing.Tuple[int, ...]:
+        return _element_shape_of(self._impl)
+
+    def __reduce__(self) -> typing.Tuple[typing.Any, typing.Tuple[typing.Any, ...]]:
+        backend_int = int(self._backend_enum())
+        shape = tuple(self._impl.shape)
+        element_shape = _element_shape_of(self._impl)
+        data = self._impl.to_numpy()
+        return (
+            _rebuild_vector_tensor,
+            (backend_int, self._impl.dtype, shape, element_shape, data),
+        )
+
+
+class MatrixTensor(Tensor):
+    """Wrapper for matrix-element tensors (``qd.Matrix.tensor(...)`` output).
+
+    Accepts either a ``MatrixNdarray`` or a ``MatrixField`` with
+    ``ndim == 2``. ``element_shape`` is ``(n, m)``.
+    """
+
+    def __init__(self, impl: typing.Any) -> None:
+        from quadrants.lang.matrix import MatrixField, MatrixNdarray
+
+        if isinstance(impl, MatrixNdarray):
+            pass
+        elif isinstance(impl, MatrixField) and impl.ndim == 2:
+            pass
+        else:
+            raise TypeError(
+                f"MatrixTensor requires a matrix-element impl; got {type(impl).__name__}"
+            )
+        self._impl = impl
+
+    @property
+    def element_shape(self) -> typing.Tuple[int, ...]:
+        return _element_shape_of(self._impl)
+
+    def __reduce__(self) -> typing.Tuple[typing.Any, typing.Tuple[typing.Any, ...]]:
+        backend_int = int(self._backend_enum())
+        shape = tuple(self._impl.shape)
+        element_shape = _element_shape_of(self._impl)
+        data = self._impl.to_numpy()
+        return (
+            _rebuild_matrix_tensor,
+            (backend_int, self._impl.dtype, shape, element_shape, data),
+        )
+
+
+# ----------------------------------------------------------------------
+# Public helpers
+# ----------------------------------------------------------------------
+
+
+def wrap(impl: typing.Any) -> "Tensor":
+    """Wrap an impl in the most specific ``Tensor`` subclass we can.
+
+    Used internally (e.g. by lazy ``.grad``) and by tests.
+    """
+    from quadrants.lang.matrix import MatrixField, MatrixNdarray, VectorNdarray
+
+    if isinstance(impl, VectorNdarray):
+        return VectorTensor(impl)
+    if isinstance(impl, MatrixNdarray):
+        return MatrixTensor(impl)
+    if isinstance(impl, MatrixField):
+        if impl.ndim == 1:
+            return VectorTensor(impl)
+        if impl.ndim == 2:
+            return MatrixTensor(impl)
+        # ndim == 0: scalar-like; fall through to base Tensor.
+    return Tensor(impl)
+
+
+# ----------------------------------------------------------------------
+# Pickle reconstructors (module-level so pickle can find them by name)
+# ----------------------------------------------------------------------
+
+
+def _rebuild_scalar_tensor(
+    backend_int: int,
+    dtype: typing.Any,
+    shape: typing.Tuple[int, ...],
+    layout: typing.Optional[typing.Tuple[int, ...]],
+    data: typing.Any,
+) -> "Tensor":
+    import quadrants as qd
+
+    backend = qd.Backend(backend_int)
+    kwargs: typing.Dict[str, typing.Any] = {"backend": backend}
+    if layout is not None:
+        kwargs["layout"] = layout
+    impl = qd.tensor(dtype, shape, **kwargs)
+    impl.from_numpy(data)
+    return Tensor(impl)
+
+
+def _rebuild_vector_tensor(
+    backend_int: int,
+    dtype: typing.Any,
+    shape: typing.Tuple[int, ...],
+    element_shape: typing.Tuple[int, ...],
+    data: typing.Any,
+) -> "VectorTensor":
+    import quadrants as qd
+
+    backend = qd.Backend(backend_int)
+    (n,) = element_shape
+    impl = qd.Vector.tensor(n, dtype, shape, backend=backend)
+    impl.from_numpy(data)
+    return VectorTensor(impl)
+
+
+def _rebuild_matrix_tensor(
+    backend_int: int,
+    dtype: typing.Any,
+    shape: typing.Tuple[int, ...],
+    element_shape: typing.Tuple[int, ...],
+    data: typing.Any,
+) -> "MatrixTensor":
+    import quadrants as qd
+
+    backend = qd.Backend(backend_int)
+    n, m = element_shape
+    impl = qd.Matrix.tensor(n, m, dtype, shape, backend=backend)
+    impl.from_numpy(data)
+    return MatrixTensor(impl)
