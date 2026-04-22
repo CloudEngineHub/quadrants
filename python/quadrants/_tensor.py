@@ -227,7 +227,15 @@ def tensor(dtype, shape, *, backend=Backend.NDARRAY, layout=None, **kwargs):
     if backend is Backend.FIELD:
         if order is not None:
             forwarded["order"] = order
-        return impl.field(dtype, shape, **forwarded)
+        f = impl.field(dtype, shape, **forwarded)
+        # Stash the layout permutation so ``Field.layout`` can report it
+        # symmetrically with ``Ndarray.layout``. Identity is normalised
+        # to ``None`` at the property level.
+        if layout is not None:
+            f._qd_layout = tuple(layout)
+            if getattr(f, "grad", None) is not None:
+                f.grad._qd_layout = tuple(layout)
+        return f
     if backend is Backend.NDARRAY:
         if order is None:
             return impl.ndarray(dtype, shape, **forwarded)

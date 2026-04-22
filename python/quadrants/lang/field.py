@@ -64,6 +64,30 @@ class Field:
         return self._shape
 
     @property
+    def layout(self):
+        """Canonical-axis-permutation tuple, or ``None`` for identity.
+
+        Mirrors :attr:`Ndarray.layout`: returns the same value the
+        caller passed to ``qd.tensor(..., layout=...)`` (or ``None`` if
+        that kwarg was omitted / was the identity permutation). Lets
+        downstream code introspect the physical layout without having
+        to know which backend produced the tensor.
+
+        Fields constructed directly via ``qd.field(..., order=...)``
+        (i.e. bypassing the unified ``qd.tensor`` factory) report
+        ``None`` here — the field's actual SNode order is still
+        encoded in the storage but is not surfaced through this
+        introspection accessor.
+        """
+        layout = getattr(self, "_qd_layout", None)
+        if layout is None:
+            return None
+        layout = tuple(layout)
+        if layout == tuple(range(len(layout))):
+            return None
+        return layout
+
+    @property
     def dtype(self) -> DataTypeCxx:
         if not self._dtype:
             self._dtype = cast(DataTypeCxx, self._snode._dtype)

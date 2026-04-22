@@ -1758,7 +1758,6 @@ class MatrixNdarray(Ndarray):
         # TODO(zhanlue): remove self.dtype and migrate its usages to element_type
         self.dtype = cook_dtype(dtype)
 
-        self.layout = Layout.AOS
         self._physical_shape = tuple(shape)
         self.element_type = DataTypeCxxWrapper(_type_factory.get_tensor_type((self.n, self.m), self.dtype).get_ptr())
         # TODO: we should pass in element_type, shape, layout instead.
@@ -1826,6 +1825,18 @@ class MatrixNdarray(Ndarray):
         self._ndarray_matrix_from_numpy(arr, as_vector=0)
 
     @python_scope
+    def to_torch(self, device=None):
+        """Convert this matrix ndarray to a ``torch.Tensor`` of shape
+        ``self.shape + (n, m)``. Mirrors :meth:`MatrixField.to_torch`."""
+        return self._ndarray_matrix_to_torch(as_vector=0, device=device)
+
+    @python_scope
+    def from_torch(self, arr):
+        """Load all entries from a ``torch.Tensor`` of shape
+        ``self.shape + (n, m)``. Mirrors :meth:`MatrixField.from_torch`."""
+        self._ndarray_matrix_from_torch(arr, as_vector=0)
+
+    @python_scope
     def __deepcopy__(self, memo=None):
         ret_arr = MatrixNdarray(self.n, self.m, self.dtype, self._physical_shape)
         ret_arr.copy_from(self)
@@ -1873,7 +1884,6 @@ class VectorNdarray(Ndarray):
         # TODO(zhanlue): remove self.dtype and migrate its usages to element_type
         self.dtype = cook_dtype(dtype)
 
-        self.layout = Layout.AOS
         self._physical_shape = tuple(shape)
         self.element_type = DataTypeCxxWrapper(_type_factory.get_tensor_type((n,), self.dtype).get_ptr())
         self.arr = impl.get_runtime().prog.create_ndarray(
@@ -1938,6 +1948,19 @@ class VectorNdarray(Ndarray):
             >>> a.from_numpy(b)
         """
         self._ndarray_matrix_from_numpy(arr, as_vector=1)
+
+    @python_scope
+    def to_torch(self, device=None):
+        """Convert this vector ndarray to a ``torch.Tensor`` of shape
+        ``self.shape + (n,)``. Mirrors :meth:`MatrixField.to_torch` on
+        the vector code path."""
+        return self._ndarray_matrix_to_torch(as_vector=1, device=device)
+
+    @python_scope
+    def from_torch(self, arr):
+        """Load all entries from a ``torch.Tensor`` of shape
+        ``self.shape + (n,)``."""
+        self._ndarray_matrix_from_torch(arr, as_vector=1)
 
     @python_scope
     def __deepcopy__(self, memo=None):

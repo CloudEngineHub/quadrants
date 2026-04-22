@@ -68,7 +68,6 @@ class Ndarray:
         self.element_type = None
         self.dtype = None
         self.arr = None
-        self.layout = Layout.AOS
         self.grad: "TensorNdarray | None" = None
         impl.get_runtime().ndarrays.add(self)
 
@@ -112,7 +111,21 @@ class Ndarray:
         self._physical_shape = None
         self.element_type = None
         self.dtype = None
-        self.layout = None
+
+    @property
+    def layout(self):
+        """Canonical-axis-permutation tuple, or ``None`` for identity.
+
+        Mirrors :attr:`Field.layout`: returns the same value the caller
+        passed to ``qd.tensor(..., layout=...)`` (or ``None`` if that
+        kwarg was omitted / was the identity permutation). Lets
+        downstream code introspect the physical layout without having
+        to know which backend produced the tensor.
+        """
+        layout = getattr(self, "_qd_layout", None)
+        if _is_identity_layout(layout):
+            return None
+        return tuple(layout)
 
     @property
     def shape(self):
@@ -259,6 +272,51 @@ class Ndarray:
         impl.get_runtime().sync()
 
     @python_scope
+    def _ndarray_matrix_to_torch(self, as_vector, device=None):
+        """Mirror of ``_ndarray_matrix_to_numpy`` that fills a torch
+        tensor instead of a numpy array.
+
+        Allocates a ``torch.zeros`` of ``self.arr.total_shape()`` (the
+        canonical-major shape including the trailing element-axis
+        extents) and dispatches the same ``ndarray_matrix_to_ext_arr``
+        bridge kernel — torch tensors expose the same external-array
+        interface to the kernel as numpy arrays do.
+        """
+        import torch  # pylint: disable=C0415
+
+        from quadrants.lang.util import to_pytorch_type  # pylint: disable=C0415
+
+        out = torch.zeros(
+            size=tuple(self.arr.total_shape()), dtype=to_pytorch_type(self.dtype), device=device
+        )
+        from quadrants._kernels import (  # pylint: disable=C0415
+            ndarray_matrix_to_ext_arr,  # pylint: disable=C0415
+        )
+
+        layout_is_aos = 1
+        ndarray_matrix_to_ext_arr(self, out, layout_is_aos, as_vector)
+        impl.get_runtime().sync()
+        return out
+
+    @python_scope
+    def _ndarray_matrix_from_torch(self, arr, as_vector):
+        """Mirror of ``_ndarray_matrix_from_numpy`` that ingests a torch
+        tensor. ``.contiguous()`` is forced so the bridge kernel sees a
+        tightly-packed external array."""
+        contig = arr.contiguous()
+        if tuple(self.arr.total_shape()) != tuple(contig.shape):
+            raise ValueError(
+                f"Mismatch shape: {tuple(self.arr.total_shape())} expected, but {tuple(contig.shape)} provided"
+            )
+        from quadrants._kernels import (  # pylint: disable=C0415
+            ext_arr_to_ndarray_matrix,  # pylint: disable=C0415
+        )
+
+        layout_is_aos = 1
+        ext_arr_to_ndarray_matrix(contig, self, layout_is_aos, as_vector)
+        impl.get_runtime().sync()
+
+    @python_scope
     def _ndarray_matrix_from_numpy(self, arr, as_vector):
         """Loads all values from a numpy array.
 
@@ -399,12 +457,60 @@ class ScalarNdarray(Ndarray):
         return self.host_accessor.getter(*self._pad_key(key))
 
     @python_scope
-    def to_numpy(self):
-        return self._ndarray_to_numpy()
+    def to_numpy(self, dtype=None):
+        """Return a canonical-view NumPy array.
+
+        ``dtype``: optional numpy dtype to cast the result to (matches
+        :meth:`Field.to_numpy`'s signature). ``None`` keeps the native
+        ndarray dtype.
+        """
+        arr = self._ndarray_to_numpy()
+        if dtype is not None and arr.dtype != dtype:
+            arr = arr.astype(dtype)
+        return arr
 
     @python_scope
     def from_numpy(self, arr):
         self._ndarray_from_numpy(arr)
+
+    @python_scope
+    def to_torch(self, device=None):
+        """Return a canonical-view torch tensor.
+
+        Mirrors :meth:`Field.to_torch`. The destination is a
+        ``torch.zeros(self.shape, ...)`` allocation that the bridge
+        kernel writes into via the canonical iteration path, so
+        layout-tagged ndarrays produce a canonical view just like
+        ``to_numpy()`` does.
+        """
+        import torch  # pylint: disable=C0415
+
+        from quadrants.lang.util import to_pytorch_type  # pylint: disable=C0415
+
+        canonical_shape = tuple(self.shape)
+        out = torch.zeros(size=canonical_shape, dtype=to_pytorch_type(self.dtype), device=device)
+        from quadrants._kernels import ndarray_to_ext_arr  # pylint: disable=C0415
+
+        ndarray_to_ext_arr(self, out)
+        impl.get_runtime().sync()
+        return out
+
+    @python_scope
+    def from_torch(self, arr):
+        """Load all values from a torch tensor.
+
+        The torch tensor must have the same canonical shape as ``self``;
+        a non-contiguous source is materialised via ``.contiguous()`` so
+        the bridge kernel sees a tightly packed external array.
+        """
+        contig = arr.contiguous()
+        canonical_shape = tuple(self.shape)
+        if canonical_shape != tuple(contig.shape):
+            raise ValueError(f"Mismatch shape: {canonical_shape} expected, but {tuple(contig.shape)} provided")
+        from quadrants._kernels import ext_arr_to_ndarray  # pylint: disable=C0415
+
+        ext_arr_to_ndarray(contig, self)
+        impl.get_runtime().sync()
 
     def __deepcopy__(self, memo=None):
         ret_arr = ScalarNdarray(self.dtype, self._physical_shape)
