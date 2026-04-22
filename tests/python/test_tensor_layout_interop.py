@@ -288,6 +288,46 @@ def test_grad_to_numpy_canonical_view_rank2(backend, layout):
             assert grad[i, j] == float(i * 100 + j * 10)
 
 
+@pytest.mark.parametrize("backend", BACKENDS, ids=BACKEND_IDS)
+@pytest.mark.parametrize("layout", _LAYOUTS_RANK3)
+@test_utils.test(arch=qd.cpu)
+def test_grad_to_numpy_canonical_view_rank3(backend, layout):
+    """Rank-3 coverage for ``.grad`` under the canonical-view contract.
+    Guards against rank-2 symmetries hiding a permutation bug in the
+    grad-tag propagation from :func:`_with_layout`."""
+    canonical = (2, 3, 4)
+    a = qd.tensor(qd.f32, shape=canonical, backend=backend, layout=layout, needs_grad=True)
+    assert a.grad is not None
+    assert tuple(a.grad.shape) == canonical
+
+    if backend is qd.Backend.FIELD:
+
+        @qd.kernel
+        def fill(x: qd.template()):
+            for i, j, k in qd.ndrange(*canonical):
+                x[i, j, k] = float(i * 1000 + j * 10 + k)
+                x.grad[i, j, k] = float(i * 10000 + j * 100 + k * 10)
+
+    else:
+
+        @qd.kernel
+        def fill(x: qd.types.ndarray()):
+            for i, j, k in qd.ndrange(*canonical):
+                x[i, j, k] = float(i * 1000 + j * 10 + k)
+                x.grad[i, j, k] = float(i * 10000 + j * 100 + k * 10)
+
+    fill(a)
+
+    primal = a.to_numpy()
+    grad = a.grad.to_numpy()
+    assert primal.shape == grad.shape == canonical
+    for i in range(canonical[0]):
+        for j in range(canonical[1]):
+            for k in range(canonical[2]):
+                assert primal[i, j, k] == float(i * 1000 + j * 10 + k)
+                assert grad[i, j, k] == float(i * 10000 + j * 100 + k * 10)
+
+
 # ----------------------------------------------------------------------------
 # Identity-layout / no-layout paths must remain byte-identical to legacy
 # (no extra allocation, no transpose, no behavioural drift).
@@ -423,6 +463,78 @@ def test_grouped_struct_for_vector_subscript_rank2(backend, layout):
 
 
 @pytest.mark.parametrize("backend", BACKENDS, ids=BACKEND_IDS)
+@pytest.mark.parametrize("layout", list(itertools.permutations(range(3))))
+@test_utils.test(arch=qd.cpu)
+def test_grouped_struct_for_vector_subscript_rank3_all_permutations(backend, layout):
+    """Extend the ``for I in qd.grouped(x)`` coverage to every rank-3
+    permutation: this is where ``build_struct_for``'s
+    canonical-reorder-of-physical-indices fix can regress silently on
+    symmetric rank-2 layouts (``(0,1)`` / ``(1,0)`` are self-inverse, so
+    confusing ``layout`` with ``invperm(layout)`` still passes). Rank 3
+    has permutations that are **not** self-inverse (e.g. ``(1, 2, 0)``),
+    which catch that class of bug."""
+    canonical = (2, 3, 4)
+    a = qd.tensor(qd.i32, shape=canonical, backend=backend, layout=layout)
+
+    annotation = qd.template() if backend is qd.Backend.FIELD else qd.types.ndarray()
+
+    @qd.kernel
+    def fill(x: annotation):
+        for I in qd.grouped(x):
+            x[I] = I[0] * 10000 + I[1] * 100 + I[2]
+
+    fill(a)
+    arr = a.to_numpy()
+    assert arr.shape == canonical
+    expected = np.zeros(canonical, dtype=np.int32)
+    for i in range(canonical[0]):
+        for j in range(canonical[1]):
+            for k in range(canonical[2]):
+                expected[i, j, k] = i * 10000 + j * 100 + k
+    np.testing.assert_array_equal(arr, expected)
+
+
+# ----------------------------------------------------------------------------
+# Multi-target struct-for ``for i, j in x`` on a layout-tagged ndarray is a
+# known limitation of the current implementation: ``build_struct_for``
+# canonicalises the loop indices for the grouped form (``for I in
+# qd.grouped(x)``), but not for the direct multi-target form, which binds
+# the runtime-delivered physical indices straight to the user names.
+#
+# This test pins that limitation as ``xfail`` so that unrelated refactors
+# surface if the limitation is accidentally lifted (strict=True flips the
+# test red when it starts passing, prompting us to promote it).
+# ----------------------------------------------------------------------------
+
+
+@pytest.mark.xfail(
+    strict=True,
+    reason="multi-target `for i, j in x` on layout-tagged ndarrays "
+    "isn't canonicalised yet; use `for I in qd.grouped(x)` or "
+    "`for i, j in qd.ndrange(*x.shape)` instead.",
+)
+@test_utils.test(arch=qd.cpu)
+def test_multi_target_struct_for_on_layout_tagged_ndarray_xfail():
+    canonical = (3, 4)
+    layout = (1, 0)
+    a = qd.tensor(qd.i32, shape=canonical, backend=qd.Backend.NDARRAY, layout=layout)
+
+    @qd.kernel
+    def fill(x: qd.types.ndarray()):
+        for i, j in x:
+            x[i, j] = i * 100 + j
+
+    fill(a)
+    arr = a.to_numpy()
+    assert arr.shape == canonical
+    expected = np.zeros(canonical, dtype=np.int32)
+    for i in range(canonical[0]):
+        for j in range(canonical[1]):
+            expected[i, j] = i * 100 + j
+    np.testing.assert_array_equal(arr, expected)
+
+
+@pytest.mark.parametrize("backend", BACKENDS, ids=BACKEND_IDS)
 @test_utils.test(arch=qd.cpu)
 def test_grouped_vector_subscript_matches_per_axis(backend):
     """Cross-check: ``x[I]`` and ``x[i, j]`` must produce byte-identical
@@ -486,3 +598,131 @@ def test_genesis_shaped_dofs_batch_layout(backend):
     t = torch.utils.dlpack.from_dlpack(a.to_dlpack())
     assert tuple(t.shape) == canonical
     np.testing.assert_array_equal(t.contiguous().cpu().numpy(), arr)
+
+
+# ----------------------------------------------------------------------------
+# Pickle: the serializer stores the canonical shape and intentionally
+# drops ``_qd_layout``. The unpickled ndarray is layout-free but its
+# element values match the original at every canonical index. See 8.7 in
+# ``perso_hugh/doc/quadrants-tensor.md`` for rationale.
+# ----------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize("layout", _LAYOUTS_RANK3)
+@test_utils.test(arch=qd.cpu)
+def test_pickle_layout_tagged_ndarray_roundtrip_drops_layout(layout):
+    import pickle  # noqa: PLC0415 — local import keeps test self-contained
+
+    canonical = (2, 3, 4)
+    a = qd.tensor(qd.i32, shape=canonical, backend=qd.Backend.NDARRAY, layout=layout)
+    fill = _make_fill_kernel(canonical, qd.Backend.NDARRAY)
+    fill(a)
+
+    restored = pickle.loads(pickle.dumps(a))
+
+    assert tuple(restored.shape) == canonical
+    # Intentional: the tag is dropped, so restored ndarrays are always
+    # layout-free. If/when a layout-preserving pickle lands, flip this to
+    # ``assert restored._qd_layout == tuple(layout)``.
+    assert getattr(restored, "_qd_layout", None) is None
+    np.testing.assert_array_equal(restored.to_numpy(), _expected_canonical(canonical))
+
+
+# ----------------------------------------------------------------------------
+# .fill(val) and copy_from(other): the two non-kernel Python entry points
+# that mutate an ndarray via quadrants-internal kernels. fill(val) uses a
+# C++ bulk-fill on x64/cuda so it's layout-agnostic by construction, but
+# pin the observable behaviour so a future switch to the kernel path
+# doesn't regress silently. copy_from expects the physical shapes to
+# match (enforced in ``Ndarray.copy_from``), so we test the natural
+# use case: two ndarrays with the same layout.
+# ----------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize("layout", _LAYOUTS_RANK3)
+@test_utils.test(arch=qd.cpu)
+def test_fill_scalar_on_layout_tagged_ndarray(layout):
+    canonical = (2, 3, 4)
+    a = qd.tensor(qd.i32, shape=canonical, backend=qd.Backend.NDARRAY, layout=layout)
+    a.fill(7)
+    arr = a.to_numpy()
+    assert arr.shape == canonical
+    np.testing.assert_array_equal(arr, np.full(canonical, 7, dtype=np.int32))
+
+
+@pytest.mark.parametrize("layout", _LAYOUTS_RANK3)
+@test_utils.test(arch=qd.cpu)
+def test_copy_from_matching_layout(layout):
+    canonical = (2, 3, 4)
+    src = qd.tensor(qd.i32, shape=canonical, backend=qd.Backend.NDARRAY, layout=layout)
+    dst = qd.tensor(qd.i32, shape=canonical, backend=qd.Backend.NDARRAY, layout=layout)
+
+    _make_fill_kernel(canonical, qd.Backend.NDARRAY)(src)
+    dst.copy_from(src)
+
+    np.testing.assert_array_equal(dst.to_numpy(), _expected_canonical(canonical))
+    np.testing.assert_array_equal(dst.to_numpy(), src.to_numpy())
+
+
+# ----------------------------------------------------------------------------
+# .grad.to_dlpack() on a layout-tagged ndarray must carry the canonical
+# shape too (grad-tag propagation + dlpack layout path working together).
+# Hardening: ensures the permuted-strides code path is exercised on the
+# grad buffer, not only the primal.
+# ----------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize("layout", _LAYOUTS_RANK2)
+@test_utils.test(arch=qd.cpu)
+def test_grad_to_dlpack_canonical_view_rank2(layout):
+    torch = pytest.importorskip("torch")
+    canonical = (3, 4)
+    a = qd.tensor(qd.f32, shape=canonical, backend=qd.Backend.NDARRAY, layout=layout, needs_grad=True)
+
+    @qd.kernel
+    def fill(x: qd.types.ndarray()):
+        for i, j in qd.ndrange(*canonical):
+            x[i, j] = float(i * 10 + j)
+            x.grad[i, j] = float(i * 100 + j * 10)
+
+    fill(a)
+
+    t = torch.utils.dlpack.from_dlpack(a.grad.to_dlpack())
+    assert tuple(t.shape) == canonical
+    expected = np.zeros(canonical, dtype=np.float32)
+    for i in range(canonical[0]):
+        for j in range(canonical[1]):
+            expected[i, j] = float(i * 100 + j * 10)
+    np.testing.assert_array_equal(t.contiguous().cpu().numpy(), expected)
+
+
+# ----------------------------------------------------------------------------
+# Mixed kernel arguments: a layout-tagged ndarray and an untagged ndarray
+# of the same canonical shape, written in the same kernel. This is the
+# Genesis-migration pattern ("this one solver tensor is layout=..., the
+# rest stay default") and must Just Work: canonical indices on either
+# side produce canonical-view results through ``to_numpy()``.
+# ----------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize("layout", _LAYOUTS_RANK2)
+@test_utils.test(arch=qd.cpu)
+def test_kernel_mixed_tagged_and_untagged_ndarray(layout):
+    canonical = (3, 4)
+    tagged = qd.tensor(qd.i32, shape=canonical, backend=qd.Backend.NDARRAY, layout=layout)
+    untagged = qd.tensor(qd.i32, shape=canonical, backend=qd.Backend.NDARRAY)
+
+    @qd.kernel
+    def run(tagged_arr: qd.types.ndarray(), untagged_arr: qd.types.ndarray()):
+        for i, j in qd.ndrange(*canonical):
+            tagged_arr[i, j] = i * 10 + j
+            untagged_arr[i, j] = tagged_arr[i, j] * 2 + 1
+
+    run(tagged, untagged)
+
+    expected = np.zeros(canonical, dtype=np.int32)
+    for i in range(canonical[0]):
+        for j in range(canonical[1]):
+            expected[i, j] = i * 10 + j
+    np.testing.assert_array_equal(tagged.to_numpy(), expected)
+    np.testing.assert_array_equal(untagged.to_numpy(), expected * 2 + 1)
