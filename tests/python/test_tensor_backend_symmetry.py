@@ -13,12 +13,14 @@ gains a kwarg the other doesn't), one of these tests will fail.
 See ``perso_hugh/doc/quadrants-tensor.md`` §8.9 for the design rationale
 and the per-asymmetry decision matrix.
 """
+
 import itertools
 
 import numpy as np
 import pytest
 
 import quadrants as qd
+
 from tests import test_utils
 
 BACKENDS = [qd.Backend.FIELD, qd.Backend.NDARRAY]

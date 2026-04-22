@@ -286,9 +286,7 @@ class Ndarray:
 
         from quadrants.lang.util import to_pytorch_type  # pylint: disable=C0415
 
-        out = torch.zeros(
-            size=tuple(self.arr.total_shape()), dtype=to_pytorch_type(self.dtype), device=device
-        )
+        out = torch.zeros(size=tuple(self.arr.total_shape()), dtype=to_pytorch_type(self.dtype), device=device)
         from quadrants._kernels import (  # pylint: disable=C0415
             ndarray_matrix_to_ext_arr,  # pylint: disable=C0415
         )
