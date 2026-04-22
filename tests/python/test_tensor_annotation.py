@@ -328,3 +328,55 @@ def test_module_level_qd_tensor_kernel_all_combos_share_decl():
         f"unexpected cache growth: {added} new entries for 4 (backend, "
         f"layout) combos (want 3, accept 2-4)"
     )
+
+
+# ----------------------------------------------------------------------------
+# qd.Tensor across a qd.reset() / qd.init() cycle.
+#
+# Pattern: define a kernel, init quadrants, allocate a Field-backed tensor,
+# run the kernel, then *destroy* the runtime via ``qd.reset()`` and
+# *re-init* it before allocating an Ndarray-backed tensor and re-running
+# the same kernel. Both halves write the right canonical values.
+#
+# This exercises the path where a single kernel-decl object survives a
+# runtime teardown (its compiled cache is invalidated by reset) and is
+# then re-driven against a different backend on the fresh runtime.
+# ----------------------------------------------------------------------------
+
+
+@test_utils.test()
+def test_qd_tensor_across_reset_and_reinit(req_arch, req_options):
+    M, N = 3, 4
+
+    @qd.kernel
+    def fill_2d(x: qd.Tensor):
+        for i, j in qd.ndrange(M, N):
+            x[i, j] = i * 100 + j
+
+    expected = np.zeros((M, N), dtype=np.int32)
+    for i in range(M):
+        for j in range(N):
+            expected[i, j] = i * 100 + j
+
+    # Phase 1: field backend on the runtime the autouse fixture spun up.
+    a_field = qd.tensor(qd.i32, shape=(M, N), backend=qd.Backend.FIELD)
+    fill_2d(a_field)
+    np.testing.assert_array_equal(a_field.to_numpy(), expected)
+
+    # Tear the runtime down. After this any tensor allocated against the
+    # old runtime is dead; the kernel decl object survives but its
+    # compiled cache is cleared.
+    qd.reset()
+
+    # Bring it back on the same arch the fixture chose. Mirror the
+    # fixture's option handling so cuda/x64 both behave like the rest of
+    # the suite.
+    init_options = dict(req_options or {})
+    init_options.setdefault("print_full_traceback", True)
+    qd.init(arch=req_arch, enable_fallback=False, **init_options)
+
+    # Phase 2: ndarray backend on the fresh runtime, same kernel object.
+    a_nd = qd.tensor(qd.i32, shape=(M, N), backend=qd.Backend.NDARRAY)
+    fill_2d(a_nd)
+    np.testing.assert_array_equal(a_nd.to_numpy(), expected)
+    # The autouse fixture's teardown will reset() again on the way out.
