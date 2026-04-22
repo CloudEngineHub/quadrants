@@ -398,6 +398,26 @@ SType IRBuilder::get_array_type(const SType &_value_type, uint32_t num_elems) {
     ib_.begin(spv::OpTypeRuntimeArray).add_seq(arr_type, value_type).commit(&global_);
   }
 
+  // NOTE: We intentionally do NOT emit OpDecorate ArrayStride here.
+  // Per the Vulkan "standalone SPIR-V" rules (VUID-StandaloneSpirv-None-10684),
+  // explicit-layout decorations like ArrayStride are only permitted on types
+  // used in explicit-layout storage classes (StorageBuffer / Uniform /
+  // PushConstant / etc. via a Block/BufferBlock struct). Emitting ArrayStride
+  // on an array type that is then used as a Function- or Workgroup-scope
+  // OpVariable produces invalid SPIR-V that spirv-val rejects and that the
+  // NVIDIA proprietary Vulkan driver's SPIR-V->NVVM compiler crashes on
+  // (observed as a SIGSEGV inside libnvidia-glvkspirv.so during
+  // vkCreateComputePipelines when compiling e.g. the 3x3 sym_eig kernel,
+  // which allocates Function-scope Matrix3x3 tmp variables).
+  // Callers that need a laid-out array (get_struct_array_type below, used for
+  // Block/BufferBlock structs) add the decoration themselves.
+
+  return arr_type;
+}
+
+SType IRBuilder::get_struct_array_type(const SType &value_type, uint32_t num_elems) {
+  SType arr_type = get_array_type(value_type, num_elems);
+
   uint32_t nbytes;
   if (value_type.flag == TypeKind::kPrimitive) {
     const auto nbits = data_type_bits(value_type.dt);
@@ -416,14 +436,9 @@ SType IRBuilder::get_array_type(const SType &_value_type, uint32_t num_elems) {
     }
   }
 
-  // decorate the array type
+  // Wrap the array in a Block/BufferBlock struct; that context requires
+  // explicit layout, so ArrayStride must be decorated here.
   this->decorate(spv::OpDecorate, arr_type, spv::DecorationArrayStride, nbytes);
-
-  return arr_type;
-}
-
-SType IRBuilder::get_struct_array_type(const SType &value_type, uint32_t num_elems) {
-  SType arr_type = get_array_type(value_type, num_elems);
 
   // declare struct of array
   SType struct_type;
