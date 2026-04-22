@@ -39,6 +39,28 @@ _LAYOUTS_RANK2 = [(0, 1), (1, 0)]
 _LAYOUTS_RANK3 = [(0, 1, 2), (2, 1, 0), (2, 0, 1), (1, 2, 0)]
 
 
+def _is_identity(layout):
+    return layout == tuple(range(len(layout)))
+
+
+def _xfail_if_ndarray_non_identity(backend, layout):
+    """Apply ``pytest.xfail`` for the (Ndarray + non-identity layout) cell.
+
+    Confirmed broken on ``hp/tensor-stork-17`` (this is the gotcha B
+    reproduction). Field passes for free because its host accessor walks
+    the SNode tree, which already applies the ``order=`` permutation.
+    The fix lands in the upcoming ``Tensor`` wrapper (§8.11) which will
+    permute host indices in ``__getitem__`` / ``__setitem__``.
+    """
+    if backend is qd.Backend.NDARRAY and not _is_identity(layout):
+        pytest.xfail(
+            "gotcha B: Ndarray host-side __getitem__/__setitem__ is not "
+            "layout-aware; canonical->physical permutation only fires "
+            "inside @qd.kernel via ast_transformer.py. Fixed in the "
+            "Tensor wrapper (see design doc §8.11)."
+        )
+
+
 def _fill_via_from_numpy(a, canonical_shape):
     """Populate ``a`` with distinct, position-encoding values via the
     layout-aware ``from_numpy`` path. Returns the source numpy array so
@@ -53,6 +75,7 @@ def _fill_via_from_numpy(a, canonical_shape):
 @test_utils.test(arch=qd.cpu)
 def test_host_getitem_canonical_rank2(backend, layout):
     """``a[i, j]`` at host scope must equal ``a.to_numpy()[i, j]``."""
+    _xfail_if_ndarray_non_identity(backend, layout)
     canonical = (3, 4)
     a = qd.tensor(qd.i32, shape=canonical, backend=backend, layout=layout)
     src = _fill_via_from_numpy(a, canonical)
@@ -73,6 +96,7 @@ def test_host_getitem_canonical_rank2(backend, layout):
 @pytest.mark.parametrize("layout", _LAYOUTS_RANK3)
 @test_utils.test(arch=qd.cpu)
 def test_host_getitem_canonical_rank3(backend, layout):
+    _xfail_if_ndarray_non_identity(backend, layout)
     canonical = (2, 3, 4)
     a = qd.tensor(qd.i32, shape=canonical, backend=backend, layout=layout)
     src = _fill_via_from_numpy(a, canonical)
@@ -96,6 +120,7 @@ def test_host_setitem_canonical_rank2(backend, layout):
     """``a[i, j] = v`` at host scope must place ``v`` at canonical
     coordinate ``(i, j)``, i.e. ``a.to_numpy()[i, j] == v``.
     """
+    _xfail_if_ndarray_non_identity(backend, layout)
     canonical = (3, 4)
     a = qd.tensor(qd.i32, shape=canonical, backend=backend, layout=layout)
 
