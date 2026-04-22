@@ -79,7 +79,7 @@ class Field:
         encoded in the storage but is not surfaced through this
         introspection accessor.
         """
-        layout = getattr(self, "_qd_layout", None)
+        layout = getattr(self, "_qd_field_layout", None)
         if layout is None:
             return None
         layout = tuple(layout)

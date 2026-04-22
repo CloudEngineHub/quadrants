@@ -231,10 +231,18 @@ def tensor(dtype, shape, *, backend=Backend.NDARRAY, layout=None, **kwargs):
         # Stash the layout permutation so ``Field.layout`` can report it
         # symmetrically with ``Ndarray.layout``. Identity is normalised
         # to ``None`` at the property level.
+        #
+        # NOTE: the attribute is ``_qd_field_layout``, *not* ``_qd_layout``.
+        # Ndarrays use ``_qd_layout`` as the canonical->physical AST
+        # rewrite trigger in ``build_Subscript`` / ``build_struct_for``;
+        # fields don't need that rewrite (their SNode hierarchy already
+        # translates canonical indices via ``order=``), so we keep the
+        # introspection-only field tag in a separate namespace to avoid
+        # accidentally double-permuting field IR.
         if layout is not None:
-            f._qd_layout = tuple(layout)
+            f._qd_field_layout = tuple(layout)
             if getattr(f, "grad", None) is not None:
-                f.grad._qd_layout = tuple(layout)
+                f.grad._qd_field_layout = tuple(layout)
         return f
     if backend is Backend.NDARRAY:
         if order is None:
