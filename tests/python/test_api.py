@@ -257,6 +257,7 @@ user_api[qd.Field] = [
     "fill",
     "from_numpy",
     "from_torch",
+    "layout",
     "parent",
     "shape",
     "snode",
