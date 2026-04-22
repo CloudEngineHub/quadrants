@@ -262,6 +262,30 @@ class ASTTransformer(Builder):
         return False
 
     @staticmethod
+    def _unpack_layout_vector_index(ast_builder, index, layout_len):
+        """If ``index`` is a rank-1 Vector of length ``layout_len``, return
+        its component list so the layout permutation can be applied
+        per-axis. Otherwise return ``[index]`` unchanged.
+
+        Handles both forms a single subscript can take inside a kernel:
+
+        - ``Matrix`` (Python class) — produced when the kernel runs on the
+          python backend, e.g. ``qd.grouped(field)`` returning a
+          ``[Matrix([i, j])]`` list.
+        - ``Expr`` with tensor shape ``(N,)`` — produced by
+          ``matrix.make_matrix(loop_indices, ...)`` in
+          :func:`build_struct_for` / :func:`build_grouped_ndrange_for`,
+          which is what real kernels see for ``for I in qd.grouped(...)``.
+        """
+        if isinstance(index, Matrix) and index.n == layout_len and index.m == 1:
+            return index.to_list()
+        if isinstance(index, expr.Expr) and index.is_tensor():
+            shape = index.get_shape()
+            if len(shape) == 1 and shape[0] == layout_len:
+                return [impl.subscript(ast_builder, index, k) for k in range(layout_len)]
+        return [index]
+
+    @staticmethod
     def build_Subscript(ctx: ASTTransformerFuncContext, node: ast.Subscript):
         build_stmt(ctx, node.value)
         build_stmt(ctx, node.slice)
@@ -271,9 +295,23 @@ class ASTTransformer(Builder):
         # has its canonical indices permuted into physical-storage order
         # before forwarding. None and identity layouts are handled
         # transparently (no rewrite => byte-identical IR for legacy code).
+        #
+        # Two indexing forms must be permuted:
+        # 1. Multi-arg subscript ``x[i, j, ...]``: ``node.slice.ptr`` is
+        #    already a list of N scalars; permute by axis.
+        # 2. Single-Vector subscript ``x[I]`` where I is a rank-N Matrix
+        #    coming from ``qd.grouped(...)``: unpack into N scalars first,
+        #    then permute. Without this, ``x[I]`` writes at canonical
+        #    indices into the smaller physical buffer — silently OOB on
+        #    permuted layouts.
         layout = getattr(node.value.ptr, "_qd_layout", None)
-        if layout is not None and len(node.slice.ptr) == len(layout):
-            node.slice.ptr = [node.slice.ptr[axis] for axis in layout]
+        if layout is not None:
+            if len(node.slice.ptr) == 1:
+                node.slice.ptr = ASTTransformer._unpack_layout_vector_index(
+                    ctx.ast_builder, node.slice.ptr[0], len(layout)
+                )
+            if len(node.slice.ptr) == len(layout):
+                node.slice.ptr = [node.slice.ptr[axis] for axis in layout]
         node.ptr = impl.subscript(ctx.ast_builder, node.value.ptr, *node.slice.ptr)
         node.violates_pure = node.value.violates_pure
         if node.violates_pure:

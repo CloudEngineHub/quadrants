@@ -60,15 +60,14 @@ def _expected_canonical(shape):
 
 def _make_fill_kernel(shape, backend):
     """Build a kernel that fills its argument with the same canonical
-    values as :func:`_expected_canonical`.
+    values as :func:`_expected_canonical`, using explicit per-axis
+    ``x[i, j, ...]`` indexing (one kernel per rank).
 
-    Uses explicit per-axis ``x[i, j, ...]`` indexing (one kernel per rank)
-    rather than ``x[I]`` with a Vector index from ``grouped(...)``. The
-    canonical→physical AST rewrite at :func:`build_Subscript` only fires
-    when the subscript arity matches ``_qd_layout`` length, which means
-    ``x[I]`` (single Vector) bypasses the rewrite and writes at the
-    physical positions of canonical indices — silently OOB on permuted
-    layouts.
+    The complementary single-Vector form ``x[I]`` (with ``I`` from
+    ``qd.grouped(...)``) is exercised separately in
+    :func:`test_grouped_vector_subscript_canonical_view_*` below; both
+    forms must agree on canonical-view semantics for layout-tagged
+    ndarrays.
     """
     coeffs = []
     rolling = 1
@@ -311,6 +310,128 @@ def test_identity_layout_to_numpy_unchanged():
     arr = a.to_numpy()
     assert arr.shape == canonical
     np.testing.assert_array_equal(arr, _expected_canonical(canonical))
+
+
+# ----------------------------------------------------------------------------
+# Single-Vector subscript ``x[I]`` (from ``qd.grouped(...)``) must obey
+# the same canonical-view contract as multi-arg ``x[i, j, ...]`` on
+# layout-tagged ndarrays.
+#
+# Regression for the AST rewrite in :func:`build_Subscript`: prior to
+# the fix, ``x[I]`` skipped the canonical→physical permutation because
+# the subscript arity (1) didn't match ``len(_qd_layout)`` (N). On a
+# permuted layout this silently wrote at canonical indices into a
+# differently-shaped physical buffer — out-of-bounds for any non-square
+# canonical shape.
+# ----------------------------------------------------------------------------
+
+
+def _make_grouped_ndrange_fill_kernel(shape, backend):
+    """Companion to :func:`_make_fill_kernel` that uses ``x[I]`` with
+    ``I`` coming from ``qd.grouped(qd.ndrange(...))``."""
+    coeffs = []
+    rolling = 1
+    for dim in reversed(shape):
+        coeffs.append(rolling)
+        rolling *= max(dim, 1) * 10
+    coeffs = list(reversed(coeffs))
+
+    annotation = qd.template() if backend is qd.Backend.FIELD else qd.types.ndarray()
+
+    if len(shape) == 2:
+        c0, c1 = coeffs
+        d0, d1 = shape
+
+        @qd.kernel
+        def fill(x: annotation):
+            for I in qd.grouped(qd.ndrange(d0, d1)):
+                x[I] = I[0] * c0 + I[1] * c1
+
+    elif len(shape) == 3:
+        c0, c1, c2 = coeffs
+        d0, d1, d2 = shape
+
+        @qd.kernel
+        def fill(x: annotation):
+            for I in qd.grouped(qd.ndrange(d0, d1, d2)):
+                x[I] = I[0] * c0 + I[1] * c1 + I[2] * c2
+
+    else:
+        raise NotImplementedError(f"_make_grouped_ndrange_fill_kernel: rank {len(shape)} not supported")
+
+    return fill
+
+
+@pytest.mark.parametrize("backend", BACKENDS, ids=BACKEND_IDS)
+@pytest.mark.parametrize("layout", _LAYOUTS_RANK2)
+@test_utils.test(arch=qd.cpu)
+def test_grouped_vector_subscript_canonical_view_rank2(backend, layout):
+    canonical = (3, 4)
+    a = qd.tensor(qd.i32, shape=canonical, backend=backend, layout=layout)
+    fill = _make_grouped_ndrange_fill_kernel(canonical, backend)
+    fill(a)
+
+    arr = a.to_numpy()
+    assert arr.shape == canonical
+    np.testing.assert_array_equal(arr, _expected_canonical(canonical))
+
+
+@pytest.mark.parametrize("backend", BACKENDS, ids=BACKEND_IDS)
+@pytest.mark.parametrize("layout", _LAYOUTS_RANK3)
+@test_utils.test(arch=qd.cpu)
+def test_grouped_vector_subscript_canonical_view_rank3(backend, layout):
+    canonical = (2, 3, 4)
+    a = qd.tensor(qd.i32, shape=canonical, backend=backend, layout=layout)
+    fill = _make_grouped_ndrange_fill_kernel(canonical, backend)
+    fill(a)
+
+    arr = a.to_numpy()
+    assert arr.shape == canonical
+    np.testing.assert_array_equal(arr, _expected_canonical(canonical))
+
+
+@pytest.mark.parametrize("backend", BACKENDS, ids=BACKEND_IDS)
+@pytest.mark.parametrize("layout", _LAYOUTS_RANK2)
+@test_utils.test(arch=qd.cpu)
+def test_grouped_struct_for_vector_subscript_rank2(backend, layout):
+    """``for I in qd.grouped(x)`` is the other source of single-Vector
+    subscripts in real kernels — the loop var ``I`` has rank
+    ``len(x.shape)`` and is used as ``x[I]``. Pin canonical-view
+    behaviour here too."""
+    canonical = (3, 4)
+    a = qd.tensor(qd.i32, shape=canonical, backend=backend, layout=layout)
+
+    annotation = qd.template() if backend is qd.Backend.FIELD else qd.types.ndarray()
+
+    @qd.kernel
+    def fill(x: annotation):
+        for I in qd.grouped(x):
+            x[I] = I[0] * 100 + I[1]
+
+    fill(a)
+    arr = a.to_numpy()
+    assert arr.shape == canonical
+    expected = np.zeros(canonical, dtype=np.int32)
+    for i in range(canonical[0]):
+        for j in range(canonical[1]):
+            expected[i, j] = i * 100 + j
+    np.testing.assert_array_equal(arr, expected)
+
+
+@pytest.mark.parametrize("backend", BACKENDS, ids=BACKEND_IDS)
+@test_utils.test(arch=qd.cpu)
+def test_grouped_vector_subscript_matches_per_axis(backend):
+    """Cross-check: ``x[I]`` and ``x[i, j]`` must produce byte-identical
+    results on the same layout-tagged tensor."""
+    canonical = (3, 5)
+    layout = (1, 0)
+    via_grouped = qd.tensor(qd.i32, shape=canonical, backend=backend, layout=layout)
+    via_per_axis = qd.tensor(qd.i32, shape=canonical, backend=backend, layout=layout)
+
+    _make_grouped_ndrange_fill_kernel(canonical, backend)(via_grouped)
+    _make_fill_kernel(canonical, backend)(via_per_axis)
+
+    np.testing.assert_array_equal(via_grouped.to_numpy(), via_per_axis.to_numpy())
 
 
 # ----------------------------------------------------------------------------
