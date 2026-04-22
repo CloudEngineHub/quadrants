@@ -291,12 +291,20 @@ class ASTTransformer(Builder):
         build_stmt(ctx, node.slice)
         if not ASTTransformer.is_tuple(node.slice):
             node.slice.ptr = [node.slice.ptr]
-        # Tensors layout: AnyArray with non-identity ``_qd_layout``
-        # has its canonical indices permuted into physical-storage order
-        # before forwarding. None and identity layouts are handled
-        # transparently (no rewrite => byte-identical IR for legacy code).
+        # Tensors layout: layout-tagged Ndarray with a non-identity
+        # ``_qd_layout`` has its canonical indices permuted into
+        # physical-storage order before forwarding. ``None`` and
+        # identity layouts are handled transparently (no rewrite =>
+        # byte-identical IR for legacy code).
         #
-        # Two indexing forms must be permuted:
+        # Fields with non-identity ``_qd_layout`` (set by ``qd.tensor()``
+        # for ``Backend.FIELD`` so the layout property can introspect)
+        # are deliberately excluded from this rewrite: their SNode
+        # hierarchy already translates canonical indices to permuted
+        # physical addresses at the IR level via the ``order=`` keyword.
+        # Permuting again here would double-permute the access.
+        #
+        # Two indexing forms must be permuted on Ndarrays:
         # 1. Multi-arg subscript ``x[i, j, ...]``: ``node.slice.ptr`` is
         #    already a list of N scalars; permute by axis.
         # 2. Single-Vector subscript ``x[I]`` where I is a rank-N Matrix
@@ -304,8 +312,10 @@ class ASTTransformer(Builder):
         #    then permute. Without this, ``x[I]`` writes at canonical
         #    indices into the smaller physical buffer — silently OOB on
         #    permuted layouts.
+        from quadrants.lang._ndarray import Ndarray  # pylint: disable=C0415
+
         layout = getattr(node.value.ptr, "_qd_layout", None)
-        if layout is not None:
+        if layout is not None and isinstance(node.value.ptr, Ndarray):
             if len(node.slice.ptr) == 1:
                 node.slice.ptr = ASTTransformer._unpack_layout_vector_index(
                     ctx.ast_builder, node.slice.ptr[0], len(layout)
@@ -1096,8 +1106,20 @@ class ASTTransformer(Builder):
                 # round-trips correctly through the canonical->physical AST
                 # rewrite in :func:`build_Subscript`. Reorder the indices
                 # so position ``m`` carries the canonical-axis-``m`` value.
+                #
+                # Fields are excluded: their struct-for already delivers
+                # canonical indices at the IR level via the SNode order=,
+                # and ``build_Subscript`` skips the canonical->physical
+                # rewrite for fields too. Reordering here would double-
+                # permute the loop indices.
+                from quadrants.lang._ndarray import Ndarray  # pylint: disable=C0415
+
                 layout = getattr(loop_var, "_qd_layout", None)
-                if layout is not None and len(layout) == len(loop_indices):
+                if (
+                    layout is not None
+                    and len(layout) == len(loop_indices)
+                    and isinstance(loop_var, Ndarray)
+                ):
                     invperm = [0] * len(layout)
                     for k, axis in enumerate(layout):
                         invperm[axis] = k
@@ -1109,20 +1131,27 @@ class ASTTransformer(Builder):
                 ctx.ast_builder.end_frontend_struct_for()
             else:
                 loop_var = node.iter.ptr
-                # Layout-tagged tensors (ndarray with ``_qd_layout`` or
-                # field that came through ``qd.tensor(layout=...)``):
-                # the runtime fills the loop-target slots with *physical*
-                # indices but the user spelled them with canonical names
-                # (``for i, j in x`` where ``i`` is canonical axis 0).
-                # Allocate hidden physical slots and rebind each user
-                # name to the physical slot whose runtime value is the
-                # canonical-axis value the user expects.
+                # Layout-tagged ndarrays only: the runtime fills the
+                # loop-target slots with *physical* indices but the user
+                # spelled them with canonical names (``for i, j in x``
+                # where ``i`` is canonical axis 0). Allocate hidden
+                # physical slots and rebind each user name to the
+                # physical slot whose runtime value is the canonical-axis
+                # value the user expects.
                 #
-                # See :func:`build_Subscript` for the symmetric
-                # canonical->physical translation on ``x[i, j]`` reads
-                # and writes inside the loop body.
+                # Fields are excluded: their struct-for already delivers
+                # canonical indices at the IR level via the SNode order=,
+                # and ``build_Subscript`` skips the canonical->physical
+                # rewrite for fields. See :func:`build_Subscript` for
+                # the symmetric translation on ``x[i, j]`` reads/writes.
+                from quadrants.lang._ndarray import Ndarray  # pylint: disable=C0415
+
                 layout = getattr(loop_var, "_qd_layout", None)
-                if layout is not None and len(layout) == len(targets):
+                if (
+                    layout is not None
+                    and len(layout) == len(targets)
+                    and isinstance(loop_var, Ndarray)
+                ):
                     phys_vars = [expr.Expr(ctx.ast_builder.make_id_expr("")) for _ in targets]
                     invperm = [0] * len(layout)
                     for k, axis in enumerate(layout):
