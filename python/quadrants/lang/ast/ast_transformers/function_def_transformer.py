@@ -11,8 +11,8 @@ from quadrants._lib.core.quadrants_python import (
 from quadrants._tensor import (
     _TENSOR_T_FIELD_MARKER,
     _TENSOR_T_NDARRAY_MARKER,
-    _TensorAnnotation,
 )
+from quadrants._tensor_wrapper import Tensor as _TensorClass
 from quadrants.lang import (
     _ndarray,
     any_array,
@@ -48,8 +48,9 @@ class FunctionDefTransformer:
         if not isinstance(annotation, primitive_types.RefType):
             ctx.kernel_args.append(name)
         # qd.Tensor value-dispatch. The first slot of this_arg_features
-        # is a string marker placed by _template_mapper_hotpath.
-        if isinstance(annotation, _TensorAnnotation):
+        # is a string marker placed by _template_mapper_hotpath. The
+        # annotation is the wrapper class itself (``qd.Tensor``).
+        if annotation is _TensorClass:
             assert this_arg_features is not None
             marker = this_arg_features[0]
             if marker == _TENSOR_T_NDARRAY_MARKER:

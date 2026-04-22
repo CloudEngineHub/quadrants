@@ -1,35 +1,39 @@
-"""``Tensor`` wrapper — full surface (``hp/tensor-stork-18``).
+"""``qd.Tensor``: backend-agnostic tensor wrapper.
 
 A thin Python wrapper around an underlying ``Ndarray`` or ``ScalarField``
 impl. Makes backend symmetry a *type* property rather than something we
 police test by test: the wrapper exposes a fixed whitelisted surface
 uniformly, regardless of which impl it contains.
 
-Scope of this file (stork-18):
+Promoted to ``qd.Tensor`` in ``hp/tensor-stork-19``: the class is now
+the public name, doubles as the polymorphic kernel-arg annotation
+(``def f(x: qd.Tensor): ...``), and is what ``qd.tensor()``,
+``qd.Vector.tensor()``, ``qd.Matrix.tensor()`` return. Bare impls are
+still reachable via ``qd.field``, ``qd.ndarray``, ``qd.Vector.field`` etc.
 
-- Skeleton introspection (``shape``, ``dtype``, ``layout``, ``_unwrap``).
+Surface:
+
+- Introspection: ``shape``, ``dtype``, ``layout``, ``_unwrap()``.
 - Layout-aware host-side ``__getitem__`` / ``__setitem__`` — permutes the
   canonical user key to the physical slot on layout-tagged ndarrays.
   Fixes gotcha B from the design doc (§8.11).
 - Symmetric pickle via ``__reduce__`` — round-trips through
   ``to_numpy()`` so it works uniformly on both backends (Field, which
-  never supported pickle upstream, now picklable through the wrapper).
+  never supported pickle upstream, is picklable through the wrapper).
 - Forwards for ``to_numpy`` / ``from_numpy`` / ``to_torch`` /
-  ``from_torch`` / ``to_dlpack`` / ``fill`` / ``copy_from``. These are
-  already layout-aware on both backends after stork-15/16, so the
-  wrapper just delegates.
+  ``from_torch`` / ``to_dlpack`` / ``fill`` / ``copy_from`` — already
+  layout-aware on both backends after stork-15/16, the wrapper delegates.
 - Lazy-wrapped ``.grad`` — returns a ``Tensor`` wrapping ``impl.grad``
   (identity-stable via ``functools.cached_property``).
 - ``VectorTensor`` / ``MatrixTensor`` subclasses carrying
   ``element_shape``.
 
-Out of scope for stork-18:
-- Class-name promotion (``qd._Tensor`` → ``qd.Tensor``). The existing
-  ``qd.Tensor`` annotation is untouched; the wrapper stays private.
-  That flip + the factory default flip are stork-19.
-- Genesis migration (stork-20).
+Out of scope:
+- Genesis migration (stork-20): rewrite Genesis ``isinstance`` sites
+  from ``(qd.Field, qd.Ndarray)`` to ``qd.Tensor``, switch its tensor
+  allocations to ``qd.tensor()``.
 
-See ``perso_hugh/doc/quadrants-tensor.md`` §8.11.
+See ``perso_hugh/doc/quadrants-tensor.md`` §8.11 / §8.12.
 """
 
 from __future__ import annotations
@@ -53,7 +57,7 @@ def _is_identity(layout: typing.Optional[typing.Tuple[int, ...]]) -> bool:
 
 
 class Tensor:
-    """Backend-agnostic tensor wrapper. POC — opt-in only.
+    """Backend-agnostic tensor wrapper. The public ``qd.Tensor`` class.
 
     Holds a reference to an underlying impl (``Ndarray`` or ``Field``)
     and forwards a whitelisted surface. Layout-aware host-side indexing
@@ -61,7 +65,13 @@ class Tensor:
     inside ``@qd.kernel`` bodies, so ``t[i, j]`` at host scope on a
     layout-tagged ndarray would otherwise hit the physical slot.
 
-    Construct explicitly via ``Tensor(impl)``. There's no factory yet.
+    Construct via ``qd.tensor(...)`` (or its ``qd.Vector.tensor`` /
+    ``qd.Matrix.tensor`` siblings). The wrapper rejects double-wrapping:
+    the impl must be a bare ``Ndarray`` or ``Field``.
+
+    Doubles as a kernel parameter annotation: ``def k(x: qd.Tensor)``
+    accepts either a Field or an Ndarray; dispatch happens at extract
+    time. See ``_template_mapper_hotpath._extract_arg``.
     """
 
     # ``cached_property`` requires ``__dict__``, so no ``__slots__``.

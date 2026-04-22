@@ -15,19 +15,15 @@ Per the user-stated rule that ``layout=`` must be invisible to users
 host-side indexing has to return the *canonical* element, identical to
 ``a.to_numpy()[i, j]``.
 
-The ``qd._Tensor`` wrapper (stork-18) owns this fix: on a layout-tagged
-ndarray it translates the canonical user key to physical coords before
-hitting the impl accessor; on a field it simply delegates. Both paths
-give the user the canonical view, symmetric across backends.
+The ``qd.Tensor`` wrapper owns this fix: on a layout-tagged ndarray it
+translates the canonical user key to physical coords before hitting the
+impl accessor; on a field it simply delegates. Both paths give the user
+the canonical view, symmetric across backends.
 
-This file covers two contracts:
-
-- *bare-impl* (legacy surface). Field passes for free; Ndarray
-  non-identity-layout is the pre-existing gotcha B bug, marked ``xfail``
-  until ``qd.tensor()`` is flipped to return wrappers in stork-19.
-- *wrapped* (``qd._Tensor(impl)``). Must pass on both backends at every
-  layout (wrapped is the canonical-view contract the user actually sees
-  once we flip the default).
+Stork-19 flips ``qd.tensor()`` (and the Vector/Matrix variants) to
+return ``qd.Tensor`` wrappers, so the natural user path here goes
+through the wrapper and the previous gotcha-B xfails turn into
+unconditional passes.
 """
 
 import itertools
@@ -50,24 +46,6 @@ def _is_identity(layout):
     return layout == tuple(range(len(layout)))
 
 
-def _xfail_if_ndarray_non_identity(backend, layout):
-    """Apply ``pytest.xfail`` for the (Ndarray + non-identity layout) cell.
-
-    Confirmed broken on ``hp/tensor-stork-17`` (this is the gotcha B
-    reproduction). Field passes for free because its host accessor walks
-    the SNode tree, which already applies the ``order=`` permutation.
-    The fix lands in the upcoming ``Tensor`` wrapper (§8.11) which will
-    permute host indices in ``__getitem__`` / ``__setitem__``.
-    """
-    if backend is qd.Backend.NDARRAY and not _is_identity(layout):
-        pytest.xfail(
-            "gotcha B: Ndarray host-side __getitem__/__setitem__ is not "
-            "layout-aware; canonical->physical permutation only fires "
-            "inside @qd.kernel via ast_transformer.py. Fixed in the "
-            "Tensor wrapper (see design doc §8.11)."
-        )
-
-
 def _fill_via_from_numpy(a, canonical_shape):
     """Populate ``a`` with distinct, position-encoding values via the
     layout-aware ``from_numpy`` path. Returns the source numpy array so
@@ -82,7 +60,6 @@ def _fill_via_from_numpy(a, canonical_shape):
 @test_utils.test(arch=qd.cpu)
 def test_host_getitem_canonical_rank2(backend, layout):
     """``a[i, j]`` at host scope must equal ``a.to_numpy()[i, j]``."""
-    _xfail_if_ndarray_non_identity(backend, layout)
     canonical = (3, 4)
     a = qd.tensor(qd.i32, shape=canonical, backend=backend, layout=layout)
     src = _fill_via_from_numpy(a, canonical)
@@ -103,7 +80,6 @@ def test_host_getitem_canonical_rank2(backend, layout):
 @pytest.mark.parametrize("layout", _LAYOUTS_RANK3)
 @test_utils.test(arch=qd.cpu)
 def test_host_getitem_canonical_rank3(backend, layout):
-    _xfail_if_ndarray_non_identity(backend, layout)
     canonical = (2, 3, 4)
     a = qd.tensor(qd.i32, shape=canonical, backend=backend, layout=layout)
     src = _fill_via_from_numpy(a, canonical)
@@ -127,7 +103,6 @@ def test_host_setitem_canonical_rank2(backend, layout):
     """``a[i, j] = v`` at host scope must place ``v`` at canonical
     coordinate ``(i, j)``, i.e. ``a.to_numpy()[i, j] == v``.
     """
-    _xfail_if_ndarray_non_identity(backend, layout)
     canonical = (3, 4)
     a = qd.tensor(qd.i32, shape=canonical, backend=backend, layout=layout)
 
@@ -141,21 +116,42 @@ def test_host_setitem_canonical_rank2(backend, layout):
 
 
 # ----------------------------------------------------------------------
-# Wrapped-tensor tests: the canonical-view contract must hold at *every*
-# (backend, layout) cell when the user interacts via ``qd._Tensor``.
-# These are the tests that exercise the stork-18 host-indexing fix.
+# Bare-impl path: same canonical-view contract must hold when the user
+# constructs the wrapper explicitly from a bare impl (i.e. allocates via
+# ``qd.field`` / ``qd.ndarray`` and wraps with ``qd.Tensor(impl)``).
+# Sanity check that the wrapper's host-side fix isn't tied to the
+# factory codepath.
 # ----------------------------------------------------------------------
+
+
+def _alloc_bare(backend, dtype, canonical, layout):
+    """Allocate a bare impl with the given layout, mirroring the factory
+    logic. Used by the wrapper-from-bare tests below."""
+    if backend is qd.Backend.FIELD:
+        order = layout if not _is_identity(layout) else None
+        kwargs = {"order": order} if order is not None else {}
+        f = qd.field(dtype, canonical, **kwargs)
+        if not _is_identity(layout):
+            f._qd_field_layout = tuple(layout)
+        return f
+    # NDARRAY
+    if _is_identity(layout):
+        return qd.ndarray(dtype, canonical)
+    physical = tuple(canonical[ax] for ax in layout)
+    arr = qd.ndarray(dtype, physical)
+    arr._qd_layout = tuple(layout)
+    return arr
 
 
 @pytest.mark.parametrize("backend", BACKENDS, ids=BACKEND_IDS)
 @pytest.mark.parametrize("layout", _LAYOUTS_RANK2)
 @test_utils.test(arch=qd.cpu)
-def test_wrapped_host_getitem_canonical_rank2(backend, layout):
+def test_wrapped_from_bare_host_getitem_rank2(backend, layout):
     canonical = (3, 4)
-    a = qd.tensor(qd.i32, shape=canonical, backend=backend, layout=layout)
-    src = _fill_via_from_numpy(a, canonical)
+    a = _alloc_bare(backend, qd.i32, canonical, layout)
+    t = qd.Tensor(a)
+    src = _fill_via_from_numpy(t, canonical)
 
-    t = qd._Tensor(a)
     assert t.shape == canonical
     assert t.layout == (None if _is_identity(layout) else layout)
 
@@ -163,46 +159,7 @@ def test_wrapped_host_getitem_canonical_rank2(backend, layout):
         host = t[ci]
         canon = int(src[ci])
         assert int(host) == canon, (
-            f"wrapped host indexing broke canonical view: t{list(ci)} = "
-            f"{int(host)}, canonical = {canon}, backend={backend!r}, "
-            f"layout={layout}"
+            f"wrapped-from-bare host indexing broke canonical view: "
+            f"t{list(ci)} = {int(host)}, canonical = {canon}, "
+            f"backend={backend!r}, layout={layout}"
         )
-
-
-@pytest.mark.parametrize("backend", BACKENDS, ids=BACKEND_IDS)
-@pytest.mark.parametrize("layout", _LAYOUTS_RANK3)
-@test_utils.test(arch=qd.cpu)
-def test_wrapped_host_getitem_canonical_rank3(backend, layout):
-    canonical = (2, 3, 4)
-    a = qd.tensor(qd.i32, shape=canonical, backend=backend, layout=layout)
-    src = _fill_via_from_numpy(a, canonical)
-
-    t = qd._Tensor(a)
-    for ci in itertools.product(*(range(d) for d in canonical)):
-        host = t[ci]
-        canon = int(src[ci])
-        assert int(host) == canon, (
-            f"wrapped host indexing broke canonical view: t{list(ci)} = "
-            f"{int(host)}, canonical = {canon}, backend={backend!r}, "
-            f"layout={layout}"
-        )
-
-
-@pytest.mark.parametrize("backend", BACKENDS, ids=BACKEND_IDS)
-@pytest.mark.parametrize("layout", _LAYOUTS_RANK2)
-@test_utils.test(arch=qd.cpu)
-def test_wrapped_host_setitem_canonical_rank2(backend, layout):
-    canonical = (3, 4)
-    a = qd.tensor(qd.i32, shape=canonical, backend=backend, layout=layout)
-    t = qd._Tensor(a)
-
-    expected = np.zeros(canonical, dtype=np.int32)
-    for n, ci in enumerate(itertools.product(*(range(d) for d in canonical))):
-        v = 2000 + n
-        t[ci] = v
-        expected[ci] = v
-
-    np.testing.assert_array_equal(a.to_numpy(), expected)
-    # And reading back through the wrapper matches too.
-    for ci in itertools.product(*(range(d) for d in canonical)):
-        assert int(t[ci]) == int(expected[ci])

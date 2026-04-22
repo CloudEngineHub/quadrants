@@ -10,25 +10,40 @@ import numpy as np
 import pytest
 
 import quadrants as qd
-from quadrants._tensor import _TensorAnnotation
 
 from tests import test_utils
 
 # ----------------------------------------------------------------------------
-# Singleton + identity
+# Class identity
 # ----------------------------------------------------------------------------
 
 
-def test_tensor_is_singleton_instance():
-    assert isinstance(qd.Tensor, _TensorAnnotation)
+def test_tensor_is_a_class():
+    """As of stork-19, ``qd.Tensor`` is the wrapper *class* (not a
+    Template singleton). Used both as kernel-arg annotation and as a
+    constructor: ``qd.Tensor(impl)`` produces a wrapper. The annotation
+    branch in ``_func_base.py`` recognises ``annotation is qd.Tensor``
+    explicitly.
+    """
+    assert isinstance(qd.Tensor, type)
 
 
-def test_tensor_is_a_template_subclass():
-    """qd.Tensor must inherit from Template so the upfront slot detection
-    in _func_base.py registers it as a template slot."""
-    from quadrants.types.annotations import Template
+@test_utils.test(arch=qd.cpu)
+def test_tensor_factory_returns_wrapper():
+    """Post stork-19, ``qd.tensor(...)`` returns ``qd.Tensor`` instances."""
+    a = qd.tensor(qd.i32, shape=(4,), backend=qd.Backend.NDARRAY)
+    b = qd.tensor(qd.i32, shape=(4,), backend=qd.Backend.FIELD)
+    assert isinstance(a, qd.Tensor)
+    assert isinstance(b, qd.Tensor)
 
-    assert isinstance(qd.Tensor, Template)
+
+@test_utils.test(arch=qd.cpu)
+def test_tensor_double_wrap_rejected():
+    """``qd.Tensor`` requires an Ndarray or Field impl; rejects wrapping
+    another wrapper to avoid silent identity confusion."""
+    a = qd.tensor(qd.i32, shape=(4,), backend=qd.Backend.NDARRAY)
+    with pytest.raises(TypeError):
+        qd.Tensor(a)
 
 
 # ----------------------------------------------------------------------------

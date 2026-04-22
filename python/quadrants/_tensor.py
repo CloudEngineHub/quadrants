@@ -5,6 +5,12 @@ This module is the user-facing entry point for selecting a tensor backend
 on a per-tensor basis.
 
 See ``docs/source/user_guide/tensor.md`` for the user guide.
+
+``qd.Tensor`` is the wrapper *class* defined in ``_tensor_wrapper.py``;
+it doubles as the polymorphic kernel-argument annotation. The dispatch
+sites that previously keyed off the ``_TensorAnnotation`` singleton type
+now check ``annotation is Tensor`` (the class). See ``_func_base.py``,
+``_template_mapper_hotpath.py`` and ``function_def_transformer.py``.
 """
 
 # pylint: disable=import-outside-toplevel
@@ -13,39 +19,15 @@ See ``docs/source/user_guide/tensor.md`` for the user guide.
 
 from enum import IntEnum
 
-from quadrants.types.annotations import Template
+# Re-export so ``from quadrants._tensor import *`` still binds ``Tensor`` —
+# keeps the wildcard import in ``__init__.py`` simple and atomic.
+from quadrants._tensor_wrapper import Tensor
 
 __all__ = [
     "Backend",
     "Tensor",
     "tensor",
 ]
-
-
-class _TensorAnnotation(Template):
-    """Polymorphic kernel-argument annotation: dispatches at call time.
-
-    A kernel parameter annotated with ``qd.Tensor`` accepts **either**
-    a field/SNode (treated like ``qd.template()``) **or** a tensor
-    ``Ndarray`` / ``AnyArray`` (treated like ``qd.types.ndarray()``).
-
-    The cache key is salted with the resolved branch, so a single
-    ``@qd.kernel`` definition can serve both backends without
-    cross-contamination between compiled instances.
-
-    Inherits from :class:`~quadrants.types.annotations.Template` so the
-    upfront template-slot detection in ``_func_base.py`` registers
-    ``qd.Tensor`` slots. The actual dispatch happens at extract-time
-    (``_template_mapper_hotpath._extract_arg``) and at AST-build-time
-    (``function_def_transformer._decl_and_create_variable``).
-    """
-
-    def __init__(self):
-        super().__init__()
-
-
-Tensor = _TensorAnnotation()
-"""Singleton polymorphic annotation; see :class:`_TensorAnnotation`."""
 
 # Marker tuples prefixed onto cache keys to keep field-resolved and
 # ndarray-resolved instantiations of the same qd.Tensor slot distinct.
@@ -243,10 +225,10 @@ def tensor(dtype, shape, *, backend=Backend.NDARRAY, layout=None, **kwargs):
             f._qd_field_layout = tuple(layout)
             if getattr(f, "grad", None) is not None:
                 f.grad._qd_field_layout = tuple(layout)
-        return f
+        return Tensor(f)
     if backend is Backend.NDARRAY:
         if order is None:
-            return impl.ndarray(dtype, shape, **forwarded)
+            return Tensor(impl.ndarray(dtype, shape, **forwarded))
         # Non-identity layout: allocate at the physical (permuted) shape
         # and tag the result so the kernel-side subscript rewrite picks
         # up the canonical -> physical translation.
@@ -259,7 +241,7 @@ def tensor(dtype, shape, *, backend=Backend.NDARRAY, layout=None, **kwargs):
         # x.grad[i, j, ...] goes through the same canonical->physical
         # AST rewrite as the primal access.
         _with_layout(arr, layout_t)
-        return arr
+        return Tensor(arr)
     raise AssertionError(f"unhandled Backend member: {backend!r}")
 
 
@@ -276,12 +258,13 @@ def _tensor_vec(n, dtype, shape, *, backend=Backend.NDARRAY, **kwargs):
     backend = _coerce_backend(backend)
     forwarded = {k: v for k, v in kwargs.items() if k != "backend"}
     # pylint: disable-next=import-outside-toplevel  # late import to break circular dependency
+    from quadrants._tensor_wrapper import VectorTensor
     from quadrants.lang.matrix import Vector
 
     if backend is Backend.FIELD:
-        return Vector.field(n, dtype, shape, **forwarded)
+        return VectorTensor(Vector.field(n, dtype, shape, **forwarded))
     if backend is Backend.NDARRAY:
-        return Vector.ndarray(n, dtype, shape, **forwarded)
+        return VectorTensor(Vector.ndarray(n, dtype, shape, **forwarded))
     raise AssertionError(f"unhandled Backend member: {backend!r}")
 
 
@@ -298,10 +281,11 @@ def _tensor_mat(n, m, dtype, shape, *, backend=Backend.NDARRAY, **kwargs):
     backend = _coerce_backend(backend)
     forwarded = {k: v for k, v in kwargs.items() if k != "backend"}
     # pylint: disable-next=import-outside-toplevel  # late import to break circular dependency
+    from quadrants._tensor_wrapper import MatrixTensor
     from quadrants.lang.matrix import Matrix
 
     if backend is Backend.FIELD:
-        return Matrix.field(n, m, dtype, shape, **forwarded)
+        return MatrixTensor(Matrix.field(n, m, dtype, shape, **forwarded))
     if backend is Backend.NDARRAY:
-        return Matrix.ndarray(n, m, dtype, shape, **forwarded)
+        return MatrixTensor(Matrix.ndarray(n, m, dtype, shape, **forwarded))
     raise AssertionError(f"unhandled Backend member: {backend!r}")

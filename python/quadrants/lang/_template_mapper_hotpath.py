@@ -36,8 +36,8 @@ from quadrants._lib import core as _qd_core
 from quadrants._tensor import (
     _TENSOR_T_FIELD_MARKER,
     _TENSOR_T_NDARRAY_MARKER,
-    _TensorAnnotation,
 )
+from quadrants._tensor_wrapper import Tensor as _TensorClass
 from quadrants.lang._dataclass_util import create_flat_name
 from quadrants.lang._ndarray import Ndarray
 from quadrants.lang.any_array import AnyArray
@@ -77,8 +77,10 @@ def _extract_arg(raise_on_templated_floats: bool, arg: Any, annotation: Annotati
     # qd.Tensor: value-dispatch. Ndarray-shaped values flow through the
     # ndarray feature path; everything else falls through to the template
     # path (Field, SNode, primitives). Both branches are salted with a
-    # marker so cache keys disambiguate.
-    if annotation_type is _TensorAnnotation:
+    # marker so cache keys disambiguate. The annotation is the wrapper
+    # *class* (``qd.Tensor``); ``arg`` is always a bare impl by the time
+    # we get here (``Kernel.__call__`` unwraps ``Tensor`` instances).
+    if annotation is _TensorClass:
         if issubclass(arg_type, (Ndarray, AnyArray)):
             return (_TENSOR_T_NDARRAY_MARKER,) + tuple(
                 _extract_arg(

@@ -37,9 +37,18 @@ qd.init(arch=qd.x64)
 a = qd.tensor(qd.f32, shape=(4, 5))                                 # ndarray (default)
 b = qd.tensor(qd.f32, shape=(4, 5), backend=qd.Backend.FIELD)       # field
 
-assert isinstance(a, qd.Ndarray)
-assert isinstance(b, qd.ScalarField)
+assert isinstance(a, qd.Tensor)
+assert isinstance(b, qd.Tensor)
 ```
+
+`qd.tensor()` (and the `qd.Vector.tensor` / `qd.Matrix.tensor` siblings)
+returns a `qd.Tensor` wrapper that uniformly forwards a fixed surface
+(`shape`, `dtype`, `layout`, `to_numpy`, `from_numpy`, `to_torch`,
+`from_torch`, `to_dlpack`, `fill`, `copy_from`, `grad`, host-side
+`__getitem__` / `__setitem__`, pickle) regardless of which backend it
+wraps. Drop down to the bare impl with `t._unwrap()` (returns the
+underlying `qd.Ndarray` or `qd.ScalarField`) only if you need a
+backend-specific knob.
 
 The default backend is `qd.Backend.NDARRAY`: it avoids recompilation when
 sizes change.
@@ -186,7 +195,9 @@ canonical view of the gradient.
 
 ## Annotating kernel arguments: `qd.Tensor`
 
-Kernel parameter annotations use `qd.Tensor` regardless of backend:
+Kernel parameter annotations use `qd.Tensor` regardless of backend.
+The same class doubles as the wrapper class returned by `qd.tensor()`,
+so the annotation and the runtime values agree:
 
 ```python
 import quadrants as qd
@@ -204,3 +215,7 @@ b = qd.tensor(qd.f32, shape=(4,), backend=qd.Backend.NDARRAY)
 fill(a)   # field branch
 fill(b)   # ndarray branch
 ```
+
+The kernel argument is unwrapped to the bare impl before the
+template-mapper / AST sees it, so kernel bodies still write `x[i, j]`
+and pay no per-call cost for the wrapper.

@@ -20,7 +20,7 @@ import numpy as np
 
 from quadrants._lib import core as _qd_core
 from quadrants._lib.core.quadrants_python import KernelLaunchContext
-from quadrants._tensor import _TensorAnnotation
+from quadrants._tensor_wrapper import Tensor as _TensorClass
 from quadrants.lang import _kernel_impl_dataclass, impl
 from quadrants.lang._dataclass_util import create_flat_name
 from quadrants.lang._ndarray import Ndarray
@@ -163,7 +163,13 @@ class FuncBase:
                 elif annotation_type is template or annotation is template:
                     pass
                 elif isinstance(annotation, template):
-                    # Catch Template subclasses (e.g. qd.Tensor).
+                    # Catch Template subclasses.
+                    pass
+                elif annotation is _TensorClass:
+                    # ``qd.Tensor`` (the wrapper class) used as the
+                    # polymorphic kernel-arg annotation. Behaves like a
+                    # template slot upfront; the actual dispatch happens
+                    # at extract-time / AST-build-time.
                     pass
                 elif annotation_type is type and is_dataclass(annotation):
                     pass
@@ -176,7 +182,11 @@ class FuncBase:
 
         self.template_slot_locations: list[int] = []
         for i, arg in enumerate(self.arg_metas):
-            if arg.annotation == template or isinstance(arg.annotation, template):
+            if (
+                arg.annotation == template
+                or isinstance(arg.annotation, template)
+                or arg.annotation is _TensorClass
+            ):
                 self.template_slot_locations.append(i)
 
     def _populate_global_vars_for_templates(
@@ -456,7 +466,9 @@ class FuncBase:
         # qd.Tensor value-dispatch at launch time. Re-target the
         # annotation to the concrete branch resolved from the runtime
         # value, then fall through to the existing dispatch logic.
-        if needed_arg_basetype is _TensorAnnotation:
+        # Wrapper instances are unwrapped earlier (in ``Kernel.__call__``);
+        # by the time we get here ``v`` is always the bare impl.
+        if needed_arg_type is _TensorClass:
             if isinstance(v, Ndarray):
                 needed_arg_type = cast(Type, _TENSOR_T_NDARRAY_LAUNCH_ANNOTATION)
                 needed_arg_type_id = id(needed_arg_type)

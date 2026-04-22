@@ -19,14 +19,15 @@ BACKENDS = [qd.Backend.FIELD, qd.Backend.NDARRAY]
 BACKEND_IDS = ["field", "ndarray"]
 
 
-def _expected_type(backend):
+def _expected_impl_type(backend):
     return qd.ScalarField if backend is qd.Backend.FIELD else qd.Ndarray
 
 
 @test_utils.test(arch=qd.cpu)
 def test_tensor_default_backend_is_ndarray():
     a = qd.tensor(qd.f32, shape=(4, 5))
-    assert isinstance(a, qd.Ndarray)
+    assert isinstance(a, qd.Tensor)
+    assert isinstance(a._unwrap(), qd.Ndarray)
     assert a.shape == (4, 5)
 
 
@@ -34,7 +35,8 @@ def test_tensor_default_backend_is_ndarray():
 @test_utils.test(arch=qd.cpu)
 def test_tensor_explicit_backend_allocates(backend):
     a = qd.tensor(qd.f32, shape=(4, 5), backend=backend)
-    assert isinstance(a, _expected_type(backend))
+    assert isinstance(a, qd.Tensor)
+    assert isinstance(a._unwrap(), _expected_impl_type(backend))
     assert a.shape == (4, 5)
 
 
@@ -47,7 +49,8 @@ def test_tensor_explicit_backend_allocates(backend):
 def test_tensor_int_backend_value_accepted(backend_int, expected):
     """``backend=0`` and ``backend=1`` work too — IntEnum coercion."""
     a = qd.tensor(qd.f32, shape=(3,), backend=backend_int)
-    assert isinstance(a, _expected_type(expected))
+    assert isinstance(a, qd.Tensor)
+    assert isinstance(a._unwrap(), _expected_impl_type(expected))
 
 
 @pytest.mark.parametrize("backend", BACKENDS, ids=BACKEND_IDS)
