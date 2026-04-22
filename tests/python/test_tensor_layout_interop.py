@@ -598,15 +598,16 @@ def test_genesis_shaped_dofs_batch_layout(backend):
 # ----------------------------------------------------------------------------
 # Pickle: as of stork-19 ``qd.tensor()`` returns a ``qd.Tensor`` wrapper,
 # whose ``__reduce__`` round-trips via ``to_numpy()`` (the canonical view)
-# and rebuilds a fresh wrapper without the layout tag. The element values
-# at every canonical index match the original. See 8.7 in
-# ``perso_hugh/doc/quadrants-tensor.md`` for rationale.
+# and rebuilds a fresh wrapper through the factory. The factory is given
+# the original ``layout=`` kwarg, so the restored tensor preserves the
+# layout *and* its canonical-indexed values match the original. See 8.7
+# in ``perso_hugh/doc/quadrants-tensor.md`` for rationale.
 # ----------------------------------------------------------------------------
 
 
 @pytest.mark.parametrize("layout", _LAYOUTS_RANK3)
 @test_utils.test(arch=qd.cpu)
-def test_pickle_layout_tagged_ndarray_roundtrip_drops_layout(layout):
+def test_pickle_layout_tagged_ndarray_roundtrip_preserves_layout(layout):
     import pickle  # noqa: PLC0415 — local import keeps test self-contained
 
     canonical = (2, 3, 4)
@@ -617,10 +618,9 @@ def test_pickle_layout_tagged_ndarray_roundtrip_drops_layout(layout):
     restored = pickle.loads(pickle.dumps(a))
 
     assert tuple(restored.shape) == canonical
-    # Intentional: the layout tag is dropped on round-trip; restored
-    # tensors are always layout-free. If/when a layout-preserving pickle
-    # lands, flip this to ``assert restored.layout == tuple(layout)``.
-    assert restored.layout is None
+    # Identity layouts normalize to ``None`` at the wrapper layer.
+    expected_layout = tuple(layout) if tuple(layout) != tuple(range(len(layout))) else None
+    assert restored.layout == expected_layout
     np.testing.assert_array_equal(restored.to_numpy(), _expected_canonical(canonical))
 
 
