@@ -58,8 +58,8 @@ def test_kernel_cache_no_fragmentation_under_wrapping(backend):
 
     a = qd.tensor(qd.i32, shape=(2,), backend=backend)
     # ``noop`` is a ``QuadrantsCallable``; the actual ``Kernel`` (which
-    # owns the JIT cache) lives at ``.wrapper``.
-    cache = noop.wrapper.materialized_kernels
+    # owns the JIT cache) lives at ``._primal``.
+    cache = noop._primal.materialized_kernels
 
     noop(a)
     n_after_bare = len(cache)
