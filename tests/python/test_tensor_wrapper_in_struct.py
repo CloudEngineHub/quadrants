@@ -1,4 +1,4 @@
-"""Wrapper-in-struct unwrap behaviour (`hp/tensor-stork-21`).
+"""Wrapper-in-struct unwrap behaviour (`hp/tensor-stork-20`).
 
 Pins the contract that a ``qd.Tensor`` wrapper stored as a *field* of a
 struct passed to a kernel is unwrapped to its bare impl before the
@@ -24,7 +24,7 @@ Genesis uses two different struct shapes depending on the global
   the struct as ``qd.template()`` and accesses fields via attribute
   lookup at AST-build time. Tests that mirror this shape are
   parametrised over the **field** backend only. (The other direction
-  is forbidden by an existing pre-stork-21 check: "Ndarray shouldn't
+  is forbidden by an existing pre-stork-20 check: "Ndarray shouldn't
   be passed in via ``qd.template()``".)
 
 Both shapes had a wrapper-unwrap gap before this branch. See
