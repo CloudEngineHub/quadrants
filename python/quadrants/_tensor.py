@@ -64,7 +64,13 @@ _TENSOR_T_NDARRAY_MARKER = "__qd_tensor_t_ndarray__"
 
 
 def _with_layout(ndarray, layout):
-    """Tag ``ndarray`` with a canonical-axis permutation. Internal."""
+    """Tag ``ndarray`` with a canonical-axis permutation. Internal.
+
+    If a companion ``grad`` ndarray exists (allocated by
+    ``needs_grad=True``), the tag is propagated to it so kernel code
+    reading ``x.grad[...]`` goes through the same canonical->physical
+    AST rewrite as ``x[...]``.
+    """
     layout = tuple(layout)
     ndim = len(ndarray.shape)
     if len(layout) != ndim:
@@ -72,6 +78,9 @@ def _with_layout(ndarray, layout):
     if sorted(layout) != list(range(ndim)):
         raise ValueError(f"layout={layout!r} is not a permutation of range({ndim})")
     ndarray._qd_layout = layout
+    grad = getattr(ndarray, "grad", None)
+    if grad is not None and getattr(grad, "_qd_layout", None) != layout:
+        grad._qd_layout = layout
     return ndarray
 
 
@@ -229,16 +238,11 @@ def tensor(dtype, shape, *, backend=Backend.NDARRAY, layout=None, **kwargs):
         layout_t = tuple(layout)
         physical_shape = tuple(shape_t[axis] for axis in layout_t)
         arr = impl.ndarray(dtype, physical_shape, **forwarded)
+        # _with_layout propagates the tag to the companion grad ndarray
+        # if one was allocated by needs_grad=True, so kernel code reading
+        # x.grad[i, j, ...] goes through the same canonical->physical
+        # AST rewrite as the primal access.
         _with_layout(arr, layout_t)
-        # If the primal was allocated with needs_grad=True, impl.ndarray has
-        # already allocated a same-shape companion grad ndarray and wired it
-        # via _set_grad. That grad array is untagged though, so kernel code
-        # reading x.grad[i, j, ...] would bypass the canonical->physical
-        # subscript rewrite. Propagate the layout tag onto the grad so both
-        # primal and grad share the same permuted view.
-        grad = getattr(arr, "grad", None)
-        if grad is not None:
-            _with_layout(grad, layout_t)
         return arr
     raise AssertionError(f"unhandled Backend member: {backend!r}")
 

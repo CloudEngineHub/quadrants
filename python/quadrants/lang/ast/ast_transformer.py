@@ -1090,7 +1090,21 @@ class ASTTransformer(Builder):
                 loop_indices = expr.make_var_list(size=len(loop_var.shape), ast_builder=ctx.ast_builder)
                 expr_group = expr.make_expr_group(loop_indices)
                 impl.begin_frontend_struct_for(ctx.ast_builder, expr_group, loop_var)
-                ctx.create_variable(target, matrix.make_matrix(loop_indices, dt=primitive_types.i32))
+                # Layout-tagged ndarrays: the runtime delivers *physical*
+                # loop indices (one per axis of the underlying buffer), but
+                # the user-visible ``I`` must be canonical so that ``x[I]``
+                # round-trips correctly through the canonical->physical AST
+                # rewrite in :func:`build_Subscript`. Reorder the indices
+                # so position ``m`` carries the canonical-axis-``m`` value.
+                layout = getattr(loop_var, "_qd_layout", None)
+                if layout is not None and len(layout) == len(loop_indices):
+                    invperm = [0] * len(layout)
+                    for k, axis in enumerate(layout):
+                        invperm[axis] = k
+                    user_indices = [loop_indices[invperm[m]] for m in range(len(layout))]
+                else:
+                    user_indices = loop_indices
+                ctx.create_variable(target, matrix.make_matrix(user_indices, dt=primitive_types.i32))
                 build_stmts(ctx, node.body)
                 ctx.ast_builder.end_frontend_struct_for()
             else:
