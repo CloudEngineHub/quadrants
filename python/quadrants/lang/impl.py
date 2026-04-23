@@ -821,12 +821,40 @@ def _field(
         else:
             axis_seq = list(range(dim))
             shape_seq = list(shape)
-        same_level = order is None
-        _create_snode(axis_seq, shape_seq, same_level).place(x, offset=offset)
+        # Allocate as a SINGLE rank-``dim`` dense SNode, always.
+        #
+        # When ``order`` is set the canonical-axis permutation is encoded as:
+        #   * the SNode is allocated at the *permuted physical shape*
+        #     (``shape_seq`` above already reflects ``shape[axis_seq]``), using
+        #     the natural ``axes(0, 1, ..., dim-1)`` declaration, and
+        #   * the field is tagged with ``_qd_layout = tuple(axis_seq)`` so
+        #     that ``build_Subscript`` / ``build_struct_for`` permute canonical
+        #     user indices into physical storage order at the AST level
+        #     (same rewrite mechanism as layout-tagged ndarrays).
+        #
+        # This replaces the legacy scheme of building a nested stack of
+        # rank-1 dense SNodes (one per axis), which doubled the number of
+        # ``linearize`` / SNode ``lookup`` operations per subscript for no
+        # memory-layout benefit (physical byte order is determined by the
+        # shape-permutation, not by SNode nesting depth). See the CHI IR
+        # comparison in ``perso_hugh/doc/regression_2026apr23_stork_log.md``
+        # (Experiment N+1) and the byte-identity regression tests in
+        # ``tests/python/test_tensor_layout_physical_bytes.py``.
+        flat_axis_seq = list(range(dim))
+        _create_snode(flat_axis_seq, shape_seq, same_level=True).place(x, offset=offset)
         if needs_grad:
-            _create_snode(axis_seq, shape_seq, same_level).place(x_grad, offset=offset)
+            _create_snode(flat_axis_seq, shape_seq, same_level=True).place(x_grad, offset=offset)
         if needs_dual:
-            _create_snode(axis_seq, shape_seq, same_level).place(x_dual, offset=offset)
+            _create_snode(flat_axis_seq, shape_seq, same_level=True).place(x_dual, offset=offset)
+        if order is not None:
+            # Identity layout is normalised out earlier by ``_layout_to_order``
+            # (``order=`` is not passed when layout is the default permutation).
+            _qd_layout = tuple(axis_seq)
+            x._qd_layout = _qd_layout
+            if x_grad is not None:
+                x_grad._qd_layout = _qd_layout
+            if x_dual is not None:
+                x_dual._qd_layout = _qd_layout
     return x
 
 

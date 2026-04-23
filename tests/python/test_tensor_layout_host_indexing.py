@@ -133,7 +133,8 @@ def _alloc_bare(backend, dtype, canonical, layout):
         # qd.field expects ``order=`` as an axis-char string ("ji", "kij", ...)
         order = "".join(chr(ord("i") + ax) for ax in layout)
         f = qd.field(dtype, canonical, order=order)
-        f._qd_field_layout = tuple(layout)
+        # ``_field`` now tags ``_qd_layout`` automatically; no extra
+        # attribute needed on the returned object.
         return f
     # NDARRAY
     if _is_identity(layout):

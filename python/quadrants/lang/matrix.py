@@ -955,22 +955,38 @@ class Matrix(QuadrantsOperations):
             else:
                 axis_seq = list(range(dim))
                 shape_seq = list(shape)
-            same_level = order is None
+            # See ``lang/impl.py::_field`` for the layout semantics: a
+            # single rank-``dim`` dense SNode is allocated at the permuted
+            # physical shape (``shape_seq``) with natural axes, and the
+            # canonical->physical permutation is encoded as ``_qd_layout``
+            # on the field for AST-level subscript rewriting.
+            flat_axis_seq = list(range(dim))
             if layout == Layout.SOA:
                 for e in entries._get_field_members():
-                    impl._create_snode(axis_seq, shape_seq, same_level).place(ScalarField(e), offset=offset)
+                    impl._create_snode(flat_axis_seq, shape_seq, same_level=True).place(ScalarField(e), offset=offset)
                 if needs_grad:
                     for e in entries_grad._get_field_members():
-                        impl._create_snode(axis_seq, shape_seq, same_level).place(ScalarField(e), offset=offset)
+                        impl._create_snode(flat_axis_seq, shape_seq, same_level=True).place(
+                            ScalarField(e), offset=offset
+                        )
                 if needs_dual:
                     for e in entries_dual._get_field_members():
-                        impl._create_snode(axis_seq, shape_seq, same_level).place(ScalarField(e), offset=offset)
+                        impl._create_snode(flat_axis_seq, shape_seq, same_level=True).place(
+                            ScalarField(e), offset=offset
+                        )
             else:
-                impl._create_snode(axis_seq, shape_seq, same_level).place(entries, offset=offset)
+                impl._create_snode(flat_axis_seq, shape_seq, same_level=True).place(entries, offset=offset)
                 if needs_grad:
-                    impl._create_snode(axis_seq, shape_seq, same_level).place(entries_grad, offset=offset)
+                    impl._create_snode(flat_axis_seq, shape_seq, same_level=True).place(entries_grad, offset=offset)
                 if needs_dual:
-                    impl._create_snode(axis_seq, shape_seq, same_level).place(entries_dual, offset=offset)
+                    impl._create_snode(flat_axis_seq, shape_seq, same_level=True).place(entries_dual, offset=offset)
+            if order is not None:
+                _qd_layout = tuple(axis_seq)
+                entries._qd_layout = _qd_layout
+                if needs_grad:
+                    entries_grad._qd_layout = _qd_layout
+                if needs_dual:
+                    entries_dual._qd_layout = _qd_layout
         return entries
 
     @classmethod
@@ -1289,7 +1305,16 @@ class MatrixField(Field):
         reading it.
         """
         impl.get_runtime().materialize()
-        return impl.get_runtime().prog.field_to_dlpack(self._snode.ptr, self.ndim, self.n, self.m)
+        capsule = impl.get_runtime().prog.field_to_dlpack(self._snode.ptr, self.ndim, self.n, self.m)
+        # See ``Field.to_dlpack`` for the rationale. Only the outer
+        # ``len(layout)`` spatial axes are permuted — the trailing
+        # element axes (``n``, ``m``) sit innermost and stay identity.
+        layout = getattr(self, "_qd_layout", None)
+        if layout is not None:
+            from quadrants.lang.field import _patch_field_dlpack_canonical  # pylint: disable=C0415
+
+            _patch_field_dlpack_canonical(capsule, tuple(layout))
+        return capsule
 
     def get_scalar_field(self, *indices):
         """Creates a ScalarField using a specific field member.
@@ -1303,7 +1328,15 @@ class MatrixField(Field):
         assert len(indices) in [1, 2]
         i = indices[0]
         j = 0 if len(indices) == 1 else indices[1]
-        return ScalarField(self.vars[i * self.m + j])
+        sf = ScalarField(self.vars[i * self.m + j])
+        # Propagate the canonical->physical layout from the parent
+        # MatrixField so that subscripts / ``get_addr`` on the extracted
+        # ScalarField go through the same rewrite (each member lives in
+        # the same permuted-physical SNode hierarchy as the parent).
+        parent_layout = getattr(self, "_qd_layout", None)
+        if parent_layout is not None:
+            sf._qd_layout = tuple(parent_layout)
+        return sf
 
     def _get_dynamic_index_stride(self):
         if self.ptr.get_dynamic_indexable():
