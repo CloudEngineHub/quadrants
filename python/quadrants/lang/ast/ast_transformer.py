@@ -654,6 +654,19 @@ class ASTTransformer(Builder):
         return True
 
     @staticmethod
+    def _promote_ndarray_if_declared(ctx: ASTTransformerFuncContext, value: Any) -> Any:
+        """If *value* is a bare ``Ndarray`` that was pre-declared as a
+        kernel arg (in ``_predeclare_struct_ndarrays``), return the ``AnyArray``
+        proxy from the cache.  Otherwise return *value* unchanged."""
+        from quadrants.lang._ndarray import Ndarray  # pylint: disable=C0415
+
+        if not isinstance(value, Ndarray):
+            return value
+        cache = ctx.global_context.ndarray_to_any_array
+        arr = cache.get(id(value))
+        return arr if arr is not None else value
+
+    @staticmethod
     def build_Attribute(ctx: ASTTransformerFuncContext, node: ast.Attribute):
         # There are two valid cases for the methods of Dynamic SNode:
         #
@@ -727,6 +740,7 @@ class ASTTransformer(Builder):
 
             if isinstance(node.ptr, _TensorClass):
                 node.ptr = node.ptr._unwrap()
+            node.ptr = ASTTransformer._promote_ndarray_if_declared(ctx, node.ptr)
         else:
             node.ptr = getattr(node.value.ptr, node.attr)
             # ``qd.Tensor`` wrappers reached via attribute access on a
@@ -745,6 +759,7 @@ class ASTTransformer(Builder):
 
             if isinstance(node.ptr, _TensorClass):
                 node.ptr = node.ptr._unwrap()
+            node.ptr = ASTTransformer._promote_ndarray_if_declared(ctx, node.ptr)
             node.violates_pure = node.value.violates_pure
             if node.violates_pure:
                 node.violates_pure_reason = node.value.violates_pure_reason

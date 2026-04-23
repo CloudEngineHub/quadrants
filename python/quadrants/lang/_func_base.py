@@ -209,12 +209,21 @@ class FuncBase:
             global_vars[template_var_name] = py_args[i]
         parameters = get_func_signature(fn).parameters
         for i, (parameter_name, parameter) in enumerate(parameters.items()):
-            if is_dataclass(parameter.annotation):
+            anno = parameter.annotation
+            if is_dataclass(anno):
                 _kernel_impl_dataclass.populate_global_vars_from_dataclass(
                     parameter_name,
-                    parameter.annotation,
+                    anno,
                     py_args[i],
                     global_vars=global_vars,
+                )
+            elif (anno is template or isinstance(anno, template) or anno is _TensorClass) and is_dataclass(py_args[i]):
+                _kernel_impl_dataclass.populate_global_vars_from_dataclass(
+                    parameter_name,
+                    type(py_args[i]),
+                    py_args[i],
+                    global_vars=global_vars,
+                    populate_all_fields=True,
                 )
 
     def get_tree_and_ctx(

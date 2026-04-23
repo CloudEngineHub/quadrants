@@ -315,6 +315,7 @@ class Kernel(FuncBase):
         self.launch_observations = LaunchObservations()
 
         self.launch_context_buffer_cache = LaunchContextBufferCache()
+        self._struct_ndarray_launch_info_by_key: dict[CompiledKernelKeyType, list] = {}
 
     def ast_builder(self) -> ASTBuilder:
         assert self.kernel_cpp is not None
@@ -418,6 +419,9 @@ class Kernel(FuncBase):
                 if _pass == 1:
                     assert key not in self.materialized_kernels
                     self.materialized_kernels[key] = quadrants_kernel
+                    self._struct_ndarray_launch_info_by_key[key] = getattr(
+                        ctx.global_context, "struct_ndarray_launch_info", []
+                    )
                 else:
                     for used_parameters in pruning.used_vars_by_func_id.values():
                         new_used_parameters = set()
@@ -470,6 +474,10 @@ class Kernel(FuncBase):
                 )
                 i_out += num_args_
                 is_launch_ctx_cacheable &= is_launch_ctx_cacheable_
+
+            struct_nd_info = self._struct_ndarray_launch_info_by_key.get(key)
+            if struct_nd_info:
+                self._set_struct_ndarray_args(struct_nd_info, args, launch_ctx_buffer, is_launch_ctx_cacheable)
 
             kernel_args_count_by_type = defaultdict(int)
             kernel_args_count_by_type.update(
@@ -550,6 +558,31 @@ class Kernel(FuncBase):
         if ret_type in primitive_types.real_types:
             return launch_ctx.get_struct_ret_float(indices)
         raise QuadrantsRuntimeTypeError(f"Invalid return type on index={indices}")
+
+    @staticmethod
+    def _set_struct_ndarray_args(
+        launch_info: list,
+        args: tuple,
+        launch_ctx_buffer: dict,
+        is_launch_ctx_cacheable: bool,
+    ) -> None:
+        """Set ndarray kernel args that were pre-declared from struct
+        template fields during compilation."""
+        from quadrants.lang._ndarray import Ndarray  # pylint: disable=C0415
+
+        for arg_id, template_arg_idx, attr_chain in launch_info:
+            obj = args[template_arg_idx]
+            for attr_name in attr_chain:
+                obj = getattr(obj, attr_name)
+            if isinstance(obj, _Tensor_cls):
+                obj = obj._unwrap()
+            assert isinstance(obj, Ndarray), f"Expected Ndarray at {attr_chain}, got {type(obj)}"
+            v_primal = obj.arr
+            v_grad = obj.grad.arr if obj.grad else None
+            if v_grad is None:
+                launch_ctx_buffer[_QD_ARRAY].append((arg_id, v_primal))
+            else:
+                launch_ctx_buffer[_QD_ARRAY_WITH_GRAD].append((arg_id, v_primal, v_grad))
 
     def ensure_compiled(self, *py_args: tuple[Any, ...]) -> tuple[Callable, int, AutodiffMode]:
         try:

@@ -15,7 +15,7 @@ from quadrants._lib.core.quadrants_python import (
     Program,
 )
 from quadrants._snode import fields_builder
-from quadrants.lang._ndarray import ScalarNdarray
+from quadrants.lang._ndarray import Ndarray, ScalarNdarray
 from quadrants.lang._ndrange import GroupedNDRange, _Ndrange
 from quadrants.lang.any_array import AnyArray
 from quadrants.lang.exception import (
@@ -206,6 +206,20 @@ def validate_subscript_index(value, index):
 def subscript(ast_builder, value, *_indices, skip_reordered=False):
     dbg_info = _qd_core.DebugInfo(get_runtime().get_current_src_info())
     ast_builder = get_runtime().compiling_callable.ast_builder()
+    # Ndarray from struct template field: resolve via the AnyArray cache
+    # populated by _predeclare_struct_ndarrays during kernel compilation.
+    if isinstance(value, Ndarray):
+        gc = getattr(get_runtime(), "_current_global_context", None)
+        if gc is not None:
+            arr = gc.ndarray_to_any_array.get(id(value))
+            if arr is not None:
+                value = arr
+        if isinstance(value, Ndarray):
+            raise QuadrantsCompilationError(
+                f"Ndarray {value!r} used in kernel scope but not registered "
+                "as a kernel parameter. Pass it via qd.Tensor annotation or "
+                "through a @qd.data_oriented / frozen-dataclass template."
+            )
     # Directly evaluate in Python for non-Quadrants types
     if not isinstance(
         value,

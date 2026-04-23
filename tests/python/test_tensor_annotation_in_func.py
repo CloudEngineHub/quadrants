@@ -10,6 +10,8 @@ dispatch branch for the ``Tensor`` class.
 Stork-23 adds that branch. These tests pin the invariant.
 """
 
+import dataclasses
+
 import numpy as np
 import pytest
 
@@ -52,19 +54,29 @@ def test_tensor_annotated_func_param(backend):
 # ---------------------------------------------------------------------------
 
 
+@pytest.mark.parametrize("backend", BACKENDS, ids=BACKEND_IDS)
 @test_utils.test(arch=qd.cpu)
-def test_tensor_struct_field_kernel_data_oriented():
-    """A @qd.data_oriented struct with a qd.Tensor field passed to a
-    kernel via template(). FIELD backend only (data_oriented)."""
+def test_tensor_struct_field_kernel_data_oriented(backend):
+    """A struct with a qd.Tensor field passed to a kernel via template().
+    FIELD uses @qd.data_oriented; NDARRAY uses @dataclasses.dataclass(frozen=True)."""
     N = 6
-    t = qd.tensor(qd.i32, shape=(N,), backend=qd.Backend.FIELD)
+    t = qd.tensor(qd.i32, shape=(N,), backend=backend)
 
-    @qd.data_oriented
-    class S:
-        def __init__(self, vals):
-            self.vals = vals
+    if backend == qd.Backend.FIELD:
 
-    s = S(vals=t)
+        @qd.data_oriented
+        class S:
+            def __init__(self, vals):
+                self.vals = vals
+
+        s = S(vals=t)
+    else:
+
+        @dataclasses.dataclass(frozen=True)
+        class S:
+            vals: qd.Tensor
+
+        s = S(vals=t)
 
     @qd.kernel
     def fill(st: qd.template()):
@@ -77,18 +89,14 @@ def test_tensor_struct_field_kernel_data_oriented():
 
 # ---------------------------------------------------------------------------
 # 3. Struct with qd.Tensor field, func takes struct as template.
-#    Uses @qd.data_oriented (FIELD backend) — the Genesis pattern.
-#    NDARRAY backend with struct attribute access inside kernels is a
-#    separate limitation (ScalarNdarray is not AnyArray in subscript).
 # ---------------------------------------------------------------------------
 
 
+@pytest.mark.parametrize("backend", BACKENDS, ids=BACKEND_IDS)
 @test_utils.test(arch=qd.cpu)
-def test_tensor_struct_field_func_via_template():
+def test_tensor_struct_field_func_via_template(backend):
     """A @qd.func receives a struct (containing qd.Tensor fields) as
-    a qd.template() arg. This avoids dataclass expansion at the call
-    site — the struct is passed as a whole, and field access is resolved
-    at the Python scope level. This is the Genesis pattern."""
+    a qd.template() arg."""
     N = 4
 
     @qd.data_oriented
@@ -96,7 +104,7 @@ def test_tensor_struct_field_func_via_template():
         def __init__(self, vals):
             self.vals = vals
 
-    t = qd.tensor(qd.i32, shape=(N,), backend=qd.Backend.FIELD)
+    t = qd.tensor(qd.i32, shape=(N,), backend=backend)
     s = S(vals=t)
 
     @qd.func
@@ -121,8 +129,9 @@ def test_tensor_struct_field_func_via_template():
 # ---------------------------------------------------------------------------
 
 
+@pytest.mark.parametrize("backend", BACKENDS, ids=BACKEND_IDS)
 @test_utils.test(arch=qd.cpu)
-def test_tensor_wrapper_in_struct_field_unwraps():
+def test_tensor_wrapper_in_struct_field_unwraps(backend):
     """When the struct field stores a qd.Tensor *wrapper*, the AST
     build_Attribute must unwrap it transparently."""
     N = 4
@@ -132,7 +141,7 @@ def test_tensor_wrapper_in_struct_field_unwraps():
         def __init__(self, vals):
             self.vals = vals
 
-    t = qd.tensor(qd.i32, shape=(N,), backend=qd.Backend.FIELD)
+    t = qd.tensor(qd.i32, shape=(N,), backend=backend)
     assert isinstance(t, qd.Tensor)
     s = S(vals=t)
 
@@ -154,8 +163,9 @@ def test_tensor_wrapper_in_struct_field_unwraps():
 # ---------------------------------------------------------------------------
 
 
+@pytest.mark.parametrize("backend", BACKENDS, ids=BACKEND_IDS)
 @test_utils.test(arch=qd.cpu)
-def test_mixed_tensor_and_scalar_struct_fields():
+def test_mixed_tensor_and_scalar_struct_fields(backend):
     """Struct with one qd.Tensor field and one scalar, both accessed
     in a @qd.func via template."""
     N = 4
@@ -166,7 +176,7 @@ def test_mixed_tensor_and_scalar_struct_fields():
             self.tensor_field = tensor_field
             self.scale = scale
 
-    t = qd.tensor(qd.i32, shape=(N,), backend=qd.Backend.FIELD)
+    t = qd.tensor(qd.i32, shape=(N,), backend=backend)
     s = S(tensor_field=t, scale=5)
 
     @qd.func
