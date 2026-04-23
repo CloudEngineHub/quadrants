@@ -1158,8 +1158,8 @@
             <span class="c1"># unwrapped earlier in ``Kernel.__call__``; this handles the</span>
             <span class="c1"># in-struct case. See ``perso_hugh/doc/quadrants-tensor.md``</span>
             <span class="c1"># §8.14.</span>
-            <span class="kn">from</span><span class="w"> </span><span class="nn">quadrants._tensor_wrapper</span><span class="w"> </span><span class="kn">import</span> <span class="p">(</span>
-                <span class="n">Tensor</span> <span class="k">as</span> <span class="n">_TensorClass</span><span class="p">,</span>  <span class="c1"># pylint: disable=C0415</span>
+            <span class="kn">from</span><span class="w"> </span><span class="nn">quadrants._tensor_wrapper</span><span class="w"> </span><span class="kn">import</span> <span class="p">(</span>  <span class="c1"># pylint: disable=C0415</span>
+                <span class="n">Tensor</span> <span class="k">as</span> <span class="n">_TensorClass</span><span class="p">,</span>
             <span class="p">)</span>
 
             <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">node</span><span class="o">.</span><span class="n">ptr</span><span class="p">,</span> <span class="n">_TensorClass</span><span class="p">):</span>

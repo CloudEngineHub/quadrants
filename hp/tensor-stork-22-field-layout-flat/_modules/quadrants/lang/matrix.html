@@ -1763,8 +1763,8 @@
         <span class="c1"># element axes (``n``, ``m``) sit innermost and stay identity.</span>
         <span class="n">layout</span> <span class="o">=</span> <span class="nb">getattr</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="s2">&quot;_qd_layout&quot;</span><span class="p">,</span> <span class="kc">None</span><span class="p">)</span>
         <span class="k">if</span> <span class="n">layout</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
-            <span class="kn">from</span><span class="w"> </span><span class="nn">quadrants.lang.field</span><span class="w"> </span><span class="kn">import</span> <span class="p">(</span>
-                <span class="n">_patch_field_dlpack_canonical</span><span class="p">,</span>  <span class="c1"># pylint: disable=C0415</span>
+            <span class="kn">from</span><span class="w"> </span><span class="nn">quadrants.lang.field</span><span class="w"> </span><span class="kn">import</span> <span class="p">(</span>  <span class="c1"># pylint: disable=C0415</span>
+                <span class="n">_patch_field_dlpack_canonical</span><span class="p">,</span>
             <span class="p">)</span>
 
             <span class="n">_patch_field_dlpack_canonical</span><span class="p">(</span><span class="n">capsule</span><span class="p">,</span> <span class="nb">tuple</span><span class="p">(</span><span class="n">layout</span><span class="p">))</span>
