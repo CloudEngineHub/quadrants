@@ -958,14 +958,14 @@ void runtime_eval_adstack_size_expr(LLVMRuntime *runtime, RuntimeContext *ctx, P
       max_size = sh.max_size_compile_time > 0 ? sh.max_size_compile_time : 1;
     } else {
       i64 v = device_eval_node(nodes, indices, sh.root_node_idx, &scope, arg_buffer);
-      // Clamp into `[1, max_size_compile_time]`. The `>= 1` clamp matches the host evaluator's guard; the upper
-      // cap is defensive against a broken tree or a runtime read that somehow exceeded the structural upper
-      // bound the pre-pass proved at compile time.
+      // Lower `>= 1` guard only. No upper clamp by `max_size_compile_time`: that field is the *fallback* used
+      // when `root_node_idx < 0` (no symbolic tree captured), not a hard ceiling on the runtime-evaluated
+      // size. An upper clamp here would silently undercount any tree whose evaluated bound exceeds the
+      // structural default - exactly the scenario the per-launch SizeExpr machinery exists to service - and
+      // the heap is sized from this value downstream, so memory safety is not a justification either. Matches
+      // `llvm_runtime_executor.cpp`'s CPU branch and the SPIR-V sizer shader.
       if (v < 1)
         v = 1;
-      if (sh.max_size_compile_time > 0 && static_cast<u64>(v) > sh.max_size_compile_time) {
-        v = sh.max_size_compile_time;
-      }
       max_size = static_cast<u64>(v);
     }
     out_max_sizes[i] = max_size;
