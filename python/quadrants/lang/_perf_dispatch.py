@@ -1,4 +1,3 @@
-import inspect
 import os
 import time
 from collections import defaultdict
@@ -8,6 +7,7 @@ from .. import _logging
 from . import impl
 from ._exceptions import raise_exception
 from ._quadrants_callable import QuadrantsCallable
+from ._signature import get_func_signature
 from .exception import QuadrantsRuntimeError, QuadrantsSyntaxError
 
 NUM_FIRST_WARMUP: int = 1
@@ -84,7 +84,7 @@ class PerformanceDispatcher(Generic[P, R]):
         self.num_active = num_active if num_active is not None else NUM_ACTIVE
         self.repeat_after_count = repeat_after_count if repeat_after_count is not None else REPEAT_AFTER_COUNT
         self.repeat_after_seconds = repeat_after_seconds if repeat_after_seconds is not None else REPEAT_AFTER_SECONDS
-        sig = inspect.signature(fn)
+        sig = get_func_signature(fn)
         self._param_types: dict[str, Any] = {}
         for param_name, param in sig.parameters.items():
             self._param_types[param_name] = param.annotation
@@ -130,7 +130,7 @@ class PerformanceDispatcher(Generic[P, R]):
         """
 
         def decorator(func: Callable | QuadrantsCallable) -> DispatchImpl:
-            sig = inspect.signature(func)
+            sig = get_func_signature(func)
             log_str = f"perf_dispatch '{self._name}': registered '{func.__name__}'"  # type: ignore
             _logging.debug(log_str)
             if QD_PERFDISPATCH_PRINT_DEBUG or _ANY_FORCE_ACTIVE:
