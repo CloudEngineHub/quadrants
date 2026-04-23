@@ -1256,7 +1256,7 @@ std::unordered_set<SNode *> ControlFlowGraph::gather_loaded_snodes() {
   return snodes;
 }
 
-void ControlFlowGraph::determine_ad_stack_size(int default_ad_stack_size) {
+void ControlFlowGraph::determine_ad_stack_size(int default_ad_stack_size, bool apply_fallback) {
   /**
    * Determine all adaptive AD-stacks' necessary size using the Bellman-Ford
    * algorithm. When there is a positive loop (#pushes > #pops in a loop)
@@ -1393,8 +1393,13 @@ void ControlFlowGraph::determine_ad_stack_size(int default_ad_stack_size) {
     }
 
     if (has_positive_loop) {
-      stack->max_size = default_ad_stack_size;
       indeterminable_stacks.insert(stack);
+      if (apply_fallback) {
+        stack->max_size = default_ad_stack_size;
+      }
+      // When `apply_fallback` is false, leave `max_size = 0` so the structural bounded-loop
+      // pre-pass in `irpass::determine_ad_stack_size` gets a chance to derive a tighter bound
+      // (e.g. a statically bounded inner loop whose push-only body defeats Bellman-Ford).
     } else {
       // Since we use |max_size| == 0 for adaptive sizes, we do not want stacks
       // with maximum capacity indeed equal to 0.

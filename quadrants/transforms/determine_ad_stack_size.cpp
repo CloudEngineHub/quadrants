@@ -176,21 +176,35 @@ bool determine_ad_stack_size(IRNode *root, const CompileConfig &config) {
   if (adaptive_allocas.empty()) {
     return false;
   }
-  // Structural pre-pass: resolve allocas whose pushes sit only inside statically-bounded range-fors.
+  // Phase 1: Bellman-Ford on the CFG. This pass tracks per-basic-block push / pop dynamics and takes the max
+  // across branches, so it resolves tight cases the structural pre-pass would over-approximate: balanced push /
+  // pop pairs (e.g. the `Basic` regression test pushes seven times but only reaches depth 4 because of
+  // intervening pops) and max-across-if-branches (pessimistically summed by the structural pre-pass since it
+  // sees both arms' pushes through an `IfStmt` pass-through). `apply_fallback = false` keeps positive-loop
+  // stacks at `max_size = 0` so phase 2 can take over - that is exactly the shape the structural pre-pass is
+  // designed for (statically-bounded inner `range(N)` kernels where Bellman-Ford gives up).
+  auto cfg = analysis::build_cfg(root);
+  cfg->simplify_graph();
+  cfg->determine_ad_stack_size(config.default_ad_stack_size, /*apply_fallback=*/false);
+  // Phase 2: structural pre-pass on the residual adaptive stacks (those Bellman-Ford deferred). Stacks already
+  // resolved by phase 1 have `max_size != 0` and are skipped, so the tight Bellman-Ford bound survives. Any
+  // alloca still at `max_size = 0` after this loop is handed back to the CFG analyzer via a second run with
+  // `apply_fallback = true` so it gets the generic `default_ad_stack_size` cap.
   for (Stmt *s : adaptive_allocas) {
     auto *alloca = s->as<AdStackAllocaStmt>();
+    if (alloca->max_size != 0) {
+      continue;
+    }
     auto bound = compute_bounded_adstack_size(alloca, root);
     if (bound.bounded) {
       alloca->max_size = bound.max_size;
     }
   }
-  // Hand off any remaining adaptive stacks (those with a while-loop or runtime-range enclosure) to
-  // the CFG Bellman-Ford analyzer, which either determines a concrete bound or falls back to
-  // `default_ad_stack_size`. The CFG analyzer skips stacks whose `max_size` is already non-zero,
-  // so the pre-pass results survive the handoff.
-  auto cfg = analysis::build_cfg(root);
-  cfg->simplify_graph();
-  cfg->determine_ad_stack_size(config.default_ad_stack_size);
+  // Re-run Bellman-Ford so any alloca still unresolved picks up the `default_ad_stack_size` cap. The CFG
+  // analyzer skips stacks whose `max_size` is already non-zero, so phase 1 / phase 2 results survive.
+  auto cfg_final = analysis::build_cfg(root);
+  cfg_final->simplify_graph();
+  cfg_final->determine_ad_stack_size(config.default_ad_stack_size, /*apply_fallback=*/true);
   return true;
 }
 
