@@ -288,7 +288,8 @@ class FunctionDefTransformer:
         # valid pass-by-reference arguments.
         if argument_type is _TensorClass:
             data = FunctionDefTransformer._unwrap_tensor(data)
-            promoted = ctx.global_context.ndarray_to_any_array.get(id(data))
+            _cache = getattr(getattr(ctx, "global_context", None), "ndarray_to_any_array", None)
+            promoted = _cache.get(id(data)) if _cache else None
             ctx.create_variable(argument_name, promoted if promoted is not None else data)
             return None
 
@@ -309,7 +310,8 @@ class FunctionDefTransformer:
                     # Tensor class has no such method — it is polymorphic).
                     if field.type is not _TensorClass and hasattr(field.type, "check_matched"):
                         field.type.check_matched(data_child.get_type(), field.name)
-                    promoted = ctx.global_context.ndarray_to_any_array.get(id(data_child))
+                    _cache = getattr(getattr(ctx, "global_context", None), "ndarray_to_any_array", None)
+                    promoted = _cache.get(id(data_child)) if _cache else None
                     ctx.create_variable(flat_name, promoted if promoted is not None else data_child)
                 elif dataclasses.is_dataclass(data_child):
                     FunctionDefTransformer._transform_func_arg(
