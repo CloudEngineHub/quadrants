@@ -733,8 +733,8 @@ class ASTTransformer(Builder):
             # unwrapped earlier in ``Kernel.__call__``; this handles the
             # in-struct case. See ``perso_hugh/doc/quadrants-tensor.md``
             # §8.14.
-            from quadrants._tensor_wrapper import (
-                Tensor as _TensorClass,  # pylint: disable=C0415
+            from quadrants._tensor_wrapper import (  # pylint: disable=C0415
+                Tensor as _TensorClass,
             )
 
             if isinstance(node.ptr, _TensorClass):

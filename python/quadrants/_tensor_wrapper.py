@@ -38,6 +38,10 @@ See ``perso_hugh/doc/quadrants-tensor.md`` §8.11 / §8.12.
 
 from __future__ import annotations
 
+# pylint: disable=import-outside-toplevel
+# (Late imports throughout are intentional, to break circular import cycles
+# between the tensor wrapper and the lang/types subpackages.)
+
 import typing
 from functools import cached_property
 
