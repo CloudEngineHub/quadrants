@@ -1,3 +1,6 @@
+# pyright: reportPrivateImportUsage=false
+# Reason: torch.zeros is public torch API, but pyright 1.1.409+ flags it as
+# private because torch's stubs don't re-export it via __all__.
 import ctypes
 from typing import TYPE_CHECKING, cast
 
