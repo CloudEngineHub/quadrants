@@ -2,6 +2,7 @@ import ast
 import dataclasses
 from typing import Any
 
+from quadrants._tensor_wrapper import Tensor as _TensorClass
 from quadrants.lang import util
 from quadrants.lang._dataclass_util import create_flat_name
 from quadrants.lang._signature import get_func_signature
@@ -219,5 +220,6 @@ def populate_global_vars_from_dataclass(
                 py_arg=child_value,
                 global_vars=global_vars,
             )
-        elif util.is_qd_template(field.type):
+        elif field.type is _TensorClass or util.is_qd_template(field.type):
+            child_value = child_value._unwrap() if isinstance(child_value, _TensorClass) else child_value
             global_vars[flat_name] = child_value

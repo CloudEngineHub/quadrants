@@ -720,7 +720,13 @@ class ASTTransformer(Builder):
                 node.ptr = getattr(tensor_ops, node.attr)
                 setattr(node, "caller", node.value.ptr)
         elif dataclasses.is_dataclass(node.value.ptr):
-            node.ptr = next(field.type for field in dataclasses.fields(node.value.ptr))
+            node.ptr = getattr(node.value.ptr, node.attr)
+            from quadrants._tensor_wrapper import (  # pylint: disable=C0415
+                Tensor as _TensorClass,
+            )
+
+            if isinstance(node.ptr, _TensorClass):
+                node.ptr = node.ptr._unwrap()
         else:
             node.ptr = getattr(node.value.ptr, node.attr)
             # ``qd.Tensor`` wrappers reached via attribute access on a
@@ -733,8 +739,8 @@ class ASTTransformer(Builder):
             # unwrapped earlier in ``Kernel.__call__``; this handles the
             # in-struct case. See ``perso_hugh/doc/quadrants-tensor.md``
             # §8.14.
-            from quadrants._tensor_wrapper import (
-                Tensor as _TensorClass,  # pylint: disable=C0415
+            from quadrants._tensor_wrapper import (  # pylint: disable=C0415
+                Tensor as _TensorClass,
             )
 
             if isinstance(node.ptr, _TensorClass):

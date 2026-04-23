@@ -188,6 +188,13 @@ class FunctionDefTransformer:
         node.args.args = []
 
     @staticmethod
+    def _unwrap_tensor(data: Any) -> Any:
+        """Unwrap a ``qd.Tensor`` wrapper to its bare impl, if needed."""
+        if isinstance(data, _TensorClass):
+            return data._unwrap()
+        return data
+
+    @staticmethod
     def _transform_func_arg(
         ctx: ASTTransformerFuncContext,
         argument_name: str,
@@ -199,10 +206,20 @@ class FunctionDefTransformer:
             ctx.create_variable(argument_name, data)
             return None
 
+        # qd.Tensor in @qd.func context: polymorphic pass-by-reference.
+        # No template-mapper features are available (those only exist for
+        # top-level @qd.kernel args). Unwrap any Tensor wrapper, then
+        # create the variable directly — ndarray and field impls are both
+        # valid pass-by-reference arguments.
+        if argument_type is _TensorClass:
+            data = FunctionDefTransformer._unwrap_tensor(data)
+            ctx.create_variable(argument_name, data)
+            return None
+
         if dataclasses.is_dataclass(argument_type):
             for field in dataclasses.fields(argument_type):
                 flat_name = create_flat_name(argument_name, field.name)
-                data_child = getattr(data, field.name)
+                data_child = FunctionDefTransformer._unwrap_tensor(getattr(data, field.name))
                 if isinstance(
                     data_child,
                     (
@@ -212,14 +229,17 @@ class FunctionDefTransformer:
                         any_array.AnyArray,
                     ),
                 ):
-                    field.type.check_matched(data_child.get_type(), field.name)
+                    # qd.Tensor struct fields skip check_matched (the
+                    # Tensor class has no such method — it is polymorphic).
+                    if field.type is not _TensorClass and hasattr(field.type, "check_matched"):
+                        field.type.check_matched(data_child.get_type(), field.name)
                     ctx.create_variable(flat_name, data_child)
                 elif dataclasses.is_dataclass(data_child):
                     FunctionDefTransformer._transform_func_arg(
                         ctx,
                         flat_name,
                         field.type,
-                        getattr(data, field.name),
+                        data_child,
                     )
                 else:
                     raise QuadrantsSyntaxError(
