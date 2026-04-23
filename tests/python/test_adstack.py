@@ -1538,3 +1538,61 @@ def test_adstack_bounded_inner_loop_pre_pass_handles_i64_bounds():
     # `default_fp` (f32). `pytest.approx` bypasses the backend `get_rel_eps()` floor so the tight
     # bound actually bites.
     assert x.grad[0] == pytest.approx(dv_dx, rel=1e-6)
+
+
+@pytest.mark.parametrize("trip_mode", ["element", "shape"])
+@test_utils.test(require=qd.extension.adstack)
+def test_adstack_nested_tripcount_gradient(trip_mode):
+    # Pins the reverse-mode gradient through three nested range-fors whose inner bounds toggle between the
+    # two shapes the structural pre-pass must recognise as trip-count sources: an ndarray element read
+    # (`range(n[i])`, lowering to a `MaxOverRange`-wrapped `ExternalTensorRead`) and a shape-only reference
+    # (`range(n.shape[0])`, lowering to a bare `ExternalTensorShape`). Both forms drive a nested adstack with
+    # `x[j] * x[j]` pushes on every innermost iteration; a trip-count bound that underestimates the true
+    # push count trips an overflow at `qd.sync()` rather than a silent numerical drift.
+    #
+    # Internal details: `qd.static(IS_ELEMENT)` picks the range at compile time so each parametrisation emits
+    # a different `SizeExpr` tree without any runtime branch in the kernel. The `element` leg is the shape
+    # the `ExternalTensorRead`-as-trip-body grammar gap is narrowed around; the `shape` leg is the
+    # always-resolvable baseline and pins that shape-only nesting keeps working when the element form is
+    # rejected or widened.
+    IS_ELEMENT = trip_mode == "element"
+    N_X = 32
+    x = qd.field(qd.f32, shape=(N_X,), needs_grad=True)
+    loss = qd.field(qd.f32, shape=(), needs_grad=True)
+
+    @qd.kernel
+    def compute(n: qd.types.ndarray(dtype=qd.i32, ndim=1)):
+        for i_e in range(n.shape[0]):
+            for i_l in range(n[i_e]) if qd.static(IS_ELEMENT) else range(n.shape[0]):
+                accum = 0.0
+                for j in range(n[i_l]) if qd.static(IS_ELEMENT) else range(n.shape[0]):
+                    accum = accum + x[j] * x[j]
+                loss[None] += accum
+
+    for i in range(N_X):
+        x[i] = 0.1
+    n_np = np.array([2, 3, 4, 1], dtype=np.int32)
+    compute(n_np)
+    loss.grad[None] = 1.0
+    for i in range(N_X):
+        x.grad[i] = 0.0
+    compute.grad(n_np)
+    qd.sync()
+
+    n_shape = int(n_np.shape[0])
+    expected_loss = 0.0
+    expected_grad = [0.0] * N_X
+    for i_e in range(n_shape):
+        middle_end = int(n_np[i_e]) if IS_ELEMENT else n_shape
+        for i_l in range(middle_end):
+            inner_end = int(n_np[i_l]) if IS_ELEMENT else n_shape
+            for j in range(inner_end):
+                expected_loss += 0.1 * 0.1
+                expected_grad[j] += 2.0 * 0.1
+
+    assert loss[None] == pytest.approx(expected_loss, rel=1e-5)
+    for k in range(N_X):
+        if expected_grad[k] == 0.0:
+            assert x.grad[k] == pytest.approx(0.0, abs=1e-7)
+        else:
+            assert x.grad[k] == pytest.approx(expected_grad[k], rel=1e-5)
