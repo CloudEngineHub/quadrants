@@ -1,16 +1,10 @@
 import gc
+import os
 import sys
 
 import pytest
 
-# rerunfailures use xdist version number to determine if it is compatible
-# but we are using a forked version of xdist(with git hash as it's version),
-# so we need to override it
-import pytest_rerunfailures
-
 import quadrants as qd
-
-pytest_rerunfailures.works_with_current_xdist = lambda: True
 
 
 @pytest.fixture(autouse=True)
@@ -86,28 +80,20 @@ def pytest_generate_tests(metafunc):
 @pytest.hookimpl(trylast=True)
 def pytest_runtest_logreport(report):
     """
-    Intentionally crash test workers when a test fails.
-    This is to avoid the failing test leaving a corrupted GPU state for the
-    following tests.
+    Kill the xdist worker process after a test failure so it restarts with
+    clean GPU state.  Stock xdist (>= 3.4) automatically restarts the worker
+    and preserves the failure report for the terminal summary.
     """
+    if not hasattr(pytest, "version_tuple"):
+        return
 
-    interactor = getattr(sys, "xdist_interactor", None)
-    if not interactor:
-        # not running under xdist, or xdist is not active,
-        # or using stock xdist (we need a customized version)
+    if not os.environ.get("PYTEST_XDIST_WORKER"):
         return
 
     if report.outcome not in ("rerun", "error", "failed"):
         return
 
-    layoff = False
-
-    for _, loc, _ in report.longrepr.chain:
-        if "CUDA_ERROR_OUT_OF_MEMORY" in loc.message:
-            layoff = True
-            break
-
-    interactor.retire(layoff=layoff)
+    os._exit(1)
 
 
 import importlib
