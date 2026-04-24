@@ -7,6 +7,7 @@ from typing import Any, Sequence
 import numpy as np
 
 from quadrants import _logging
+from quadrants import _tensor_wrapper
 from quadrants._tensor_wrapper import Tensor as _TensorClass
 from quadrants.types.annotations import Template
 
@@ -73,18 +74,9 @@ def stringify_obj_type(
     - in data oriented objects, the values of all primitive types are added to the cache key, since they are baked
       into the kernel, and require a kernel recompilation, when they change
     """
-    # ``qd.Tensor`` wrappers passed as struct fields. The top-level
-    # kernel-arg unwrap hook in ``Kernel.__call__`` strips wrappers off
-    # positional / keyword args before the fastcache hasher sees them,
-    # but the dataclass / data-oriented walkers below (``dataclass_to_repr``
-    # and the ``is_data_oriented`` branch) do raw ``getattr`` to fetch
-    # struct fields, so a wrapper stored as a struct field arrives here
-    # un-stripped. Without this branch the hasher falls through to the
-    # ``[FASTCACHE][PARAM_INVALID]`` warning and disables the fast path
-    # for the whole call. See ``perso_hugh/doc/quadrants-tensor.md`` §8.14.
-    # ``qd.Tensor`` wrappers: unwrap to the bare impl so the type checks
-    # below match. After unwrap, ``_qd_layout`` (if any) is on the impl.
-    if isinstance(obj, _TensorClass):
+    # Unwrap qd.Tensor wrapper to bare impl. Guarded by the module-level
+    # flag to avoid per-arg isinstance overhead when no Tensor exists.
+    if _tensor_wrapper._any_tensor_constructed and isinstance(obj, _TensorClass):
         obj = obj._unwrap()
     arg_type = type(obj)
     _layout = getattr(obj, "_qd_layout", None)

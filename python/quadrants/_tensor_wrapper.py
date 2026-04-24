@@ -52,6 +52,9 @@ __all__ = [
 ]
 
 
+_any_tensor_constructed = False
+
+
 def _is_identity(layout: typing.Optional[typing.Tuple[int, ...]]) -> bool:
     if layout is None:
         return True
@@ -85,6 +88,8 @@ class Tensor:
         if not isinstance(impl, (Ndarray, Field)):
             raise TypeError(f"Tensor(impl) requires an Ndarray or Field; got {type(impl).__name__}")
         self._impl: typing.Any = impl
+        global _any_tensor_constructed  # noqa: PLW0603
+        _any_tensor_constructed = True
 
     # ------------------------------------------------------------------
     # Identity / debug

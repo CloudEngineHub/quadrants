@@ -57,6 +57,8 @@ class Ndarray:
         shape (Tuple[int]): Shape of the Ndarray.
     """
 
+    _qd_layout: tuple[int, ...] | None = None
+
     def __init__(self):
         self.host_accessor = None
         # `_physical_shape` is the underlying storage shape (matches the C++

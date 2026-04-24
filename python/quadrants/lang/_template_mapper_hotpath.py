@@ -72,27 +72,14 @@ _primitive_types = {int, float, bool}
 
 
 def _extract_arg(raise_on_templated_floats: bool, arg: Any, annotation: AnnotationType, arg_name: str) -> Any:
-    # ``qd.Tensor`` wrappers passed as struct fields. Top-level
-    # kernel-arg unwrap in ``Kernel.__call__`` covers direct args, but
-    # the dataclass-field recursion at the bottom of this function
-    # walks struct attributes via raw ``getattr``, so a wrapper stored
-    # as a struct field arrives here un-stripped with its declared
-    # annotation (e.g. ``qd.types.NDArray[qd.f32, 2]``). Without this
-    # unwrap the function falls through to the "external arrays" path
-    # (line ~149) which technically reads ``.shape`` off the wrapper
-    # but produces a meaningless cache key. See ``perso_hugh/doc/
-    # quadrants-tensor.md`` §8.14. Idempotent for top-level args.
-    if isinstance(arg, _TensorClass):
-        arg = arg._unwrap()
     annotation_type = type(annotation)
-    arg_type = type(arg)
-    # qd.Tensor: value-dispatch. Ndarray-shaped values flow through the
-    # ndarray feature path; everything else falls through to the template
-    # path (Field, SNode, primitives). Both branches are salted with a
-    # marker so cache keys disambiguate. The annotation is the wrapper
-    # *class* (``qd.Tensor``); ``arg`` is always a bare impl by the time
-    # we get here (``Kernel.__call__`` unwraps ``Tensor`` instances).
+    # qd.Tensor value-dispatch. Unwrap happens here (annotation-guarded)
+    # rather than unconditionally, to avoid per-arg isinstance overhead
+    # when no qd.Tensor is in use.
     if annotation is _TensorClass:
+        if isinstance(arg, _TensorClass):
+            arg = arg._unwrap()
+        arg_type = type(arg)
         if issubclass(arg_type, (Ndarray, AnyArray)):
             return (_TENSOR_T_NDARRAY_MARKER,) + tuple(
                 _extract_arg(
@@ -108,6 +95,7 @@ def _extract_arg(raise_on_templated_floats: bool, arg: Any, annotation: Annotati
         annotation = template
         annotation_type = type(template)
         return (_TENSOR_T_FIELD_MARKER,) + (_extract_arg(raise_on_templated_floats, arg, template, arg_name),)
+    arg_type = type(arg)
     if annotation is template or annotation_type is template:
         if arg_type is SNode:
             return arg.ptr
@@ -148,9 +136,7 @@ def _extract_arg(raise_on_templated_floats: bool, arg: Any, annotation: Annotati
             # Convert singleton primitive dtype to int. This will dramatically speed up hashing later on.
             type_id = id(arg.element_type)
             element_type = type_id if type_id in primitive_types.type_ids else arg.element_type
-            # Optional tensor layout (None for legacy / identity).
-            layout = getattr(arg, "_qd_layout", None)
-            return element_type, len(arg.shape), needs_grad, annotation.boundary, layout
+            return element_type, len(arg.shape), needs_grad, annotation.boundary, arg._qd_layout
         if isinstance(arg, AnyArray):
             ty = arg.get_type()
             if __debug__ and __builtins__["__debug__"]:
