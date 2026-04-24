@@ -46,11 +46,9 @@ def tensor_to_ext_arr(tensor: template(), arr: ndarray_type.ndarray()):
 
 @kernel
 def ndarray_to_ext_arr(ndarray: ndarray_type.ndarray(), arr: ndarray_type.ndarray()):
-    # Iterate via ``arr`` (always untagged, canonical-shaped) so that
-    # subscripting ``ndarray[I]`` on a layout-tagged source applies the
-    # canonical->physical permutation correctly and writes land at the
-    # canonical positions in ``arr``. For untagged sources both sides
-    # share a shape so behaviour is identical to ``grouped(ndarray)``.
+    # Iterate via ``arr`` (always untagged, canonical-shaped) so that subscripting ``ndarray[I]`` on a layout-tagged
+    # source applies the canonical->physical permutation correctly and writes land at the canonical positions in
+    # ``arr``. For untagged sources both sides share a shape so behaviour is identical to ``grouped(ndarray)``.
     for I in grouped(arr):
         arr[I] = ndarray[I]
 
@@ -104,9 +102,8 @@ def ndarray_to_ndarray(ndarray: ndarray_type.ndarray(), other: ndarray_type.ndar
 
 @kernel
 def ext_arr_to_ndarray(arr: ndarray_type.ndarray(), ndarray: ndarray_type.ndarray()):
-    # Symmetric to ``ndarray_to_ext_arr``: iterate via the untagged,
-    # canonical-shaped ``arr``. ``ndarray[I]`` then permutes I from
-    # canonical to physical on layout-tagged destinations.
+    # Symmetric to ``ndarray_to_ext_arr``: iterate via the untagged, canonical-shaped ``arr``. ``ndarray[I]`` then
+    # permutes I from canonical to physical on layout-tagged destinations.
     for I in grouped(arr):
         ndarray[I] = arr[I]
 

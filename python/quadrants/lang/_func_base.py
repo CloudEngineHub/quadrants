@@ -58,8 +58,8 @@ if TYPE_CHECKING:
 from quadrants.types.enums import Layout
 from quadrants.types.utils import is_signed
 
-# Default ndarray annotation used when qd.Tensor resolves to the ndarray
-# branch at launch time. Defined at module scope to avoid per-call alloc.
+# Default ndarray annotation used when qd.Tensor resolves to the ndarray branch at launch time. Defined at module
+# scope to avoid per-call alloc.
 _TENSOR_T_NDARRAY_LAUNCH_ANNOTATION = ndarray_type.NdarrayType()
 
 from ._kernel_types import KernelBatchedArgType
@@ -171,10 +171,8 @@ class FuncBase:
                     # Catch Template subclasses.
                     pass
                 elif annotation is _TensorClass:
-                    # ``qd.Tensor`` (the wrapper class) used as the
-                    # polymorphic kernel-arg annotation. Behaves like a
-                    # template slot upfront; the actual dispatch happens
-                    # at extract-time / AST-build-time.
+                    # ``qd.Tensor`` (the wrapper class) used as the polymorphic kernel-arg annotation. Behaves like a
+                    # template slot upfront; the actual dispatch happens at extract-time / AST-build-time.
                     pass
                 elif annotation_type is type and is_dataclass(annotation):
                     pass
@@ -481,9 +479,8 @@ class FuncBase:
         needed_arg_type_id = id(needed_arg_type)
         needed_arg_basetype = type(needed_arg_type)
 
-        # qd.Tensor value-dispatch at launch time. Unwrap the wrapper
-        # (if present) and re-target the annotation to the concrete
-        # branch.
+        # qd.Tensor value-dispatch at launch time. Unwrap the wrapper (if present) and re-target the annotation to the
+        # concrete branch.
         if needed_arg_type is _TensorClass:
             if isinstance(v, _TensorClass):
                 v = v._unwrap()
@@ -491,13 +488,11 @@ class FuncBase:
                 needed_arg_type = cast(Type, _TENSOR_T_NDARRAY_LAUNCH_ANNOTATION)
                 needed_arg_type_id = id(needed_arg_type)
                 needed_arg_basetype = type(needed_arg_type)
-                # Re-widen v to avoid pyright narrowing it to Ndarray for the
-                # remainder of the function (the dispatch logic below treats
-                # v as Any and inspects attributes that don't exist on Ndarray).
+                # Re-widen v to avoid pyright narrowing it to Ndarray for the remainder of the function (the dispatch
+                # logic below treats v as Any and inspects attributes that don't exist on Ndarray).
                 v = cast(Any, v)
             else:
-                # Field/SNode/scalar template: launch path is a no-op
-                # (templates don't set kernel args).
+                # Field/SNode/scalar template: launch path is a no-op (templates don't set kernel args).
                 return 0, True
 
         # Note: do not use sth like "needed == f32". That would be slow.

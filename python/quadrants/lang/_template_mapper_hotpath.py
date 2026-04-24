@@ -54,9 +54,8 @@ from quadrants.types import (
     template,
 )
 
-# Default ndarray annotation for Tensor-resolved-as-ndarray. Defining at
-# module scope avoids re-allocating per call. boundary defaults to UNSAFE
-# (the same default a bare ``qd.types.ndarray()`` would produce).
+# Default ndarray annotation for Tensor-resolved-as-ndarray. Defining at module scope avoids re-allocating per call.
+# boundary defaults to UNSAFE (the same default a bare ``qd.types.ndarray()`` would produce).
 _TENSOR_T_NDARRAY_ANNOTATION = ndarray_type.NdarrayType()
 
 AnnotationType = Union[
@@ -95,9 +94,8 @@ def _extract_arg(raise_on_templated_floats: bool, arg: Any, annotation: Annotati
                     arg_name,
                 )
             )
-        # Fall through to the template path below by retargeting the
-        # annotation. Wrap the result with a field marker so its cache
-        # entry is distinct from the ndarray branch above.
+        # Fall through to the template path below by retargeting the annotation. Wrap the result with a field marker so
+        # its cache entry is distinct from the ndarray branch above.
         annotation = template
         annotation_type = type(template)
         return (_TENSOR_T_FIELD_MARKER,) + (_extract_arg(raise_on_templated_floats, arg, template, arg_name),)

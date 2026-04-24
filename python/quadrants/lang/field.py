@@ -365,10 +365,9 @@ class ScalarField(Field):
         try:
             capsule = impl.get_runtime().prog.field_to_dlpack(self._snode.ptr, 0, 0, 0)
         except ModuleNotFoundError:
-            # The C++ ``field_to_dlpack`` calls ``torch_supports_byte_offset``
-            # which unconditionally does ``import torch``. Guard here so
-            # callers that don't need torch (e.g. raw DLPack consumers)
-            # get a clear error instead of a worker crash.
+            # The C++ ``field_to_dlpack`` calls ``torch_supports_byte_offset`` which unconditionally does
+            # ``import torch``. Guard here so callers that don't need torch (e.g. raw DLPack consumers) get a clear
+            # error instead of a worker crash.
             raise ModuleNotFoundError(
                 "field.to_dlpack() requires torch to be installed "
                 "(the C++ layer checks torch version for DLPack byte_offset support)"

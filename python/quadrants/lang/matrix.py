@@ -955,11 +955,9 @@ class Matrix(QuadrantsOperations):
             else:
                 axis_seq = list(range(dim))
                 shape_seq = list(shape)
-            # See ``lang/impl.py::_field`` for the layout semantics: a
-            # single rank-``dim`` dense SNode is allocated at the permuted
-            # physical shape (``shape_seq``) with natural axes, and the
-            # canonical->physical permutation is encoded as ``_qd_layout``
-            # on the field for AST-level subscript rewriting.
+            # See ``lang/impl.py::_field`` for the layout semantics: a single rank-``dim`` dense SNode is allocated at
+            # the permuted physical shape (``shape_seq``) with natural axes, and the canonical->physical permutation
+            # is encoded as ``_qd_layout`` on the field for AST-level subscript rewriting.
             flat_axis_seq = list(range(dim))
             phys_offset = offset
             if order is not None and offset is not None:
@@ -1321,9 +1319,8 @@ class MatrixField(Field):
                 "MatrixField.to_dlpack() requires torch to be installed "
                 "(the C++ layer checks torch version for DLPack byte_offset support)"
             ) from None
-        # See ``Field.to_dlpack`` for the rationale. Only the outer
-        # ``len(layout)`` spatial axes are permuted — the trailing
-        # element axes (``n``, ``m``) sit innermost and stay identity.
+        # See ``Field.to_dlpack`` for the rationale. Only the outer ``len(layout)`` spatial axes are permuted — the
+        # trailing element axes (``n``, ``m``) sit innermost and stay identity.
         layout = getattr(self, "_qd_layout", None)
         if layout is not None:
             from quadrants.lang.field import (  # pylint: disable=C0415
@@ -1346,10 +1343,9 @@ class MatrixField(Field):
         i = indices[0]
         j = 0 if len(indices) == 1 else indices[1]
         sf = ScalarField(self.vars[i * self.m + j])
-        # Propagate the canonical->physical layout from the parent
-        # MatrixField so that subscripts / ``get_addr`` on the extracted
-        # ScalarField go through the same rewrite (each member lives in
-        # the same permuted-physical SNode hierarchy as the parent).
+        # Propagate the canonical->physical layout from the parent MatrixField so that subscripts / ``get_addr`` on the
+        # extracted ScalarField go through the same rewrite (each member lives in the same permuted-physical SNode
+        # hierarchy as the parent).
         parent_layout = getattr(self, "_qd_layout", None)
         if parent_layout is not None:
             sf._qd_layout = tuple(parent_layout)

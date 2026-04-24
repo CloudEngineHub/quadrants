@@ -14,13 +14,13 @@ now check ``annotation is Tensor`` (the class). See ``_func_base.py``,
 """
 
 # pylint: disable=import-outside-toplevel
-# (Late imports below are intentional, to break circular import cycles
-# between the tensor entry point and the lang/types subpackages.)
+# (Late imports below are intentional, to break circular import cycles between the tensor entry point and the
+# lang/types subpackages.)
 
 from enum import IntEnum
 
-# Re-export so ``from quadrants._tensor import *`` still binds ``Tensor`` —
-# keeps the wildcard import in ``__init__.py`` simple and atomic.
+# Re-export so ``from quadrants._tensor import *`` still binds ``Tensor`` — keeps the wildcard import in
+# ``__init__.py`` simple and atomic.
 from quadrants._tensor_wrapper import Tensor
 from quadrants._tensor_wrapper import wrap as _wrap_impl
 
