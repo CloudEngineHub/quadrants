@@ -106,6 +106,7 @@ def pytest_handlecrashitem(crashitem, report, sched):
     the default handler from running.
     """
     report.outcome = "passed"
+    report.when = "teardown"
     report.longrepr = None
 
 
