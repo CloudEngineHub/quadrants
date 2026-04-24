@@ -308,6 +308,8 @@ class VectorTensor(Tensor):
         else:
             raise TypeError(f"VectorTensor requires a vector-element impl; got {type(impl).__name__}")
         self._impl: typing.Any = impl
+        global _any_tensor_constructed  # noqa: PLW0603
+        _any_tensor_constructed = True
 
     @property
     def element_shape(self) -> typing.Tuple[int, ...]:
@@ -341,6 +343,8 @@ class MatrixTensor(Tensor):
         else:
             raise TypeError(f"MatrixTensor requires a matrix-element impl; got {type(impl).__name__}")
         self._impl: typing.Any = impl
+        global _any_tensor_constructed  # noqa: PLW0603
+        _any_tensor_constructed = True
 
     @property
     def element_shape(self) -> typing.Tuple[int, ...]:
