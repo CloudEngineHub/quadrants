@@ -73,8 +73,11 @@ def stringify_obj_type(
     - in data oriented objects, the values of all primitive types are added to the cache key, since they are baked
       into the kernel, and require a kernel recompilation, when they change
     """
-    # Unwrap qd.Tensor wrapper to bare impl. Guarded by the module-level
-    # flag to avoid per-arg isinstance overhead when no Tensor exists.
+    # PERF-CRITICAL: Unwrap qd.Tensor wrapper to bare impl. The
+    # _any_tensor_constructed guard makes the isinstance zero-cost when no
+    # qd.Tensor has been created. Without this guard the per-arg isinstance
+    # check causes a measurable CPU regression. Do not remove the guard or
+    # move the isinstance outside of it.
     if _tensor_wrapper._any_tensor_constructed and isinstance(
         obj, _TensorClass
     ):  # pyright: ignore[reportOptionalMemberAccess]

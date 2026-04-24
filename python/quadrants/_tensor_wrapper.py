@@ -52,6 +52,13 @@ __all__ = [
 ]
 
 
+# PERF-CRITICAL: This flag is checked on every kernel arg in
+# _template_mapper_hotpath._extract_arg, kernel.Kernel.__call__,
+# _func_base._inject_template_globals, and args_hasher.stringify_obj_type.
+# It gates the isinstance(arg, Tensor) unwrap so that programs which never
+# construct a qd.Tensor pay zero Python overhead for the check. Removing
+# this flag or the guards that read it causes a measurable ~4% CPU
+# regression on Genesis benchmarks (see regression_2026apr23_stork_log.md).
 _any_tensor_constructed = False
 
 
@@ -89,7 +96,7 @@ class Tensor:
             raise TypeError(f"Tensor(impl) requires an Ndarray or Field; got {type(impl).__name__}")
         self._impl: typing.Any = impl
         global _any_tensor_constructed  # noqa: PLW0603
-        _any_tensor_constructed = True
+        _any_tensor_constructed = True  # see comment on the flag definition above
 
     # ------------------------------------------------------------------
     # Identity / debug
