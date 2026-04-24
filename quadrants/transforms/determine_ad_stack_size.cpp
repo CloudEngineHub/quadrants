@@ -1309,11 +1309,10 @@ bool determine_ad_stack_size(IRNode *root, const CompileConfig &config) {
   // the source location so the user can either restructure the reverse-mode loop to match the grammar or
   // extend the grammar (or bump `default_ad_stack_size` in `qd.init` if they know their real bound). The
   // runtime adstack-overflow check still fires at `qd.sync()` time if the kernel actually exceeds the
-  // fallback at runtime. Hard-erroring here was tried and rolled back: it broke `test_double_for_loops` /
-  // `test_double_for_loops_more_nests`, which predate the symbolic-tree work and rely on the
-  // Bellman-Ford+default fallback path since the grammar does not (yet) cover `for j in range(field[i])` /
-  // `range(ndarray[i])` where `i` is a loop-carried variable. When `QD_DUMP_IR=1` is set, the full kernel
-  // IR is also dumped to `/tmp/ir_adstack_unresolved/unresolved_alloca_<id>.ll` for offline inspection.
+  // fallback at runtime. Hard-erroring here was tried and rolled back: kernels with `for j in range(field[i])` /
+  // `range(ndarray[i])` where `i` is a loop-carried variable predate the symbolic-tree work and rely on the
+  // Bellman-Ford+default fallback path because the grammar does not (yet) cover those shapes. When `QD_DUMP_IR=1`
+  // is set, the full kernel IR is dumped to `<tmp>/ir_adstack_unresolved/unresolved_alloca_<id>.ll` for inspection.
   for (Stmt *s : adaptive_allocas) {
     auto *alloca = s->as<AdStackAllocaStmt>();
     if (alloca->max_size != 0 || alloca->size_expr) {
@@ -1323,7 +1322,7 @@ bool determine_ad_stack_size(IRNode *root, const CompileConfig &config) {
     const char *dump_env = std::getenv("QD_DUMP_IR");
     if (dump_env != nullptr && std::string(dump_env) == "1") {
       irpass::re_id(root);
-      std::filesystem::path dump_dir{"/tmp/ir_adstack_unresolved"};
+      std::filesystem::path dump_dir = std::filesystem::temp_directory_path() / "ir_adstack_unresolved";
       std::error_code ec;
       std::filesystem::create_directories(dump_dir, ec);
       std::filesystem::path dump_path = dump_dir / fmt::format("unresolved_alloca_{}.ll", alloca->id);

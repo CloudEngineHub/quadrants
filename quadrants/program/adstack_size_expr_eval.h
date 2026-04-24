@@ -39,8 +39,8 @@ int64_t evaluate_adstack_size_expr(const SerializedSizeExpr &expr, Program *prog
 //
 // Mixed subtrees that contain both an `ExternalTensorRead` and a `FieldLoad` are rejected with a hard error:
 // the device interpreter does not support on-device SNode access, so a `FieldLoad` that cannot be lifted out
-// to a host-resolvable `Const` has nowhere to run. The grammar today does not emit this combination and
-// Genesis has never been observed to do so; the hard error pins the assumption so a future regression cannot
+// to a host-resolvable `Const` has nowhere to run. The grammar today does not emit this combination and no
+// user kernel has been observed to do so; the hard error pins the assumption so a future regression cannot
 // slip past.
 std::vector<uint8_t> encode_adstack_size_expr_device_bytecode(const AdStackSizingInfo &ad_stack,
                                                               Program *prog,

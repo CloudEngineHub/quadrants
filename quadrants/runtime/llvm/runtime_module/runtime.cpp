@@ -790,7 +790,7 @@ void runtime_get_adstack_metadata_field_ptrs(LLVMRuntime *runtime) {
 // is no `array_ptrs` map on device; the host-side encoder has already resolved `arg_id -> arg_buffer_offset`
 // through the kernel's `args_type` struct layout.
 //
-// Recursion bounded by tree depth (typically <10 for Genesis's kernels, <30 worst case in quadrants tests). The
+// Recursion bounded by tree depth (typically <10 for observed reverse-mode kernels, <30 worst case). The
 // bound-variable scope is kept in a fixed-size array indexed by `var_id`, so `MaxOverRange` nesting is capped at
 // `kDeviceBoundVarCap` levels; exceeding this would indicate a pre-pass bug since the grammar does not generate
 // that many nested ranges in practice.

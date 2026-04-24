@@ -398,10 +398,10 @@ int32_t encode_subtree(const SerializedSizeExpr &src,
     }
     case SizeExpr::Kind::FieldLoad: {
       // If we reach here the subtree is not host-substitutable (has free bound vars or sits alongside
-      // `ExternalTensorRead` in the same closed context). Genesis today never emits this combination; implementing
-      // on-device SNode access would mean threading `snode_rw_accessors_bank` through the device interpreter,
-      // which is a separate codegen subsystem. Bail loudly so a future regression is caught rather than silently
-      // misreading field memory through a stale DeviceAllocation handle.
+      // `ExternalTensorRead` in the same closed context). No currently-observed user kernel emits this combination;
+      // implementing on-device SNode access would mean threading `snode_rw_accessors_bank` through the device
+      // interpreter, which is a separate codegen subsystem. Bail loudly so a future regression is caught rather than
+      // silently misreading field memory through a stale DeviceAllocation handle.
       QD_ERROR(
           "Adstack SizeExpr FieldLoad at node {} has free bound variables or is inside an `ExternalTensorRead`"
           " context: on-device SNode access is not yet implemented by the device-side adstack SizeExpr"
