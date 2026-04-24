@@ -327,6 +327,11 @@
     <span class="n">BoundaryMode</span><span class="p">,</span>
     <span class="n">DataTypeCxx</span><span class="p">,</span>
 <span class="p">)</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">quadrants._tensor</span><span class="w"> </span><span class="kn">import</span> <span class="p">(</span>
+    <span class="n">_TENSOR_T_FIELD_MARKER</span><span class="p">,</span>
+    <span class="n">_TENSOR_T_NDARRAY_MARKER</span><span class="p">,</span>
+<span class="p">)</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">quadrants._tensor_wrapper</span><span class="w"> </span><span class="kn">import</span> <span class="n">Tensor</span> <span class="k">as</span> <span class="n">_TensorClass</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">quadrants.lang</span><span class="w"> </span><span class="kn">import</span> <span class="p">(</span>
     <span class="n">_ndarray</span><span class="p">,</span>
     <span class="n">any_array</span><span class="p">,</span>
@@ -363,6 +368,32 @@
         <span class="n">full_name</span> <span class="o">=</span> <span class="n">prefix_name</span> <span class="o">+</span> <span class="s2">&quot;_&quot;</span> <span class="o">+</span> <span class="n">name</span>
         <span class="k">if</span> <span class="ow">not</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">annotation</span><span class="p">,</span> <span class="n">primitive_types</span><span class="o">.</span><span class="n">RefType</span><span class="p">):</span>
             <span class="n">ctx</span><span class="o">.</span><span class="n">kernel_args</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">name</span><span class="p">)</span>
+        <span class="c1"># qd.Tensor value-dispatch. The first slot of this_arg_features</span>
+        <span class="c1"># is a string marker placed by _template_mapper_hotpath. The</span>
+        <span class="c1"># annotation is the wrapper class itself (``qd.Tensor``).</span>
+        <span class="k">if</span> <span class="n">annotation</span> <span class="ow">is</span> <span class="n">_TensorClass</span><span class="p">:</span>
+            <span class="k">assert</span> <span class="n">this_arg_features</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span>
+            <span class="n">marker</span> <span class="o">=</span> <span class="n">this_arg_features</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span>
+            <span class="k">if</span> <span class="n">marker</span> <span class="o">==</span> <span class="n">_TENSOR_T_NDARRAY_MARKER</span><span class="p">:</span>
+                <span class="n">raw_element_type</span><span class="p">,</span> <span class="n">ndim</span><span class="p">,</span> <span class="n">needs_grad</span><span class="p">,</span> <span class="n">boundary</span><span class="p">,</span> <span class="n">layout</span> <span class="o">=</span> <span class="n">this_arg_features</span><span class="p">[</span><span class="mi">1</span><span class="p">:]</span>
+                <span class="k">return</span> <span class="kc">False</span><span class="p">,</span> <span class="p">(</span>
+                    <span class="n">kernel_arguments</span><span class="o">.</span><span class="n">decl_ndarray_arg</span><span class="p">,</span>
+                    <span class="p">(</span>
+                        <span class="n">to_quadrants_type</span><span class="p">(</span><span class="n">raw_element_type</span><span class="p">),</span>
+                        <span class="n">ndim</span><span class="p">,</span>
+                        <span class="n">full_name</span><span class="p">,</span>
+                        <span class="n">needs_grad</span><span class="p">,</span>
+                        <span class="n">BoundaryMode</span><span class="p">(</span><span class="n">boundary</span><span class="p">),</span>
+                        <span class="n">layout</span><span class="p">,</span>
+                    <span class="p">),</span>
+                <span class="p">)</span>
+            <span class="k">if</span> <span class="n">marker</span> <span class="o">==</span> <span class="n">_TENSOR_T_FIELD_MARKER</span><span class="p">:</span>
+                <span class="c1"># Field branch: behave exactly like a template arg.</span>
+                <span class="k">if</span> <span class="n">name</span> <span class="ow">in</span> <span class="n">ctx</span><span class="o">.</span><span class="n">template_vars</span><span class="p">:</span>
+                    <span class="k">return</span> <span class="kc">True</span><span class="p">,</span> <span class="n">ctx</span><span class="o">.</span><span class="n">template_vars</span><span class="p">[</span><span class="n">name</span><span class="p">]</span>
+                <span class="k">assert</span> <span class="n">ctx</span><span class="o">.</span><span class="n">global_vars</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span>
+                <span class="k">return</span> <span class="kc">True</span><span class="p">,</span> <span class="n">ctx</span><span class="o">.</span><span class="n">global_vars</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">name</span><span class="p">)</span>
+            <span class="k">raise</span> <span class="ne">AssertionError</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;unknown qd.Tensor marker: </span><span class="si">{</span><span class="n">marker</span><span class="si">!r}</span><span class="s2">&quot;</span><span class="p">)</span>
         <span class="k">if</span> <span class="n">annotation</span> <span class="o">==</span> <span class="n">annotations</span><span class="o">.</span><span class="n">template</span> <span class="ow">or</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">annotation</span><span class="p">,</span> <span class="n">annotations</span><span class="o">.</span><span class="n">template</span><span class="p">):</span>
             <span class="k">if</span> <span class="n">name</span> <span class="ow">in</span> <span class="n">ctx</span><span class="o">.</span><span class="n">template_vars</span><span class="p">:</span>
                 <span class="k">return</span> <span class="kc">True</span><span class="p">,</span> <span class="n">ctx</span><span class="o">.</span><span class="n">template_vars</span><span class="p">[</span><span class="n">name</span><span class="p">]</span>
@@ -382,7 +413,8 @@
             <span class="n">ndim</span><span class="p">:</span> <span class="nb">int</span>
             <span class="n">needs_grad</span><span class="p">:</span> <span class="nb">bool</span>
             <span class="n">boundary</span><span class="p">:</span> <span class="nb">int</span>
-            <span class="n">raw_element_type</span><span class="p">,</span> <span class="n">ndim</span><span class="p">,</span> <span class="n">needs_grad</span><span class="p">,</span> <span class="n">boundary</span> <span class="o">=</span> <span class="n">this_arg_features</span>
+            <span class="c1"># Tensors layout is the trailing slot; None for legacy / identity.</span>
+            <span class="n">raw_element_type</span><span class="p">,</span> <span class="n">ndim</span><span class="p">,</span> <span class="n">needs_grad</span><span class="p">,</span> <span class="n">boundary</span><span class="p">,</span> <span class="n">layout</span> <span class="o">=</span> <span class="n">this_arg_features</span>
             <span class="k">return</span> <span class="kc">False</span><span class="p">,</span> <span class="p">(</span>
                 <span class="n">kernel_arguments</span><span class="o">.</span><span class="n">decl_ndarray_arg</span><span class="p">,</span>
                 <span class="p">(</span>
@@ -391,6 +423,7 @@
                     <span class="n">full_name</span><span class="p">,</span>
                     <span class="n">needs_grad</span><span class="p">,</span>
                     <span class="n">BoundaryMode</span><span class="p">(</span><span class="n">boundary</span><span class="p">),</span>
+                    <span class="n">layout</span><span class="p">,</span>
                 <span class="p">),</span>
             <span class="p">)</span>
         <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">annotation</span><span class="p">,</span> <span class="n">MatrixType</span><span class="p">):</span>
@@ -476,6 +509,13 @@
         <span class="n">node</span><span class="o">.</span><span class="n">args</span><span class="o">.</span><span class="n">args</span> <span class="o">=</span> <span class="p">[]</span>
 
     <span class="nd">@staticmethod</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">_unwrap_tensor</span><span class="p">(</span><span class="n">data</span><span class="p">:</span> <span class="n">Any</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Any</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Unwrap a ``qd.Tensor`` wrapper to its bare impl, if needed.&quot;&quot;&quot;</span>
+        <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">data</span><span class="p">,</span> <span class="n">_TensorClass</span><span class="p">):</span>
+            <span class="k">return</span> <span class="n">data</span><span class="o">.</span><span class="n">_unwrap</span><span class="p">()</span>
+        <span class="k">return</span> <span class="n">data</span>
+
+    <span class="nd">@staticmethod</span>
     <span class="k">def</span><span class="w"> </span><span class="nf">_transform_func_arg</span><span class="p">(</span>
         <span class="n">ctx</span><span class="p">:</span> <span class="n">ASTTransformerFuncContext</span><span class="p">,</span>
         <span class="n">argument_name</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
@@ -487,10 +527,20 @@
             <span class="n">ctx</span><span class="o">.</span><span class="n">create_variable</span><span class="p">(</span><span class="n">argument_name</span><span class="p">,</span> <span class="n">data</span><span class="p">)</span>
             <span class="k">return</span> <span class="kc">None</span>
 
+        <span class="c1"># qd.Tensor in @qd.func context: polymorphic pass-by-reference.</span>
+        <span class="c1"># No template-mapper features are available (those only exist for</span>
+        <span class="c1"># top-level @qd.kernel args). Unwrap any Tensor wrapper, then</span>
+        <span class="c1"># create the variable directly — ndarray and field impls are both</span>
+        <span class="c1"># valid pass-by-reference arguments.</span>
+        <span class="k">if</span> <span class="n">argument_type</span> <span class="ow">is</span> <span class="n">_TensorClass</span><span class="p">:</span>
+            <span class="n">data</span> <span class="o">=</span> <span class="n">FunctionDefTransformer</span><span class="o">.</span><span class="n">_unwrap_tensor</span><span class="p">(</span><span class="n">data</span><span class="p">)</span>
+            <span class="n">ctx</span><span class="o">.</span><span class="n">create_variable</span><span class="p">(</span><span class="n">argument_name</span><span class="p">,</span> <span class="n">data</span><span class="p">)</span>
+            <span class="k">return</span> <span class="kc">None</span>
+
         <span class="k">if</span> <span class="n">dataclasses</span><span class="o">.</span><span class="n">is_dataclass</span><span class="p">(</span><span class="n">argument_type</span><span class="p">):</span>
             <span class="k">for</span> <span class="n">field</span> <span class="ow">in</span> <span class="n">dataclasses</span><span class="o">.</span><span class="n">fields</span><span class="p">(</span><span class="n">argument_type</span><span class="p">):</span>
                 <span class="n">flat_name</span> <span class="o">=</span> <span class="n">create_flat_name</span><span class="p">(</span><span class="n">argument_name</span><span class="p">,</span> <span class="n">field</span><span class="o">.</span><span class="n">name</span><span class="p">)</span>
-                <span class="n">data_child</span> <span class="o">=</span> <span class="nb">getattr</span><span class="p">(</span><span class="n">data</span><span class="p">,</span> <span class="n">field</span><span class="o">.</span><span class="n">name</span><span class="p">)</span>
+                <span class="n">data_child</span> <span class="o">=</span> <span class="n">FunctionDefTransformer</span><span class="o">.</span><span class="n">_unwrap_tensor</span><span class="p">(</span><span class="nb">getattr</span><span class="p">(</span><span class="n">data</span><span class="p">,</span> <span class="n">field</span><span class="o">.</span><span class="n">name</span><span class="p">))</span>
                 <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span>
                     <span class="n">data_child</span><span class="p">,</span>
                     <span class="p">(</span>
@@ -500,14 +550,17 @@
                         <span class="n">any_array</span><span class="o">.</span><span class="n">AnyArray</span><span class="p">,</span>
                     <span class="p">),</span>
                 <span class="p">):</span>
-                    <span class="n">field</span><span class="o">.</span><span class="n">type</span><span class="o">.</span><span class="n">check_matched</span><span class="p">(</span><span class="n">data_child</span><span class="o">.</span><span class="n">get_type</span><span class="p">(),</span> <span class="n">field</span><span class="o">.</span><span class="n">name</span><span class="p">)</span>
+                    <span class="c1"># qd.Tensor struct fields skip check_matched (the</span>
+                    <span class="c1"># Tensor class has no such method — it is polymorphic).</span>
+                    <span class="k">if</span> <span class="n">field</span><span class="o">.</span><span class="n">type</span> <span class="ow">is</span> <span class="ow">not</span> <span class="n">_TensorClass</span> <span class="ow">and</span> <span class="nb">hasattr</span><span class="p">(</span><span class="n">field</span><span class="o">.</span><span class="n">type</span><span class="p">,</span> <span class="s2">&quot;check_matched&quot;</span><span class="p">):</span>
+                        <span class="n">field</span><span class="o">.</span><span class="n">type</span><span class="o">.</span><span class="n">check_matched</span><span class="p">(</span><span class="n">data_child</span><span class="o">.</span><span class="n">get_type</span><span class="p">(),</span> <span class="n">field</span><span class="o">.</span><span class="n">name</span><span class="p">)</span>
                     <span class="n">ctx</span><span class="o">.</span><span class="n">create_variable</span><span class="p">(</span><span class="n">flat_name</span><span class="p">,</span> <span class="n">data_child</span><span class="p">)</span>
                 <span class="k">elif</span> <span class="n">dataclasses</span><span class="o">.</span><span class="n">is_dataclass</span><span class="p">(</span><span class="n">data_child</span><span class="p">):</span>
                     <span class="n">FunctionDefTransformer</span><span class="o">.</span><span class="n">_transform_func_arg</span><span class="p">(</span>
                         <span class="n">ctx</span><span class="p">,</span>
                         <span class="n">flat_name</span><span class="p">,</span>
                         <span class="n">field</span><span class="o">.</span><span class="n">type</span><span class="p">,</span>
-                        <span class="nb">getattr</span><span class="p">(</span><span class="n">data</span><span class="p">,</span> <span class="n">field</span><span class="o">.</span><span class="n">name</span><span class="p">),</span>
+                        <span class="n">data_child</span><span class="p">,</span>
                     <span class="p">)</span>
                 <span class="k">else</span><span class="p">:</span>
                     <span class="k">raise</span> <span class="n">QuadrantsSyntaxError</span><span class="p">(</span>
