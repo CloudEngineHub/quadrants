@@ -118,6 +118,8 @@ bool try_eval_const_int(Stmt *stmt, int64_t *out) {
   return false;
 }
 
+std::unique_ptr<SizeExpr> expr_max(std::unique_ptr<SizeExpr> a, std::unique_ptr<SizeExpr> b);
+
 std::unique_ptr<SizeExpr> expr_add(std::unique_ptr<SizeExpr> a, std::unique_ptr<SizeExpr> b) {
   if (a->kind == SizeExpr::Kind::Const && b->kind == SizeExpr::Kind::Const) {
     return SizeExpr::make_const(a->const_value + b->const_value);
@@ -276,11 +278,12 @@ std::unique_ptr<SizeExpr> expr_sub(std::unique_ptr<SizeExpr> a, std::unique_ptr<
   // trip-count upper bound). Fusing under a shared MaxOverRange preserves the per-iteration pairing that the
   // user-IR Sub was meant to capture and keeps the dynamic sizing as tight as possible. The `end` operands
   // must be structurally equal OR must both be `ExternalTensorShape` along the same axis - the latter covers
-  // the parallel-ndarray pattern where the two shapes are expected to be equal at launch time but structural
-  // compare rejects them because the `arg_id`s differ. Picking `end_a` in the shape-pair case is safe for
-  // any launch that honours the same-length assumption; if a caller passes mismatched shapes the fused body
-  // reads the shorter ndarray past its end, so this narrows the fusion to the `ExternalTensorShape` pair and
-  // keeps the ordinary wildcard-end case on the strict-equality path.
+  // the parallel-ndarray pattern where the two shapes come from distinct ndarrays. In the cross-ndarray
+  // case, the fused body reads `arr_a[v]` and `arr_b[v]` at the same `v`, so the iteration range must be
+  // the min of both shapes or the shorter ndarray is read past its buffer end (UB on CPU, illegal-address
+  // on CUDA / AMDGPU). `min(a, b) = a + b - max(a, b)` stays inside the existing grammar, and the
+  // constant-folding inside `expr_{add,sub,max}` collapses it back to `a` when `a == b`, so the matching-
+  // shape case stays byte-for-byte identical to the strict-equality path.
   if (a->kind == SizeExpr::Kind::MaxOverRange && b->kind == SizeExpr::Kind::MaxOverRange && a->operands.size() == 3 &&
       b->operands.size() == 3 && expr_equal(a->operands[0].get(), b->operands[0].get())) {
     bool end_eq = expr_equal(a->operands[1].get(), b->operands[1].get());
@@ -295,8 +298,12 @@ std::unique_ptr<SizeExpr> expr_sub(std::unique_ptr<SizeExpr> a, std::unique_ptr<
         substitute_var_in_place(body_b_renamed.get(), var_y, var_x);
       }
       auto new_body = expr_sub(std::move(a->operands[2]), std::move(body_b_renamed));
-      return SizeExpr::make_max_over_range(var_x, std::move(a->operands[0]), std::move(a->operands[1]),
-                                           std::move(new_body));
+      auto end_a = std::move(a->operands[1]);
+      auto end_b = std::move(b->operands[1]);
+      auto end_sum = expr_add(end_a->clone(), end_b->clone());
+      auto end_max = expr_max(std::move(end_a), std::move(end_b));
+      auto fused_end = expr_sub(std::move(end_sum), std::move(end_max));
+      return SizeExpr::make_max_over_range(var_x, std::move(a->operands[0]), std::move(fused_end), std::move(new_body));
     }
   }
   return SizeExpr::make_binary(SizeExpr::Kind::Sub, std::move(a), std::move(b));

@@ -1442,7 +1442,7 @@ def test_adstack_bounded_inner_loop_not_capped_by_default_ad_stack_size():
     # test guards against regressing. The test is restricted to SPIR-V backends (Vulkan / Metal) because the
     # LLVM backend rewrites inner-range bounds through `LoopIndexStmt` in a shape the structural analyzer does
     # not fold, so LLVM legitimately falls back to `default_ad_stack_size=1` and overflows at `compute.grad()`;
-    # the LLVM-side runtime-evaluator that would lift this restriction is planned as future work.
+    # the LLVM-side runtime-evaluator that would lift this restriction ships in a follow-up.
     x = qd.field(qd.f32, shape=(1,), needs_grad=True)
     y = qd.field(qd.f32, shape=(), needs_grad=True)
 
@@ -1649,7 +1649,7 @@ def test_adstack_field_load_bounded_loop_evaluated_per_launch():
     # Internal details: the symbolic bound tree is flattened into the serialisable `SerializedSizeExpr` form and
     # stored inside `AdStackSizingInfo::size_exprs`, so this test exercises the same path whether the kernel is
     # freshly compiled or restored from the offline cache. Scoped to LLVM backends (CPU / CUDA / AMDGPU); the
-    # SPIR-V sizer mirror is planned as future work. The CPU leg is load-bearing for the chunk-loop guard: the
+    # SPIR-V sizer mirror ships in the follow-up. The CPU leg is load-bearing for the chunk-loop guard: the
     # grad-kernel's CPU-multithreaded outer `range_for` wraps the user body with `min(N, (thread_idx << k) +
     # chunk_size)`-style bounds, and the structural pre-pass must stop walking at the `AdStackAllocaStmt`'s own
     # scope (the `stack_init` emitted at alloca time resets per-entry) or the outer chunk loop's unparseable
@@ -1822,7 +1822,7 @@ def test_adstack_ext_tensor_read_indexed_by_stashed_outer_loop_var(outer_bound):
     # recognising the stash pattern (single loop-index push plus const-zero initialiser) and folding
     # through to the backing `LoopIndexStmt`.
     #
-    # Internal details: scoped to LLVM backends (CPU / CUDA / AMDGPU); the SPIR-V sizer mirror is planned as future work.
+    # Internal details: scoped to LLVM backends (CPU / CUDA / AMDGPU); the SPIR-V sizer mirror ships in the follow-up.
     # Parametrised over `outer_bound` because const and dynamic outer range-for bounds lower very differently - a
     # constant collapses into the offload's `const_end` at offload time (no prep task), a dynamic bound lowers to a
     # prep serial task that writes the value into the kernel's global-temporary buffer for the main range-for task
@@ -2060,7 +2060,7 @@ def test_adstack_structural_pre_pass_fuses_sub_of_max_over_range_with_matching_s
     # reverse-pass push count.
     #
     # Internal details: scoped to LLVM backends (CPU / CUDA / AMDGPU) because this PR lands only the host-evaluator
-    # path; the SPIR-V sizer mirror is planned as future work and will unlock Metal / Vulkan. Two surface spellings share a
+    # path; the SPIR-V sizer mirror ships in the follow-up and unlocks Metal / Vulkan. Two surface spellings share a
     # single test body via `qd.static` because both produce the same `expr_sub` call at walker time, just via
     # different `build_value_expr` recursion paths:
     #   - `begin_end`: `for i_j_ in range(start[i_o], end[i_o])` - `compute_bounded_adstack_size` multiplies
@@ -2130,7 +2130,7 @@ def test_adstack_structural_pre_pass_fuses_sub_of_max_over_range_with_mismatched
     # evaluates to 5, and the adstack gets sized to fit.
     #
     # Internal details: scoped to LLVM backends (CPU / CUDA / AMDGPU) because this PR lands only the host-evaluator
-    # path; the SPIR-V sizer mirror is planned as future work and will unlock Metal / Vulkan. The trivial `range(1)`
+    # path; the SPIR-V sizer mirror ships in the follow-up and unlocks Metal / Vulkan. The trivial `range(1)`
     # wrapper keeps the kernel AST inside a top-level for-loop, which the autodiff front-end requires
     # (`reverse_segments` rejects mixed statement-plus-for kernel bodies).
     N_X = 16
@@ -2172,5 +2172,60 @@ def test_adstack_structural_pre_pass_fuses_sub_of_max_over_range_with_mismatched
     assert x.grad[0] == pytest.approx(0.6, rel=1e-5)
     for k in range(1, 5):
         assert x.grad[k] == pytest.approx(0.2, rel=1e-5)
+    for k in range(5, N_X):
+        assert x.grad[k] == pytest.approx(0.0, abs=1e-7)
+
+
+@test_utils.test(require=qd.extension.adstack, arch=[qd.cpu, qd.cuda, qd.amdgpu])
+def test_adstack_fuses_sub_of_max_over_range_with_mismatched_lengths_is_safe():
+    # Pins that the `both_shape_same_axis` widening of `expr_sub`'s MaxOverRange fusion stays safe when the
+    # two ndarrays along the fused axis have DIFFERENT lengths at launch. The fused body evaluates
+    # `arr_a[v] - arr_b[v]` at the same `v`, so the iteration range must be the min of both shapes; iterating
+    # to the larger shape reads the shorter ndarray past its buffer end, which is UB on CPU and surfaces as
+    # `cudaErrorIllegalAddress` / `hipErrorIllegalAddress` at the next DtoH sync on CUDA / AMDGPU.
+    #
+    # Internal details: the fix expresses `min(shape_a, shape_b)` as `a + b - max(a, b)` to stay inside the
+    # grammar rather than introducing a new `Min` node (host + device evaluators both have to agree on the
+    # grammar). With `arr_a = [5, 5, 5, 5]` (shape 4) and `arr_b = [4, 0]` (shape 2) the pre-fix walker
+    # iterated `v in [0, 4)` and read `arr_b[2]` / `arr_b[3]` OOB. The fix caps the fused end at 2 so both
+    # reads stay in-bounds; the resulting bound evaluates to `4 * 2 * max_v (arr_a[v] - arr_b[v]) = 8 * 5 =
+    # 40`, which comfortably covers the actual `(4 * 1) + (4 * 5) = 24` pushes.
+    N_X = 8
+
+    x = qd.field(qd.f32, shape=(N_X,), needs_grad=True)
+    loss = qd.field(qd.f32, shape=(), needs_grad=True)
+
+    @qd.kernel
+    def compute(arr_a: qd.types.ndarray(dtype=qd.i32, ndim=1), arr_b: qd.types.ndarray(dtype=qd.i32, ndim=1)):
+        for _dummy in range(1):
+            accum = 0.0
+            for i_a in range(arr_a.shape[0]):
+                for i_b in range(arr_b.shape[0]):
+                    n = arr_a[i_a] - arr_b[i_b]
+                    if n > 0:
+                        for k in range(n):
+                            accum = accum + x[k] * x[k]
+            loss[None] += accum
+
+    for i in range(N_X):
+        x[i] = 0.1
+    arr_a_np = np.array([5, 5, 5, 5], dtype=np.int32)
+    arr_b_np = np.array([4, 0], dtype=np.int32)
+
+    compute(arr_a_np, arr_b_np)
+    loss.grad[None] = 1.0
+    for i in range(N_X):
+        x.grad[i] = 0.0
+    compute.grad(arr_a_np, arr_b_np)
+    qd.sync()
+
+    # Push breakdown: for every (i_a in [0, 4), i_b in [0, 2)) the inner trip is arr_a[i_a] - arr_b[i_b].
+    # With arr_b = [4, 0] the per-i_b inner trips are 1 and 5; summed over the four i_a values: 4 * (1 + 5)
+    # = 24 pushes. x[0] is visited by every (i_a, i_b) pair with a non-zero trip (8 visits); x[1..4] are
+    # visited only by the i_b = 1 branch (4 visits each); x[5..] are never visited.
+    assert loss[None] == pytest.approx(24 * 0.01, rel=1e-5)
+    assert x.grad[0] == pytest.approx(2 * 8 * 0.1, rel=1e-5)
+    for k in range(1, 5):
+        assert x.grad[k] == pytest.approx(2 * 4 * 0.1, rel=1e-5)
     for k in range(5, N_X):
         assert x.grad[k] == pytest.approx(0.0, abs=1e-7)
