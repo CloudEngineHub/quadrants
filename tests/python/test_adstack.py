@@ -1636,7 +1636,7 @@ def test_adstack_sizer_trip_count_ndarray_mutated_after_launch_read():
         assert x.grad[k] == pytest.approx(4 * 2.0 * 0.1, rel=1e-5)
 
 
-@test_utils.test(require=qd.extension.adstack, arch=[qd.cpu, qd.cuda], default_ad_stack_size=2)
+@test_utils.test(require=qd.extension.adstack, arch=[qd.cpu, qd.cuda, qd.amdgpu], default_ad_stack_size=2)
 def test_adstack_field_load_bounded_loop_evaluated_per_launch():
     # Pins the host-evaluated SizeExpr path end-to-end: a reverse-mode adstack whose inner-loop bound is a scalar
     # i32 field load must size the per-thread heap slice from the live field value at each launch, not from
@@ -1682,7 +1682,7 @@ def test_adstack_field_load_bounded_loop_evaluated_per_launch():
 
 
 @pytest.mark.parametrize("ndarray_kind", ["numpy", "qd_ndarray"])
-@test_utils.test(require=qd.extension.adstack, arch=[qd.cpu, qd.cuda])
+@test_utils.test(require=qd.extension.adstack, arch=[qd.cpu, qd.cuda, qd.amdgpu])
 def test_adstack_inner_range_bounded_by_ndarray_read_at_outer_index(ndarray_kind):
     # Pins the `ExternalTensorRead`-over-`LoopIndex` `MaxOverRange` wrap in the `SizeExpr` pre-pass: a
     # reverse-mode adstack whose inner range `range(a[i])` is bounded by a scalar ndarray read at the enclosing
@@ -1810,7 +1810,7 @@ def test_adstack_inner_range_bounded_by_multidim_ndarray_read():
 
 
 @pytest.mark.parametrize("outer_bound", ["const", "dynamic"])
-@test_utils.test(require=qd.extension.adstack, arch=[qd.cpu, qd.cuda])
+@test_utils.test(require=qd.extension.adstack, arch=[qd.cpu, qd.cuda, qd.amdgpu])
 def test_adstack_ext_tensor_read_indexed_by_stashed_outer_loop_var(outer_bound):
     # Pins the `ExternalPtrStmt` indexed by `AdStackLoadTopStmt` grammar gap. The kernel walks a
     # parent/child hierarchical-array layout: an outer parallel-for whose body casts its loop variable
@@ -1944,7 +1944,7 @@ def test_adstack_field_ptr_indexed_by_stashed_outer_loop_var():
         assert x.grad[i] == pytest.approx(0.45125, rel=1e-5)
 
 
-@test_utils.test(require=qd.extension.adstack, cfg_optimization=False, ad_stack_experimental_enabled=True)
+@test_utils.test(require=qd.extension.adstack, cfg_optimization=False)
 def test_adstack_triangular_ndrange_self_referential_push_idempotency():
     # Pins the phase-2 idempotency-at-zero probe ordering in `build_value_expr` for a reverse-mode push whose
     # value expression is self-referential by construction. The kernel couples a 2D `qd.ndrange` outer parallel
@@ -2049,7 +2049,7 @@ def test_adstack_triangular_ndrange_self_referential_push_idempotency():
 
 
 @pytest.mark.parametrize("inner_loop_shape", ["begin_end", "sub_then_range"])
-@test_utils.test(require=qd.extension.adstack, arch=[qd.cpu, qd.cuda])
+@test_utils.test(require=qd.extension.adstack, arch=[qd.cpu, qd.cuda, qd.amdgpu])
 def test_adstack_structural_pre_pass_fuses_sub_of_max_over_range_with_matching_shape_ends(inner_loop_shape):
     # Covers the two user-facing surface forms of a reverse-mode kernel whose inner range-for trip count is
     # the difference between two reads of parallel ndarrays indexed by the SAME outer loop. Both lower to a
@@ -2115,7 +2115,7 @@ def test_adstack_structural_pre_pass_fuses_sub_of_max_over_range_with_matching_s
         assert x.grad[j] == pytest.approx(0.0, abs=1e-7)
 
 
-@test_utils.test(require=qd.extension.adstack, arch=[qd.cpu, qd.cuda])
+@test_utils.test(require=qd.extension.adstack, arch=[qd.cpu, qd.cuda, qd.amdgpu])
 def test_adstack_structural_pre_pass_fuses_sub_of_max_over_range_with_mismatched_shape_ends():
     # Pins the `expr_sub` fusion for the Sub-of-two-MaxOverRange shape that the walker builds when an inner
     # range-for's trip count is computed as the difference between two ndarray reads whose indices come from
