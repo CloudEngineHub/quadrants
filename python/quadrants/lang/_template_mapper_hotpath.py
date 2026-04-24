@@ -32,12 +32,12 @@ import weakref
 from dataclasses import _FIELD, _FIELDS
 from typing import Any, Union
 
+from quadrants import _tensor_wrapper
 from quadrants._lib import core as _qd_core
 from quadrants._tensor import (
     _TENSOR_T_FIELD_MARKER,
     _TENSOR_T_NDARRAY_MARKER,
 )
-from quadrants import _tensor_wrapper
 from quadrants._tensor_wrapper import Tensor as _TensorClass
 from quadrants.lang._dataclass_util import create_flat_name
 from quadrants.lang._ndarray import Ndarray

@@ -21,9 +21,9 @@ from typing import TYPE_CHECKING, Any, Callable, DefaultDict, Type, cast
 
 import numpy as np
 
+from quadrants import _tensor_wrapper
 from quadrants._lib import core as _qd_core
 from quadrants._lib.core.quadrants_python import KernelLaunchContext
-from quadrants import _tensor_wrapper
 from quadrants._tensor_wrapper import Tensor as _TensorClass
 from quadrants.lang import _kernel_impl_dataclass, impl
 from quadrants.lang._dataclass_util import create_flat_name

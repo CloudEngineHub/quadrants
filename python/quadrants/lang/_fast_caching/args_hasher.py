@@ -6,8 +6,7 @@ from typing import Any, Sequence
 
 import numpy as np
 
-from quadrants import _logging
-from quadrants import _tensor_wrapper
+from quadrants import _logging, _tensor_wrapper
 from quadrants._tensor_wrapper import Tensor as _TensorClass
 from quadrants.types.annotations import Template
 

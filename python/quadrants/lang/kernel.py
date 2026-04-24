@@ -16,6 +16,7 @@ from quadrants import _logging
 
 _GRAPH_ENABLED = os.environ.get("QD_GRAPH", "1") == "1"
 
+from quadrants import _tensor_wrapper
 from quadrants._lib.core.quadrants_python import (
     Arch,
     ASTBuilder,
@@ -24,7 +25,6 @@ from quadrants._lib.core.quadrants_python import (
     KernelCxx,
     KernelLaunchContext,
 )
-from quadrants import _tensor_wrapper
 from quadrants._tensor_wrapper import Tensor as _Tensor_cls
 from quadrants.lang import _kernel_impl_dataclass, impl, runtime_ops
 from quadrants.lang._fast_caching import src_hasher
