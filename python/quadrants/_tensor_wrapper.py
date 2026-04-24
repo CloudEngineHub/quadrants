@@ -37,8 +37,8 @@ See ``perso_hugh/doc/quadrants-tensor.md`` §8.11 / §8.12.
 """
 
 # pylint: disable=import-outside-toplevel
-# (Late imports throughout are intentional, to break circular import cycles
-# between the tensor wrapper and the lang/types subpackages.)
+# (Late imports throughout are intentional, to break circular import cycles between the tensor wrapper and the
+# lang/types subpackages.)
 from __future__ import annotations
 
 import typing
@@ -120,8 +120,7 @@ class Tensor:
 
     @property
     def layout(self) -> typing.Optional[typing.Tuple[int, ...]]:
-        # Forwards to the impl's ``layout`` property (symmetric across
-        # backends after stork-16).
+        # Forwards to the impl's ``layout`` property (symmetric across backends after stork-16).
         return self._impl.layout
 
     # ------------------------------------------------------------------
@@ -219,8 +218,8 @@ class Tensor:
         self._impl.fill(value)
 
     def copy_from(self, other: typing.Any) -> None:
-        # Accept either another ``Tensor`` or a bare impl (convenience:
-        # lets Genesis-style code pass raw fields during the migration).
+        # Accept either another ``Tensor`` or a bare impl (convenience: lets Genesis-style code pass raw fields
+        # during the migration).
         if isinstance(other, Tensor):
             other = other._impl
         self._impl.copy_from(other)

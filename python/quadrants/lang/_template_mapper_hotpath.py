@@ -53,9 +53,8 @@ from quadrants.types import (
     template,
 )
 
-# Default ndarray annotation for Tensor-resolved-as-ndarray. Defining at
-# module scope avoids re-allocating per call. boundary defaults to UNSAFE
-# (the same default a bare ``qd.types.ndarray()`` would produce).
+# Default ndarray annotation for Tensor-resolved-as-ndarray. Defining at module scope avoids re-allocating per call.
+# boundary defaults to UNSAFE (the same default a bare ``qd.types.ndarray()`` would produce).
 _TENSOR_T_NDARRAY_ANNOTATION = ndarray_type.NdarrayType()
 
 AnnotationType = Union[
@@ -72,25 +71,19 @@ _primitive_types = {int, float, bool}
 
 
 def _extract_arg(raise_on_templated_floats: bool, arg: Any, annotation: AnnotationType, arg_name: str) -> Any:
-    # ``qd.Tensor`` wrappers passed as struct fields. Top-level
-    # kernel-arg unwrap in ``Kernel.__call__`` covers direct args, but
-    # the dataclass-field recursion at the bottom of this function
-    # walks struct attributes via raw ``getattr``, so a wrapper stored
-    # as a struct field arrives here un-stripped with its declared
-    # annotation (e.g. ``qd.types.NDArray[qd.f32, 2]``). Without this
-    # unwrap the function falls through to the "external arrays" path
-    # (line ~149) which technically reads ``.shape`` off the wrapper
-    # but produces a meaningless cache key. See ``perso_hugh/doc/
-    # quadrants-tensor.md`` §8.14. Idempotent for top-level args.
+    # ``qd.Tensor`` wrappers passed as struct fields. Top-level kernel-arg unwrap in ``Kernel.__call__`` covers direct
+    # args, but the dataclass-field recursion at the bottom of this function walks struct attributes via raw
+    # ``getattr``, so a wrapper stored as a struct field arrives here un-stripped with its declared annotation (e.g.
+    # ``qd.types.NDArray[qd.f32, 2]``). Without this unwrap the function falls through to the "external arrays" path
+    # (line ~149) which technically reads ``.shape`` off the wrapper but produces a meaningless cache key. See
+    # ``perso_hugh/doc/quadrants-tensor.md`` §8.14. Idempotent for top-level args.
     if isinstance(arg, _TensorClass):
         arg = arg._unwrap()
     annotation_type = type(annotation)
     arg_type = type(arg)
-    # qd.Tensor: value-dispatch. Ndarray-shaped values flow through the
-    # ndarray feature path; everything else falls through to the template
-    # path (Field, SNode, primitives). Both branches are salted with a
-    # marker so cache keys disambiguate. The annotation is the wrapper
-    # *class* (``qd.Tensor``); ``arg`` is always a bare impl by the time
+    # qd.Tensor: value-dispatch. Ndarray-shaped values flow through the ndarray feature path; everything else falls
+    # through to the template path (Field, SNode, primitives). Both branches are salted with a marker so cache keys
+    # disambiguate. The annotation is the wrapper *class* (``qd.Tensor``); ``arg`` is always a bare impl by the time
     # we get here (``Kernel.__call__`` unwraps ``Tensor`` instances).
     if annotation is _TensorClass:
         if issubclass(arg_type, (Ndarray, AnyArray)):
@@ -102,9 +95,8 @@ def _extract_arg(raise_on_templated_floats: bool, arg: Any, annotation: Annotati
                     arg_name,
                 )
             )
-        # Fall through to the template path below by retargeting the
-        # annotation. Wrap the result with a field marker so its cache
-        # entry is distinct from the ndarray branch above.
+        # Fall through to the template path below by retargeting the annotation. Wrap the result with a field marker
+        # so its cache entry is distinct from the ndarray branch above.
         annotation = template
         annotation_type = type(template)
         return (_TENSOR_T_FIELD_MARKER,) + (_extract_arg(raise_on_templated_floats, arg, template, arg_name),)

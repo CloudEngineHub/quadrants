@@ -57,8 +57,8 @@ if TYPE_CHECKING:
 from quadrants.types.enums import Layout
 from quadrants.types.utils import is_signed
 
-# Default ndarray annotation used when qd.Tensor resolves to the ndarray
-# branch at launch time. Defined at module scope to avoid per-call alloc.
+# Default ndarray annotation used when qd.Tensor resolves to the ndarray branch at launch time. Defined at module
+# scope to avoid per-call alloc.
 _TENSOR_T_NDARRAY_LAUNCH_ANNOTATION = ndarray_type.NdarrayType()
 
 from ._kernel_types import KernelBatchedArgType
@@ -170,10 +170,8 @@ class FuncBase:
                     # Catch Template subclasses.
                     pass
                 elif annotation is _TensorClass:
-                    # ``qd.Tensor`` (the wrapper class) used as the
-                    # polymorphic kernel-arg annotation. Behaves like a
-                    # template slot upfront; the actual dispatch happens
-                    # at extract-time / AST-build-time.
+                    # ``qd.Tensor`` (the wrapper class) used as the polymorphic kernel-arg annotation. Behaves like a
+                    # template slot upfront; the actual dispatch happens at extract-time / AST-build-time.
                     pass
                 elif annotation_type is type and is_dataclass(annotation):
                     pass
@@ -460,42 +458,33 @@ class FuncBase:
             )
         actual_argument_slot += 1
 
-        # ``qd.Tensor`` wrappers passed as struct fields. The top-level
-        # kernel-arg unwrap hook in ``Kernel.__call__`` strips wrappers
-        # off positional / keyword args before they reach the
-        # template-mapper or this dispatch path, but it does **not**
-        # walk into struct args. When the recursion below descends into
-        # a ``@qd.data_oriented`` (or plain dataclass) struct field
-        # whose value is a wrapper, we land here with ``needed_arg_type``
-        # set to whatever annotation the struct declared on the field
-        # (e.g. ``NdarrayType``) and ``v`` set to a ``Tensor`` instance.
-        # Unwrap defensively so the rest of the function sees the bare
-        # impl, matching what callers expect post-stork-19. Idempotent
-        # for top-level args (already unwrapped).
+        # ``qd.Tensor`` wrappers passed as struct fields. The top-level kernel-arg unwrap hook in ``Kernel.__call__``
+        # strips wrappers off positional / keyword args before they reach the template-mapper or this dispatch path,
+        # but it does **not** walk into struct args. When the recursion below descends into a ``@qd.data_oriented``
+        # (or plain dataclass) struct field whose value is a wrapper, we land here with ``needed_arg_type`` set to
+        # whatever annotation the struct declared on the field (e.g. ``NdarrayType``) and ``v`` set to a ``Tensor``
+        # instance. Unwrap defensively so the rest of the function sees the bare impl, matching what callers expect
+        # post-stork-19. Idempotent for top-level args (already unwrapped).
         if isinstance(v, _TensorClass):
             v = v._unwrap()
 
         needed_arg_type_id = id(needed_arg_type)
         needed_arg_basetype = type(needed_arg_type)
 
-        # qd.Tensor value-dispatch at launch time. Re-target the
-        # annotation to the concrete branch resolved from the runtime
-        # value, then fall through to the existing dispatch logic.
-        # Wrapper instances are unwrapped earlier (in ``Kernel.__call__``,
-        # plus the defensive in-struct unwrap immediately above);
-        # by the time we get here ``v`` is always the bare impl.
+        # qd.Tensor value-dispatch at launch time. Re-target the annotation to the concrete branch resolved from the
+        # runtime value, then fall through to the existing dispatch logic. Wrapper instances are unwrapped earlier (in
+        # ``Kernel.__call__``, plus the defensive in-struct unwrap immediately above); by the time we get here ``v``
+        # is always the bare impl.
         if needed_arg_type is _TensorClass:
             if isinstance(v, Ndarray):
                 needed_arg_type = cast(Type, _TENSOR_T_NDARRAY_LAUNCH_ANNOTATION)
                 needed_arg_type_id = id(needed_arg_type)
                 needed_arg_basetype = type(needed_arg_type)
-                # Re-widen v to avoid pyright narrowing it to Ndarray for the
-                # remainder of the function (the dispatch logic below treats
-                # v as Any and inspects attributes that don't exist on Ndarray).
+                # Re-widen v to avoid pyright narrowing it to Ndarray for the remainder of the function (the dispatch
+                # logic below treats v as Any and inspects attributes that don't exist on Ndarray).
                 v = cast(Any, v)
             else:
-                # Field/SNode/scalar template: launch path is a no-op
-                # (templates don't set kernel args).
+                # Field/SNode/scalar template: launch path is a no-op (templates don't set kernel args).
                 return 0, True
 
         # Note: do not use sth like "needed == f32". That would be slow.

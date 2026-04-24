@@ -14,13 +14,13 @@ now check ``annotation is Tensor`` (the class). See ``_func_base.py``,
 """
 
 # pylint: disable=import-outside-toplevel
-# (Late imports below are intentional, to break circular import cycles
-# between the tensor entry point and the lang/types subpackages.)
+# (Late imports below are intentional, to break circular import cycles between the tensor entry point and the
+# lang/types subpackages.)
 
 from enum import IntEnum
 
-# Re-export so ``from quadrants._tensor import *`` still binds ``Tensor`` —
-# keeps the wildcard import in ``__init__.py`` simple and atomic.
+# Re-export so ``from quadrants._tensor import *`` still binds ``Tensor`` — keeps the wildcard import in
+# ``__init__.py`` simple and atomic.
 from quadrants._tensor_wrapper import Tensor
 
 __all__ = [
@@ -56,8 +56,7 @@ def _with_layout(ndarray, layout):
     reading ``x.grad[...]`` goes through the same canonical->physical
     AST rewrite as ``x[...]``.
     """
-    # Unwrap Tensor wrappers transparently. Imported lazily to dodge the
-    # _tensor_wrapper -> _tensor cycle.
+    # Unwrap Tensor wrappers transparently. Imported lazily to dodge the _tensor_wrapper -> _tensor cycle.
     from quadrants._tensor_wrapper import (  # pylint: disable=reimported
         Tensor as _TensorWrapper,
     )
@@ -221,27 +220,23 @@ def tensor(dtype, shape, *, backend=Backend.NDARRAY, layout=None, **kwargs):
         if order is not None:
             forwarded["order"] = order
         f = impl.field(dtype, shape, **forwarded)
-        # The canonical->physical layout permutation is attached by
-        # ``_field`` itself via ``_qd_layout`` (identical attribute to the
-        # one ``Ndarray`` uses). The AST subscript rewrite in
-        # ``build_Subscript`` / ``build_struct_for`` reads it to permute
-        # user-supplied canonical indices into physical storage order;
+        # The canonical->physical layout permutation is attached by ``_field`` itself via ``_qd_layout`` (identical
+        # attribute to the one ``Ndarray`` uses). The AST subscript rewrite in ``build_Subscript`` /
+        # ``build_struct_for`` reads it to permute user-supplied canonical indices into physical storage order;
         # ``Field.layout`` reads the same attribute for introspection.
         return Tensor(f)
     if backend is Backend.NDARRAY:
         if order is None:
             return Tensor(impl.ndarray(dtype, shape, **forwarded))
-        # Non-identity layout: allocate at the physical (permuted) shape
-        # and tag the result so the kernel-side subscript rewrite picks
-        # up the canonical -> physical translation.
+        # Non-identity layout: allocate at the physical (permuted) shape and tag the result so the kernel-side
+        # subscript rewrite picks up the canonical -> physical translation.
         assert layout is not None  # implied by `order is not None`
         layout_t = tuple(layout)
         physical_shape = tuple(shape_t[axis] for axis in layout_t)
         arr = impl.ndarray(dtype, physical_shape, **forwarded)
-        # _with_layout propagates the tag to the companion grad ndarray
-        # if one was allocated by needs_grad=True, so kernel code reading
-        # x.grad[i, j, ...] goes through the same canonical->physical
-        # AST rewrite as the primal access.
+        # _with_layout propagates the tag to the companion grad ndarray if one was allocated by needs_grad=True, so
+        # kernel code reading x.grad[i, j, ...] goes through the same canonical->physical AST rewrite as the primal
+        # access.
         _with_layout(arr, layout_t)
         return Tensor(arr)
     raise AssertionError(f"unhandled Backend member: {backend!r}")

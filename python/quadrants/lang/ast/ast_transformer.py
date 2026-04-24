@@ -302,13 +302,10 @@ class ASTTransformer(Builder):
         # Ndarray expects.
         #
         # Two indexing forms must be permuted:
-        # 1. Multi-arg subscript ``x[i, j, ...]``: ``node.slice.ptr`` is
-        #    already a list of N scalars; permute by axis.
-        # 2. Single-Vector subscript ``x[I]`` where I is a rank-N Matrix
-        #    coming from ``qd.grouped(...)``: unpack into N scalars first,
-        #    then permute. Without this, ``x[I]`` writes at canonical
-        #    indices into the smaller physical buffer — silently OOB on
-        #    permuted layouts.
+        # 1. Multi-arg subscript ``x[i, j, ...]``: ``node.slice.ptr`` is already a list of N scalars; permute by axis.
+        # 2. Single-Vector subscript ``x[I]`` where I is a rank-N Matrix coming from ``qd.grouped(...)``: unpack
+        #    into N scalars first, then permute. Without this, ``x[I]`` writes at canonical indices into the smaller
+        #    physical buffer — silently OOB on permuted layouts.
         layout = getattr(node.value.ptr, "_qd_layout", None)
         if layout is not None:
             if len(node.slice.ptr) == 1:
@@ -725,16 +722,11 @@ class ASTTransformer(Builder):
                 node.ptr = node.ptr._unwrap()
         else:
             node.ptr = getattr(node.value.ptr, node.attr)
-            # ``qd.Tensor`` wrappers reached via attribute access on a
-            # ``@qd.data_oriented`` struct field at AST-build time. The
-            # IR layer downstream of this (``build_Subscript`` ->
-            # ``impl.subscript``) only knows about ``Ndarray`` / ``Field``
-            # / ``Expr``; the wrapper is host-side. Unwrap here so
-            # ``state.a[i, j]`` inside a kernel body resolves to the bare
-            # impl. Top-level wrapper args (``def k(x: qd.Tensor)``) are
-            # unwrapped earlier in ``Kernel.__call__``; this handles the
-            # in-struct case. See ``perso_hugh/doc/quadrants-tensor.md``
-            # §8.14.
+            # ``qd.Tensor`` wrappers reached via attribute access on a ``@qd.data_oriented`` struct field at AST-build
+            # time. The IR layer downstream (``build_Subscript`` -> ``impl.subscript``) only knows about ``Ndarray`` /
+            # ``Field`` / ``Expr``; the wrapper is host-side. Unwrap here so ``state.a[i, j]`` inside a kernel body
+            # resolves to the bare impl. Top-level wrapper args (``def k(x: qd.Tensor)``) are unwrapped earlier in
+            # ``Kernel.__call__``; this handles the in-struct case. See ``perso_hugh/doc/quadrants-tensor.md`` §8.14.
             from quadrants._tensor_wrapper import (  # pylint: disable=C0415
                 Tensor as _TensorClass,
             )
@@ -1117,13 +1109,10 @@ class ASTTransformer(Builder):
                 loop_indices = expr.make_var_list(size=len(loop_var.shape), ast_builder=ctx.ast_builder)
                 expr_group = expr.make_expr_group(loop_indices)
                 impl.begin_frontend_struct_for(ctx.ast_builder, expr_group, loop_var)
-                # Layout-tagged tensors (both ndarray and field): the
-                # runtime delivers *physical* loop indices (one per axis
-                # of the underlying buffer), but the user-visible ``I``
-                # must be canonical so that ``x[I]`` round-trips correctly
-                # through the canonical->physical AST rewrite in
-                # :func:`build_Subscript`. Reorder the indices so position
-                # ``m`` carries the canonical-axis-``m`` value.
+                # Layout-tagged tensors (both ndarray and field): the runtime delivers *physical* loop indices (one
+                # per axis of the underlying buffer), but the user-visible ``I`` must be canonical so that ``x[I]``
+                # round-trips correctly through the canonical->physical AST rewrite in :func:`build_Subscript`.
+                # Reorder the indices so position ``m`` carries the canonical-axis-``m`` value.
                 layout = getattr(loop_var, "_qd_layout", None)
                 if layout is not None and len(layout) == len(loop_indices):
                     invperm = [0] * len(layout)
@@ -1137,13 +1126,10 @@ class ASTTransformer(Builder):
                 ctx.ast_builder.end_frontend_struct_for()
             else:
                 loop_var = node.iter.ptr
-                # Layout-tagged tensors (both ndarray and field): the
-                # runtime fills the loop-target slots with *physical*
-                # indices but the user spelled them with canonical names
-                # (``for i, j in x`` where ``i`` is canonical axis 0).
-                # Allocate hidden physical slots and rebind each user
-                # name to the physical slot whose runtime value is the
-                # canonical-axis value the user expects.
+                # Layout-tagged tensors (both ndarray and field): the runtime fills the loop-target slots with
+                # *physical* indices but the user spelled them with canonical names (``for i, j in x`` where ``i``
+                # is canonical axis 0). Allocate hidden physical slots and rebind each user name to the physical slot
+                # whose runtime value is the canonical-axis value the user expects.
                 layout = getattr(loop_var, "_qd_layout", None)
                 if layout is not None and len(layout) == len(targets):
                     phys_vars = [expr.Expr(ctx.ast_builder.make_id_expr("")) for _ in targets]

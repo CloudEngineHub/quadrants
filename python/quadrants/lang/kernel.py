@@ -570,20 +570,15 @@ class Kernel(FuncBase):
 
         self.raise_on_templated_floats = config.raise_on_templated_floats
         py_args = self.fuse_args(is_func=False, is_pyfunc=False, py_args=py_args, kwargs=kwargs, global_context=None)
-        # Tensor-wrapper unwrap (stork-17). Substitute each
-        # ``qd.Tensor`` instance (including ``VectorTensor`` /
-        # ``MatrixTensor`` subclasses) with its underlying ``Ndarray`` /
-        # ``ScalarField`` impl *before* anything downstream observes the
-        # arg tuple — including the autograd tape (uses identity), the
-        # template mapper (cache-keys on ``id(arg)``), ``_extract_arg``,
-        # and the AST builder. This guarantees JIT cache stability:
-        # ``id(Tensor(impl))`` differs across constructions, but
-        # ``id(impl)`` is stable, so wrapper-or-not yields identical
-        # cache keys.
+        # Tensor-wrapper unwrap (stork-17). Substitute each ``qd.Tensor`` instance (including ``VectorTensor`` /
+        # ``MatrixTensor`` subclasses) with its underlying ``Ndarray`` / ``ScalarField`` impl *before* anything
+        # downstream observes the arg tuple — including the autograd tape (uses identity), the template mapper
+        # (cache-keys on ``id(arg)``), ``_extract_arg``, and the AST builder. This guarantees JIT cache stability:
+        # ``id(Tensor(impl))`` differs across constructions, but ``id(impl)`` is stable, so wrapper-or-not yields
+        # identical cache keys.
         #
-        # Fast path: most calls have no wrappers. ``isinstance`` is used
-        # so VectorTensor/MatrixTensor subclasses are also unwrapped.
-        # The check short-circuits on the first non-wrapper.
+        # Fast path: most calls have no wrappers. ``isinstance`` is used so VectorTensor/MatrixTensor subclasses are
+        # also unwrapped. The check short-circuits on the first non-wrapper.
         for _a in py_args:
             if isinstance(_a, _Tensor_cls):
                 py_args = tuple(a._impl if isinstance(a, _Tensor_cls) else a for a in py_args)

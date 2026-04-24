@@ -47,9 +47,8 @@ class FunctionDefTransformer:
         full_name = prefix_name + "_" + name
         if not isinstance(annotation, primitive_types.RefType):
             ctx.kernel_args.append(name)
-        # qd.Tensor value-dispatch. The first slot of this_arg_features
-        # is a string marker placed by _template_mapper_hotpath. The
-        # annotation is the wrapper class itself (``qd.Tensor``).
+        # qd.Tensor value-dispatch. The first slot of this_arg_features is a string marker placed by
+        # _template_mapper_hotpath. The annotation is the wrapper class itself (``qd.Tensor``).
         if annotation is _TensorClass:
             assert this_arg_features is not None
             marker = this_arg_features[0]
@@ -206,11 +205,9 @@ class FunctionDefTransformer:
             ctx.create_variable(argument_name, data)
             return None
 
-        # qd.Tensor in @qd.func context: polymorphic pass-by-reference.
-        # No template-mapper features are available (those only exist for
-        # top-level @qd.kernel args). Unwrap any Tensor wrapper, then
-        # create the variable directly — ndarray and field impls are both
-        # valid pass-by-reference arguments.
+        # qd.Tensor in @qd.func context: polymorphic pass-by-reference. No template-mapper features are available
+        # (those only exist for top-level @qd.kernel args). Unwrap any Tensor wrapper, then create the variable
+        # directly — ndarray and field impls are both valid pass-by-reference arguments.
         if argument_type is _TensorClass:
             data = FunctionDefTransformer._unwrap_tensor(data)
             ctx.create_variable(argument_name, data)
@@ -229,8 +226,8 @@ class FunctionDefTransformer:
                         any_array.AnyArray,
                     ),
                 ):
-                    # qd.Tensor struct fields skip check_matched (the
-                    # Tensor class has no such method — it is polymorphic).
+                    # qd.Tensor struct fields skip check_matched (the Tensor class has no such method — it is
+                    # polymorphic).
                     if field.type is not _TensorClass and hasattr(field.type, "check_matched"):
                         field.type.check_matched(data_child.get_type(), field.name)
                     ctx.create_variable(flat_name, data_child)
