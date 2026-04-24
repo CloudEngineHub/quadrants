@@ -1142,11 +1142,7 @@ void TaskCodeGenLLVM::visit(AssertStmt *stmt) {
   auto arguments = create_entry_block_alloca(argument_buffer_size);
 
   std::vector<llvm::Value *> args;
-  // On CPU, use the context-aware variant that returns non-zero on failure
-  // so we can emit an early return and avoid the subsequent out-of-bounds
-  // memory access.  On GPU, asm("exit;") kills the thread directly.
-  bool use_ctx_variant = arch_is_cpu(current_arch());
-  args.emplace_back(use_ctx_variant ? get_context() : get_runtime());
+  args.emplace_back(get_runtime());
   args.emplace_back(builder->CreateIsNotNull(llvm_val[stmt->cond]));
   args.emplace_back(builder->CreateGlobalStringPtr(stmt->text));
 
@@ -1171,17 +1167,7 @@ void TaskCodeGenLLVM::visit(AssertStmt *stmt) {
   args.emplace_back(
       builder->CreateGEP(argument_buffer_size, arguments, {tlctx->get_constant(0), tlctx->get_constant(0)}));
 
-  llvm_val[stmt] = call(use_ctx_variant ? "quadrants_assert_format_ctx" : "quadrants_assert_format", std::move(args));
-
-  if (use_ctx_variant) {
-    auto *assert_abort = llvm::BasicBlock::Create(*llvm_context, "assert_abort", func);
-    auto *assert_cont = llvm::BasicBlock::Create(*llvm_context, "assert_cont", func);
-    auto *failed = builder->CreateICmpNE(llvm_val[stmt], tlctx->get_constant(0));
-    builder->CreateCondBr(failed, assert_abort, assert_cont);
-    builder->SetInsertPoint(assert_abort);
-    builder->CreateRetVoid();
-    builder->SetInsertPoint(assert_cont);
-  }
+  llvm_val[stmt] = call("quadrants_assert_format", std::move(args));
 }
 
 void TaskCodeGenLLVM::visit(SNodeOpStmt *stmt) {
@@ -2507,12 +2493,6 @@ void TaskCodeGenLLVM::visit(FuncCallStmt *stmt) {
     current_callable = old_callable;
   }
   llvm::Function *llvm_func = func_map[stmt->func];
-  // FIXME: when cpu_assert_failed fires inside a @qd.real_func callee, the
-  // flag is set on new_ctx but never propagated back to the caller's context.
-  // Regular @qd.func is AST-inlined so assertions are handled by the caller's
-  // visit(AssertStmt) directly.  real_func needs: (1) zero-init new_ctx's
-  // cpu_assert_failed before the call, (2) post-call check + propagate to
-  // get_context(), (3) emit ret void on failure.
   auto *new_ctx = create_entry_block_alloca(get_runtime_type("RuntimeContext"));
   call("RuntimeContext_set_runtime", new_ctx, get_runtime());
   if (!stmt->func->parameter_list.empty()) {
