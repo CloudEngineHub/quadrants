@@ -220,3 +220,135 @@ def test_tensor_func_param_2d_with_layout(backend):
     for i in range(M):
         for j in range(N):
             assert arr[i, j] == i * 100 + j, f"mismatch at [{i},{j}]"
+
+
+# ---------------------------------------------------------------------------
+# 8. Struct with qd.Tensor vector-compound field — exercises
+#    populate_global_vars_from_dataclass + element_shape propagation
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize("backend", BACKENDS, ids=BACKEND_IDS)
+@test_utils.test(arch=qd.cpu)
+def test_tensor_struct_vector_field_roundtrip(backend):
+    """Struct field holding a *vector*-element qd.Tensor allocated via
+    ``qd.tensor(vec3_type, ...)``.  Covers the ``_wrap_impl`` fix that
+    ensures VectorTensor is returned for compound dtypes, plus the struct
+    expansion path in ``populate_global_vars_from_dataclass``."""
+    N = 4
+    vec3 = qd.types.vector(3, qd.f32)
+    t = qd.tensor(vec3, shape=(N,), backend=backend)
+    assert isinstance(t, qd.VectorTensor), f"expected VectorTensor, got {type(t).__name__}"
+
+    if backend == qd.Backend.FIELD:
+
+        @qd.data_oriented
+        class S:
+            def __init__(self, vals):
+                self.vals = vals
+
+        s = S(vals=t)
+    else:
+
+        @dataclasses.dataclass(frozen=True)
+        class S:
+            vals: qd.Tensor
+
+        s = S(vals=t)
+
+    @qd.kernel
+    def fill(st: qd.template()):
+        for i in range(N):
+            for j in qd.static(range(3)):
+                st.vals[i][j] = i * 10.0 + j
+
+    fill(s)
+    arr = t.to_numpy()
+    assert arr.shape == (N, 3)
+    assert arr[2, 1] == pytest.approx(21.0)
+
+
+# ---------------------------------------------------------------------------
+# 9. Frozen dataclass with qd.Tensor field, kernel arg is struct TYPE
+#    (not qd.template()) — exercises _predeclare_struct_ndarrays +
+#    ndarray_to_any_array resolution in impl.subscript (Option C path)
+# ---------------------------------------------------------------------------
+
+
+@test_utils.test(arch=qd.cpu)
+def test_tensor_struct_field_typed_kernel_arg_ndarray():
+    """A frozen dataclass with a qd.Tensor-annotated field passed to a
+    kernel as ``state: State`` (typed arg, not qd.template()). This
+    exercises the _predeclare_struct_ndarrays mechanism that registers
+    bare Ndarray fields in ndarray_to_any_array so impl.subscript can
+    resolve them."""
+    N = 6
+
+    @dataclasses.dataclass(frozen=True)
+    class State:
+        vals: qd.Tensor
+
+    t = qd.tensor(qd.i32, shape=(N,), backend=qd.Backend.NDARRAY)
+    s = State(vals=t)
+
+    @qd.kernel
+    def fill(st: State):
+        for i in range(N):
+            st.vals[i] = i * 3
+
+    fill(s)
+    np.testing.assert_array_equal(t.to_numpy(), np.arange(N) * 3)
+
+
+@test_utils.test(arch=qd.cpu)
+def test_tensor_struct_field_typed_kernel_arg_field():
+    """Same as above but with FIELD backend and @qd.data_oriented struct,
+    kernel arg typed as the struct class."""
+    N = 6
+
+    @qd.data_oriented
+    class State:
+        def __init__(self, vals):
+            self.vals = vals
+
+    t = qd.tensor(qd.i32, shape=(N,), backend=qd.Backend.FIELD)
+    s = State(vals=t)
+
+    @qd.kernel
+    def fill(st: qd.template()):
+        for i in range(N):
+            st.vals[i] = i * 3
+
+    fill(s)
+    np.testing.assert_array_equal(t.to_numpy(), np.arange(N) * 3)
+
+
+# ---------------------------------------------------------------------------
+# 10. Frozen dataclass with MULTIPLE qd.Tensor fields + typed kernel arg
+# ---------------------------------------------------------------------------
+
+
+@test_utils.test(arch=qd.cpu)
+def test_tensor_struct_multiple_fields_typed_kernel_arg():
+    """Struct with two qd.Tensor fields passed as typed kernel arg.
+    Both fields must be correctly pre-declared and subscriptable."""
+    N = 4
+
+    @dataclasses.dataclass(frozen=True)
+    class State:
+        pos: qd.Tensor
+        vel: qd.Tensor
+
+    pos = qd.tensor(qd.i32, shape=(N,), backend=qd.Backend.NDARRAY)
+    vel = qd.tensor(qd.i32, shape=(N,), backend=qd.Backend.NDARRAY)
+    s = State(pos=pos, vel=vel)
+
+    @qd.kernel
+    def step(st: State):
+        for i in range(N):
+            st.pos[i] = i
+            st.vel[i] = i * 2
+
+    step(s)
+    np.testing.assert_array_equal(pos.to_numpy(), np.arange(N))
+    np.testing.assert_array_equal(vel.to_numpy(), np.arange(N) * 2)

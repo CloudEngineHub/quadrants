@@ -119,3 +119,50 @@ def test_tensor_kernel_roundtrip(backend):
 
     fill(a)
     assert list(a.to_numpy()) == [0, 2, 4, 6]
+
+
+# ----------------------------------------------------------------------------
+# qd.tensor() with compound dtype (vector / matrix types)
+# ----------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize("backend", BACKENDS, ids=BACKEND_IDS)
+@test_utils.test(arch=qd.cpu)
+def test_tensor_compound_vector_returns_vector_tensor(backend):
+    """``qd.tensor(vec3_type, shape)`` must return a ``VectorTensor``, not
+    the base ``Tensor``, so that ``element_shape`` is available."""
+    vec3 = qd.types.vector(3, qd.f32)
+    a = qd.tensor(vec3, shape=(4,), backend=backend)
+    assert isinstance(a, qd.VectorTensor), f"expected VectorTensor, got {type(a).__name__}"
+    assert a.element_shape == (3,)
+    assert a.shape == (4,)
+
+
+@pytest.mark.parametrize("backend", BACKENDS, ids=BACKEND_IDS)
+@test_utils.test(arch=qd.cpu)
+def test_tensor_compound_matrix_returns_matrix_tensor(backend):
+    """``qd.tensor(mat2x3_type, shape)`` must return a ``MatrixTensor``."""
+    mat23 = qd.types.matrix(2, 3, qd.f32)
+    a = qd.tensor(mat23, shape=(5,), backend=backend)
+    assert isinstance(a, qd.MatrixTensor), f"expected MatrixTensor, got {type(a).__name__}"
+    assert a.element_shape == (2, 3)
+    assert a.shape == (5,)
+
+
+@pytest.mark.parametrize("backend", BACKENDS, ids=BACKEND_IDS)
+@test_utils.test(arch=qd.cpu)
+def test_tensor_compound_vector_roundtrip(backend):
+    """Allocate via ``qd.tensor(vec3, ...)`` and verify data roundtrip."""
+    vec3 = qd.types.vector(3, qd.f32)
+    a = qd.tensor(vec3, shape=(4,), backend=backend)
+
+    @qd.kernel
+    def fill(x: qd.Tensor):
+        for i in range(4):
+            for j in qd.static(range(3)):
+                x[i][j] = i * 10.0 + j
+
+    fill(a)
+    arr = a.to_numpy()
+    assert arr.shape == (4, 3)
+    assert arr[2, 1] == 21.0
