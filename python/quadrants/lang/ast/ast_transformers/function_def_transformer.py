@@ -228,7 +228,7 @@ class FunctionDefTransformer:
                 return
             from quadrants._lib import core as _qd_core  # pylint: disable=C0415
 
-            element_type = cook_dtype(nd.dtype)
+            element_type = cook_dtype(nd.element_type)
             ndim = len(nd._physical_shape)
             needs_grad = nd.grad is not None
             layout = getattr(nd, "_qd_layout", None)
@@ -237,9 +237,7 @@ class FunctionDefTransformer:
                 element_type, ndim, name, needs_grad
             )
             arr = any_array.AnyArray(
-                _qd_core.make_external_tensor_expr(
-                    element_type, ndim, arg_id_vec, needs_grad, BoundaryMode.UNSAFE
-                ),
+                _qd_core.make_external_tensor_expr(element_type, ndim, arg_id_vec, needs_grad, BoundaryMode.UNSAFE),
                 _qd_layout=layout,
             )
             cache[key] = arr

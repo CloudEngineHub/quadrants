@@ -75,8 +75,6 @@ from quadrants.types.primitive_types import (
 )
 
 if TYPE_CHECKING:
-    from quadrants.lang._ndarray import Ndarray
-
     from .ast.ast_transformer_utils import ASTTransformerGlobalContext
 
 
