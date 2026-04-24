@@ -73,12 +73,10 @@ _primitive_types = {int, float, bool}
 
 
 def _extract_arg(raise_on_templated_floats: bool, arg: Any, annotation: AnnotationType, arg_name: str) -> Any:
-    # PERF-CRITICAL: Unwrap qd.Tensor wrappers (e.g. from struct fields).
-    # The _any_tensor_constructed guard makes the isinstance zero-cost when
-    # no qd.Tensor has been created. This function runs on *every* argument
-    # of *every* kernel invocation; without the guard the cumulative
-    # isinstance overhead causes a ~4% CPU regression. Do not remove the
-    # guard or move the isinstance outside of it.
+    # PERF-CRITICAL: Unwrap qd.Tensor wrappers (e.g. from struct fields). The _any_tensor_constructed guard makes
+    # the isinstance zero-cost when no qd.Tensor has been created. This function runs on *every* argument of *every*
+    # kernel invocation; without the guard the cumulative isinstance overhead causes a ~4% CPU regression. Do not
+    # remove the guard or move the isinstance outside of it.
     if _tensor_wrapper._any_tensor_constructed and isinstance(
         arg, _TensorClass
     ):  # pyright: ignore[reportOptionalMemberAccess]
@@ -144,10 +142,9 @@ def _extract_arg(raise_on_templated_floats: bool, arg: Any, annotation: Annotati
             # Convert singleton primitive dtype to int. This will dramatically speed up hashing later on.
             type_id = id(arg.element_type)
             element_type = type_id if type_id in primitive_types.type_ids else arg.element_type
-            # PERF-CRITICAL: arg._qd_layout uses direct attribute access
-            # (not getattr) because Ndarray has a class-level _qd_layout=None
-            # default. This avoids the overhead of getattr(..., default) on
-            # every kernel arg. Do not replace with getattr().
+            # PERF-CRITICAL: arg._qd_layout uses direct attribute access (not getattr) because Ndarray has a
+            # class-level _qd_layout=None default. This avoids getattr(..., default) overhead on every kernel arg.
+            # Do not replace with getattr().
             return element_type, len(arg.shape), needs_grad, annotation.boundary, arg._qd_layout
         if isinstance(arg, AnyArray):
             ty = arg.get_type()

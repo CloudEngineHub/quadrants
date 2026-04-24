@@ -470,11 +470,9 @@ class FuncBase:
             )
         actual_argument_slot += 1
 
-        # PERF-CRITICAL: Unwrap qd.Tensor wrappers from struct fields.
-        # The _any_tensor_constructed guard makes the isinstance zero-cost
-        # when no qd.Tensor has been created. Without this guard the per-arg
-        # isinstance check causes a measurable CPU regression. Do not remove
-        # the guard or move the isinstance outside of it.
+        # PERF-CRITICAL: Unwrap qd.Tensor wrappers from struct fields. The _any_tensor_constructed guard makes
+        # the isinstance zero-cost when no qd.Tensor has been created. Without this guard the per-arg isinstance
+        # check causes a measurable CPU regression. Do not remove the guard or move the isinstance outside of it.
         if _tensor_wrapper._any_tensor_constructed and isinstance(
             v, _TensorClass
         ):  # pyright: ignore[reportOptionalMemberAccess]

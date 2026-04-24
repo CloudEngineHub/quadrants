@@ -52,13 +52,11 @@ __all__ = [
 ]
 
 
-# PERF-CRITICAL: This flag is checked on every kernel arg in
-# _template_mapper_hotpath._extract_arg, kernel.Kernel.__call__,
-# _func_base._inject_template_globals, and args_hasher.stringify_obj_type.
-# It gates the isinstance(arg, Tensor) unwrap so that programs which never
-# construct a qd.Tensor pay zero Python overhead for the check. Removing
-# this flag or the guards that read it causes a measurable ~4% CPU
-# regression on Genesis benchmarks (see regression_2026apr23_stork_log.md).
+# PERF-CRITICAL: This flag is checked on every kernel arg in _template_mapper_hotpath._extract_arg,
+# kernel.Kernel.__call__, _func_base._inject_template_globals, and args_hasher.stringify_obj_type.
+# It gates the isinstance(arg, Tensor) unwrap so that programs which never construct a qd.Tensor pay zero Python
+# overhead for the check. Removing this flag or the guards that read it causes a measurable ~4% CPU regression on
+# Genesis benchmarks (see regression_2026apr23_stork_log.md).
 _any_tensor_constructed = False
 
 

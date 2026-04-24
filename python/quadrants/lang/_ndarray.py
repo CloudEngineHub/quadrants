@@ -57,20 +57,17 @@ class Ndarray:
         shape (Tuple[int]): Shape of the Ndarray.
     """
 
-    # PERF-CRITICAL: This class attribute lets hotpath code access
-    # ``arg._qd_layout`` directly instead of ``getattr(arg, "_qd_layout", None)``.
-    # Direct attribute access is measurably faster on the per-kernel-arg path
-    # in _template_mapper_hotpath._extract_arg. Instance-level _qd_layout
-    # (set during layout-tagged allocation) shadows this default.
+    # PERF-CRITICAL: This class attribute lets hotpath code access ``arg._qd_layout`` directly instead of
+    # ``getattr(arg, "_qd_layout", None)``. Direct attribute access is measurably faster on the per-kernel-arg
+    # path in _template_mapper_hotpath._extract_arg. Instance-level _qd_layout (set during layout-tagged
+    # allocation) shadows this default.
     _qd_layout: tuple[int, ...] | None = None
 
     def __init__(self):
         self.host_accessor = None
-        # `_physical_shape` is the underlying storage shape (matches the C++
-        # ndarray buffer). `shape` is exposed as a property: when a layout
-        # tag (`_qd_layout`) is present it returns the *canonical* shape the
-        # user indexes inside kernels; otherwise it returns the physical
-        # shape (which is the same thing).
+        # `_physical_shape` is the underlying storage shape (matches the C++ ndarray buffer). `shape` is exposed
+        # as a property: when a layout tag (`_qd_layout`) is present it returns the *canonical* shape the user
+        # indexes inside kernels; otherwise it returns the physical shape (which is the same thing).
         self._physical_shape = None
         self.element_type = None
         self.dtype = None
