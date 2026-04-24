@@ -81,8 +81,10 @@ def pytest_generate_tests(metafunc):
 def pytest_runtest_logreport(report):
     """
     Kill the xdist worker process after a test failure so it restarts with
-    clean GPU state.  Stock xdist (>= 3.4) automatically restarts the worker
-    and preserves the failure report for the terminal summary.
+    clean GPU state.  The real test report is sent by xdist's own hook
+    (which runs before this trylast hook) before we exit.  The controller's
+    pytest_handlecrashitem hook below suppresses the synthetic "worker
+    crashed" duplicate.
     """
     if not os.environ.get("PYTEST_XDIST_WORKER"):
         return
@@ -91,6 +93,20 @@ def pytest_runtest_logreport(report):
         return
 
     os._exit(1)
+
+
+def pytest_handlecrashitem(crashitem, report, sched):
+    """Suppress the synthetic 'worker crashed while running ...' report.
+
+    When pytest_runtest_logreport above kills a worker via os._exit(1),
+    stock xdist treats it as a crash and synthesizes a duplicate failure
+    report.  The real report was already sent before the exit, so we
+    mark the synthetic one as passed to keep it out of the failure summary.
+    This hook is firstresult=True in xdist, so returning here prevents
+    the default handler from running.
+    """
+    report.outcome = "passed"
+    report.longrepr = None
 
 
 import importlib
