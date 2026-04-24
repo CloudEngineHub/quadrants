@@ -21,7 +21,7 @@ from enum import IntEnum
 
 # Re-export so ``from quadrants._tensor import *`` still binds ``Tensor`` —
 # keeps the wildcard import in ``__init__.py`` simple and atomic.
-from quadrants._tensor_wrapper import Tensor
+from quadrants._tensor_wrapper import Tensor, wrap as _wrap_impl
 
 __all__ = [
     "Backend",
@@ -228,10 +228,10 @@ def tensor(dtype, shape, *, backend=Backend.NDARRAY, layout=None, **kwargs):
         # ``build_Subscript`` / ``build_struct_for`` reads it to permute
         # user-supplied canonical indices into physical storage order;
         # ``Field.layout`` reads the same attribute for introspection.
-        return Tensor(f)
+        return _wrap_impl(f)
     if backend is Backend.NDARRAY:
         if order is None:
-            return Tensor(impl.ndarray(dtype, shape, **forwarded))
+            return _wrap_impl(impl.ndarray(dtype, shape, **forwarded))
         # Non-identity layout: allocate at the physical (permuted) shape
         # and tag the result so the kernel-side subscript rewrite picks
         # up the canonical -> physical translation.
@@ -244,7 +244,7 @@ def tensor(dtype, shape, *, backend=Backend.NDARRAY, layout=None, **kwargs):
         # x.grad[i, j, ...] goes through the same canonical->physical
         # AST rewrite as the primal access.
         _with_layout(arr, layout_t)
-        return Tensor(arr)
+        return _wrap_impl(arr)
     raise AssertionError(f"unhandled Backend member: {backend!r}")
 
 
