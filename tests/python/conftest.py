@@ -84,9 +84,6 @@ def pytest_runtest_logreport(report):
     clean GPU state.  Stock xdist (>= 3.4) automatically restarts the worker
     and preserves the failure report for the terminal summary.
     """
-    if not hasattr(pytest, "version_tuple"):
-        return
-
     if not os.environ.get("PYTEST_XDIST_WORKER"):
         return
 
