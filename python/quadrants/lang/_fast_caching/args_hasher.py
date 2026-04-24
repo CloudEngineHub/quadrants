@@ -82,23 +82,24 @@ def stringify_obj_type(
     # un-stripped. Without this branch the hasher falls through to the
     # ``[FASTCACHE][PARAM_INVALID]`` warning and disables the fast path
     # for the whole call. See ``perso_hugh/doc/quadrants-tensor.md`` §8.14.
-    # Layout / backend differences are captured via the bare impl's own
-    # repr, so unwrap-then-recurse is sound — different layouts produce
-    # different cache keys via the underlying ndarray/field type info.
+    # ``qd.Tensor`` wrappers: unwrap to the bare impl so the type checks
+    # below match. After unwrap, ``_qd_layout`` (if any) is on the impl.
     if isinstance(obj, _TensorClass):
         obj = obj._unwrap()
     arg_type = type(obj)
+    _layout = getattr(obj, "_qd_layout", None)
+    _layout_tag = "" if _layout is None else f"-L{_layout!r}"
     if isinstance(obj, ScalarNdarray):
-        return f"[nd-{obj.dtype}-{len(obj.shape)}]"  # type: ignore[arg-type]
+        return f"[nd-{obj.dtype}-{len(obj.shape)}{_layout_tag}]"  # type: ignore[arg-type]
     if isinstance(obj, VectorNdarray):
-        return f"[ndv-{obj.n}-{obj.dtype}-{len(obj.shape)}]"  # type: ignore[arg-type]
+        return f"[ndv-{obj.n}-{obj.dtype}-{len(obj.shape)}{_layout_tag}]"  # type: ignore[arg-type]
     if isinstance(obj, ScalarField):
         # disabled for now, because we need to think about how to handle field offset
         # etc
         # TODO: think about whether there is a way to include fields
         return None
     if isinstance(obj, MatrixNdarray):
-        return f"[ndm-{obj.m}-{obj.n}-{obj.dtype}-{len(obj.shape)}]"  # type: ignore[arg-type]
+        return f"[ndm-{obj.m}-{obj.n}-{obj.dtype}-{len(obj.shape)}{_layout_tag}]"  # type: ignore[arg-type]
     if isinstance(obj, torch_type):
         return f"[pt-{obj.dtype}-{obj.ndim}]"  # type: ignore
     if isinstance(obj, np.ndarray):
