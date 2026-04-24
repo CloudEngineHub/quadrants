@@ -72,11 +72,11 @@ _primitive_types = {int, float, bool}
 
 
 def _extract_arg(raise_on_templated_floats: bool, arg: Any, annotation: AnnotationType, arg_name: str) -> Any:
-    # ``qd.Tensor`` wrappers passed as struct fields. Top-level kernel-arg unwrap in ``Kernel.__call__`` covers
-    # direct args, but the dataclass-field recursion at the bottom of this function walks struct attributes via raw
+    # ``qd.Tensor`` wrappers passed as struct fields. Top-level kernel-arg unwrap in ``Kernel.__call__`` covers direct
+    # args, but the dataclass-field recursion at the bottom of this function walks struct attributes via raw
     # ``getattr``, so a wrapper stored as a struct field arrives here un-stripped with its declared annotation (e.g.
-    # ``qd.types.NDArray[qd.f32, 2]``). Without this unwrap the function falls through to the "external arrays"
-    # path (line ~149) which technically reads ``.shape`` off the wrapper but produces a meaningless cache key. See
+    # ``qd.types.NDArray[qd.f32, 2]``). Without this unwrap the function falls through to the "external arrays" path
+    # (line ~149) which technically reads ``.shape`` off the wrapper but produces a meaningless cache key. See
     # ``perso_hugh/doc/quadrants-tensor.md`` §8.14. Idempotent for top-level args.
     #
     # PERF-CRITICAL: The _any_tensor_constructed guard makes the isinstance zero-cost when no qd.Tensor has been
@@ -87,6 +87,10 @@ def _extract_arg(raise_on_templated_floats: bool, arg: Any, annotation: Annotati
     ):  # pyright: ignore[reportOptionalMemberAccess]
         arg = arg._unwrap()
     annotation_type = type(annotation)
+    # qd.Tensor: value-dispatch. Ndarray-shaped values flow through the ndarray feature path; everything else falls
+    # through to the template path (Field, SNode, primitives). Both branches are salted with a marker so cache keys
+    # disambiguate. The annotation is the wrapper *class* (``qd.Tensor``); ``arg`` is always a bare impl by the time
+    # we get here (``Kernel.__call__`` unwraps ``Tensor`` instances).
     if annotation is _TensorClass:
         if isinstance(arg, _TensorClass):
             arg = arg._unwrap()

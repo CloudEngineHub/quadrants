@@ -611,8 +611,8 @@ class Kernel(FuncBase):
         # ``id(Tensor(impl))`` differs across constructions, but ``id(impl)`` is stable, so wrapper-or-not yields
         # identical cache keys.
         #
-        # Fast path: most calls have no wrappers. ``isinstance`` is used so VectorTensor/MatrixTensor subclasses
-        # are also unwrapped. The check short-circuits on the first non-wrapper.
+        # Fast path: most calls have no wrappers. ``isinstance`` is used so VectorTensor/MatrixTensor subclasses are
+        # also unwrapped. The check short-circuits on the first non-wrapper.
         #
         # PERF-CRITICAL: The _any_tensor_constructed guard makes the isinstance loop zero-cost when no qd.Tensor
         # has been created. Without this guard, the per-arg isinstance check causes a ~4% CPU regression on Genesis
