@@ -393,8 +393,8 @@ def _rebuild_scalar_tensor(
         kwargs["layout"] = layout
     # ``qd.tensor()`` already returns a Tensor wrapper post stork-19.
     t = qd.tensor(dtype, shape, **kwargs)  # type: ignore[reportOptionalCall]
-    t.from_numpy(data)
-    return t
+    t.from_numpy(data)  # type: ignore[reportAttributeAccessIssue]
+    return t  # type: ignore[reportReturnType]
 
 
 def _rebuild_vector_tensor(
@@ -408,7 +408,7 @@ def _rebuild_vector_tensor(
 
     backend = qd.Backend(backend_int)  # type: ignore[reportOptionalCall]
     (n,) = element_shape
-    t = qd.Vector.tensor(n, dtype, shape, backend=backend)
+    t = qd.Vector.tensor(n, dtype, shape, backend=backend)  # type: ignore[reportAttributeAccessIssue]
     t.from_numpy(data)
     return t
 
@@ -424,6 +424,6 @@ def _rebuild_matrix_tensor(
 
     backend = qd.Backend(backend_int)  # type: ignore[reportOptionalCall]
     n, m = element_shape
-    t = qd.Matrix.tensor(n, m, dtype, shape, backend=backend)
+    t = qd.Matrix.tensor(n, m, dtype, shape, backend=backend)  # type: ignore[reportAttributeAccessIssue]
     t.from_numpy(data)
     return t

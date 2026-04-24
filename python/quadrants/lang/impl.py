@@ -841,11 +841,14 @@ def _field(
         # (Experiment N+1) and the byte-identity regression tests in
         # ``tests/python/test_tensor_layout_physical_bytes.py``.
         flat_axis_seq = list(range(dim))
-        _create_snode(flat_axis_seq, shape_seq, same_level=True).place(x, offset=offset)
+        phys_offset = offset
+        if order is not None and offset is not None:
+            phys_offset = tuple(offset[axis_seq[p]] for p in range(dim))
+        _create_snode(flat_axis_seq, shape_seq, same_level=True).place(x, offset=phys_offset)
         if needs_grad:
-            _create_snode(flat_axis_seq, shape_seq, same_level=True).place(x_grad, offset=offset)
+            _create_snode(flat_axis_seq, shape_seq, same_level=True).place(x_grad, offset=phys_offset)
         if needs_dual:
-            _create_snode(flat_axis_seq, shape_seq, same_level=True).place(x_dual, offset=offset)
+            _create_snode(flat_axis_seq, shape_seq, same_level=True).place(x_dual, offset=phys_offset)
         if order is not None:
             # Identity layout is normalised out earlier by ``_layout_to_order``
             # (``order=`` is not passed when layout is the default permutation).

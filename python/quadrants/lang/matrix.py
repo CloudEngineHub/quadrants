@@ -961,25 +961,34 @@ class Matrix(QuadrantsOperations):
             # canonical->physical permutation is encoded as ``_qd_layout``
             # on the field for AST-level subscript rewriting.
             flat_axis_seq = list(range(dim))
+            phys_offset = offset
+            if order is not None and offset is not None:
+                phys_offset = tuple(offset[axis_seq[p]] for p in range(dim))
             if layout == Layout.SOA:
                 for e in entries._get_field_members():
-                    impl._create_snode(flat_axis_seq, shape_seq, same_level=True).place(ScalarField(e), offset=offset)
+                    impl._create_snode(flat_axis_seq, shape_seq, same_level=True).place(
+                        ScalarField(e), offset=phys_offset
+                    )
                 if needs_grad:
                     for e in entries_grad._get_field_members():
                         impl._create_snode(flat_axis_seq, shape_seq, same_level=True).place(
-                            ScalarField(e), offset=offset
+                            ScalarField(e), offset=phys_offset
                         )
                 if needs_dual:
                     for e in entries_dual._get_field_members():
                         impl._create_snode(flat_axis_seq, shape_seq, same_level=True).place(
-                            ScalarField(e), offset=offset
+                            ScalarField(e), offset=phys_offset
                         )
             else:
-                impl._create_snode(flat_axis_seq, shape_seq, same_level=True).place(entries, offset=offset)
+                impl._create_snode(flat_axis_seq, shape_seq, same_level=True).place(entries, offset=phys_offset)
                 if needs_grad:
-                    impl._create_snode(flat_axis_seq, shape_seq, same_level=True).place(entries_grad, offset=offset)
+                    impl._create_snode(flat_axis_seq, shape_seq, same_level=True).place(
+                        entries_grad, offset=phys_offset
+                    )
                 if needs_dual:
-                    impl._create_snode(flat_axis_seq, shape_seq, same_level=True).place(entries_dual, offset=offset)
+                    impl._create_snode(flat_axis_seq, shape_seq, same_level=True).place(
+                        entries_dual, offset=phys_offset
+                    )
             if order is not None:
                 _qd_layout = tuple(axis_seq)
                 entries._qd_layout = _qd_layout
@@ -1047,7 +1056,7 @@ class Matrix(QuadrantsOperations):
             shape: Shape of the tensor (excluding the matrix dimensions) as
                 an ``int`` or tuple of ``int``.
             backend (qd.Backend, optional): Storage backend. Defaults to
-                ``qd.Backend.FIELD``.
+                ``qd.Backend.NDARRAY``.
             **kwargs: Forwarded verbatim to the underlying
                 ``qd.Matrix.field`` / ``qd.Matrix.ndarray`` call.
 
@@ -1266,7 +1275,7 @@ class Vector(Matrix):
             shape: Shape of the tensor (excluding the vector dimension) as
                 an ``int`` or tuple of ``int``.
             backend (qd.Backend, optional): Storage backend. Defaults to
-                ``qd.Backend.FIELD``.
+                ``qd.Backend.NDARRAY``.
             **kwargs: Forwarded verbatim to the underlying
                 ``qd.Vector.field`` / ``qd.Vector.ndarray`` call.
 
@@ -1838,7 +1847,7 @@ class MatrixNdarray(Ndarray):
         return Matrix([[NdarrayHostAccess(self, key, (i, j)) for j in range(self.m)] for i in range(self.n)])
 
     @python_scope
-    def to_numpy(self):
+    def to_numpy(self, dtype=None):
         """Converts this ndarray to a `numpy.ndarray`.
 
         Example::
@@ -1851,7 +1860,10 @@ class MatrixNdarray(Ndarray):
              [[[0. 0.]
                [0. 0.]]]]
         """
-        return self._ndarray_matrix_to_numpy(as_vector=0)
+        arr = self._ndarray_matrix_to_numpy(as_vector=0)
+        if dtype is not None and arr.dtype != dtype:
+            arr = arr.astype(dtype)
+        return arr
 
     @python_scope
     def from_numpy(self, arr):
@@ -1960,7 +1972,7 @@ class VectorNdarray(Ndarray):
         return Vector([NdarrayHostAccess(self, key, (i,)) for i in range(self.n)])
 
     @python_scope
-    def to_numpy(self):
+    def to_numpy(self, dtype=None):
         """Converts this vector ndarray to a `numpy.ndarray`.
 
         Example::
@@ -1973,7 +1985,10 @@ class VectorNdarray(Ndarray):
                    [[0., 0., 0.],
                     [0., 0., 0.]]], dtype=float32)
         """
-        return self._ndarray_matrix_to_numpy(as_vector=1)
+        arr = self._ndarray_matrix_to_numpy(as_vector=1)
+        if dtype is not None and arr.dtype != dtype:
+            arr = arr.astype(dtype)
+        return arr
 
     @python_scope
     def from_numpy(self, arr):

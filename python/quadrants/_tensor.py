@@ -127,10 +127,13 @@ _VEC_MAT_ACCEPTED_KWARGS = frozenset({"backend", "needs_grad"})
 
 
 def _validate_kwargs(kwargs, *, factory_name, accepted):
-    # Special-case ``order=``: it's the most likely typo for users coming
-    # from ``qd.field``, so give them a directly actionable hint.
     if "order" in kwargs:
-        raise TypeError(f"{factory_name}(...) does not accept order=; pass layout=(...) instead")
+        if "layout" in accepted:
+            raise TypeError(f"{factory_name}(...) does not accept order=; pass layout=(...) instead")
+        raise TypeError(
+            f"{factory_name}(...) does not accept order= (or layout=); "
+            "use the underlying qd.Vector.field / qd.Matrix.field for non-default storage order"
+        )
     extra = set(kwargs) - accepted
     if extra:
         accepted_str = ", ".join(sorted(accepted | {"dtype", "shape"}))
