@@ -66,9 +66,7 @@ class TestNoDuplicateFailures:
                 assert False, "intentional failure"
             """
         )
-        result = xdist_project.runpytest_subprocess(
-            "-n", "2", "--dist=worksteal", *SUBPROCESS_ARGS, "-v"
-        )
+        result = xdist_project.runpytest_subprocess("-n", "2", "--dist=worksteal", *SUBPROCESS_ARGS, "-v")
         result.assert_outcomes(passed=1, failed=1)
 
     def test_multiple_failures_counted_correctly(self, xdist_project):
