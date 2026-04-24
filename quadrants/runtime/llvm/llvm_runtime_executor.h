@@ -102,11 +102,16 @@ class LlvmRuntimeExecutor {
   // `max_size_compile_time` is used (cache-hit path - symbolic tree is currently not serialized into the offline
   // cache, so the compile-time fallback is all the launcher has).
   //
-  // `device_runtime_context_ptr` is the device-side pointer the sizer kernel should receive as its `ctx`
-  // argument on backends without unified virtual addressing (AMDGPU): the runtime-eval sizer kernel
-  // dereferences `ctx->arg_buffer` on device, so passing the host `&ctx->get_context()` would fault with
-  // `hipErrorIllegalAddress`. CUDA has UVA and passes `nullptr` (the function falls back to
-  // `&ctx->get_context()`); CPU ignores this argument entirely because the host evaluator runs in-process.
+  // `device_runtime_context_ptr` is the device-side pointer the sizer kernel should receive as its `ctx` argument when
+  // the GPU cannot dereference the host `&ctx->get_context()` pointer directly: the sizer kernel reads
+  // `ctx->arg_buffer` on device to resolve `ExternalTensorRead` leaves against the kernel arg buffer. AMDGPU/HIP has no
+  // UVA fallback and always faults with `hipErrorIllegalAddress`, so the AMDGPU launcher always stages a device copy of
+  // `RuntimeContext` and passes that pointer. CUDA UVA covers pinned / CUDA-managed memory only; the plain
+  // `std::make_unique<RuntimeContext>()` backing is neither, so dereferencing the host pointer requires HMM (system-
+  // allocated memory), which is a driver + kernel capability advertised via
+  // `CU_DEVICE_ATTRIBUTE_PAGEABLE_MEMORY_ACCESS`. The CUDA launcher stages the device copy only when that attribute
+  // reports unsupported (Turing without HMM, Windows, pre-535 Linux drivers) and passes `nullptr` otherwise to keep the
+  // HMM-equipped fast path zero-overhead. CPU ignores this argument and runs the host evaluator in-process.
   std::size_t publish_adstack_metadata(const AdStackSizingInfo &ad_stack,
                                        std::size_t num_threads,
                                        LaunchContextBuilder *ctx,

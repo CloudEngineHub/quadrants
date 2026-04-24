@@ -725,14 +725,16 @@ std::size_t LlvmRuntimeExecutor::publish_adstack_metadata(const AdStackSizingInf
     // on the default stream and stream-orders it before the subsequent main-kernel dispatch, so the writes we
     // do here are visible by the time the user's kernel reads `adstack_max_sizes` etc.
     //
-    // The sizer kernel dereferences `ctx->arg_buffer` on device (that's how it resolves `ExternalTensorRead`
-    // leaves against ndarray pointers the caller packed into the arg buffer). CUDA has unified virtual
-    // addressing, so a host pointer to the `RuntimeContext` resolves transparently on the device. AMDGPU/HIP
-    // does not (non-pinned host allocations are not visible in the device address space), so the AMDGPU
-    // launcher stages a device-side copy of the context and hands it in here via
-    // `device_runtime_context_ptr`; we use that device pointer to avoid an `hipErrorIllegalAddress` fault
-    // that would otherwise surface on the next DtoH sync as
-    // `illegal memory access ... while calling memcpy_device_to_host`.
+    // The sizer kernel dereferences `ctx->arg_buffer` on device (that's how it resolves `ExternalTensorRead` leaves
+    // against ndarray pointers the caller packed into the arg buffer). AMDGPU always stages a device-side copy of
+    // `RuntimeContext` because HIP has no UVA fallback and the host pointer faults with `hipErrorIllegalAddress`. CUDA
+    // stages the device copy only when the driver + kernel do not expose HMM / system-allocated memory (queried via
+    // `CU_DEVICE_ATTRIBUTE_PAGEABLE_MEMORY_ACCESS`): CUDA UVA covers pinned / CUDA-managed memory only, not the plain
+    // `std::make_unique<RuntimeContext>()` backing, so a host pointer works on HMM-capable setups but faults otherwise
+    // (Turing without HMM, Windows, pre-535 Linux drivers) as `CUDA_ERROR_ILLEGAL_ADDRESS` at the next DtoH sync
+    // `illegal memory access ... while calling memcpy_device_to_host`. When the caller passes `nullptr` (HMM-capable
+    // CUDA) we fall back to the host pointer; the launcher gates the allocation so HMM-equipped setups pay no staging
+    // cost.
     auto *const runtime_jit = get_runtime_jit_module();
     void *runtime_context_ptr_for_sizer =
         device_runtime_context_ptr != nullptr ? device_runtime_context_ptr : static_cast<void *>(&ctx->get_context());
