@@ -23,6 +23,7 @@ import numpy as np
 
 from quadrants._lib import core as _qd_core
 from quadrants._lib.core.quadrants_python import KernelLaunchContext
+from quadrants import _tensor_wrapper
 from quadrants._tensor_wrapper import Tensor as _TensorClass
 from quadrants.lang import _kernel_impl_dataclass, impl
 from quadrants.lang._dataclass_util import create_flat_name
@@ -469,13 +470,17 @@ class FuncBase:
             )
         actual_argument_slot += 1
 
+        # Unwrap qd.Tensor wrappers from struct fields. Guarded by
+        # the module flag to avoid per-arg isinstance when no Tensor exists.
+        if _tensor_wrapper._any_tensor_constructed and isinstance(v, _TensorClass):
+            v = v._unwrap()
+
         needed_arg_type_id = id(needed_arg_type)
         needed_arg_basetype = type(needed_arg_type)
 
         # qd.Tensor value-dispatch at launch time. Unwrap the wrapper
         # (if present) and re-target the annotation to the concrete
-        # branch. Guarded by annotation check to avoid per-arg isinstance
-        # overhead when no qd.Tensor annotations are in use.
+        # branch.
         if needed_arg_type is _TensorClass:
             if isinstance(v, _TensorClass):
                 v = v._unwrap()

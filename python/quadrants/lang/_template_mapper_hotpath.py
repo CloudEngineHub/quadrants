@@ -37,6 +37,7 @@ from quadrants._tensor import (
     _TENSOR_T_FIELD_MARKER,
     _TENSOR_T_NDARRAY_MARKER,
 )
+from quadrants import _tensor_wrapper
 from quadrants._tensor_wrapper import Tensor as _TensorClass
 from quadrants.lang._dataclass_util import create_flat_name
 from quadrants.lang._ndarray import Ndarray
@@ -72,10 +73,11 @@ _primitive_types = {int, float, bool}
 
 
 def _extract_arg(raise_on_templated_floats: bool, arg: Any, annotation: AnnotationType, arg_name: str) -> Any:
+    # Unwrap qd.Tensor wrappers (e.g. from struct fields). Guarded by
+    # the module flag to skip the isinstance when no Tensor exists.
+    if _tensor_wrapper._any_tensor_constructed and isinstance(arg, _TensorClass):
+        arg = arg._unwrap()
     annotation_type = type(annotation)
-    # qd.Tensor value-dispatch. Unwrap happens here (annotation-guarded)
-    # rather than unconditionally, to avoid per-arg isinstance overhead
-    # when no qd.Tensor is in use.
     if annotation is _TensorClass:
         if isinstance(arg, _TensorClass):
             arg = arg._unwrap()
