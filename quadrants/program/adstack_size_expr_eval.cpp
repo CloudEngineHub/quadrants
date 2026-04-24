@@ -155,6 +155,15 @@ int64_t evaluate_node(const SerializedSizeExpr &expr,
     case SizeExpr::Kind::MaxOverRange: {
       int64_t begin = evaluate_node(expr, node.operand_a, bound_vars, prog, ctx);
       int64_t end = evaluate_node(expr, node.operand_b, bound_vars, prog, ctx);
+      // Guard against pathological trip counts. The evaluator walks `[begin, end)` linearly and re-evaluates the
+      // body at every i; a range of several million would stall the launch hot path for seconds. Real reverse-mode
+      // trip counts sit well below this cap (a few hundred to a few thousand in practice); anything above is
+      // almost certainly a pre-pass grammar bug the user should file, and a clear QD_ERROR beats a silent hang.
+      constexpr int64_t kMaxOverRangeIterations = int64_t{1} << 24;
+      QD_ERROR_IF(end > begin && end - begin > kMaxOverRangeIterations,
+                  "SerializedSizeExpr MaxOverRange iteration count {} exceeds the {} guard; refusing to enumerate. "
+                  "Shrink the enclosing reverse-mode loop or restructure the `SizeExpr` source kernel.",
+                  end - begin, kMaxOverRangeIterations);
       int64_t result = 0;
       auto extended = bound_vars;
       for (int64_t i = begin; i < end; ++i) {

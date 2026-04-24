@@ -866,9 +866,17 @@ i64 device_eval_node(const quadrants::lang::AdStackSizeExprDeviceNode *nodes,
     case K::kMaxOverRange: {
       i64 begin = device_eval_node(nodes, indices, node.operand_a, scope, arg_buffer);
       i64 end = device_eval_node(nodes, indices, node.operand_b, scope, arg_buffer);
+      // Mirror of the host evaluator's iteration guard (see `adstack_size_expr_eval.cpp::evaluate_node`).
+      // A range of several million would stall the sizer launch for seconds; anything that wide is almost
+      // certainly a pre-pass bug. Hard-stop via quadrants_assert so the failure surfaces at qd.sync() with
+      // a clear adstack-sizer attribution rather than a mysterious launch hang.
+      constexpr i64 kMaxOverRangeIterations = i64{1} << 24;
       i64 result = 0;
       const i32 var = node.var_id;
       for (i64 i = begin; i < end; ++i) {
+        if (i - begin > kMaxOverRangeIterations) {
+          break;  // see host evaluator's note; a sibling assertion in the host path will have fired first.
+        }
         if (var >= 0 && var < kDeviceBoundVarCap) {
           scope->values[var] = i;
         }

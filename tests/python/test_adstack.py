@@ -1,4 +1,5 @@
 import math
+import os
 import pathlib
 import re
 import subprocess
@@ -1319,8 +1320,6 @@ def test_adstack_vector_subscript_selfop_no_warnings(tmp_path):
     script_path = tmp_path / "vector_subscript_selfop.py"
     script_path.write_text(child_script)
     env_no_cache = {"QD_OFFLINE_CACHE": "0"}
-    import os
-
     env = {**os.environ, **env_no_cache}
     result = subprocess.run([sys.executable, str(script_path)], capture_output=True, check=True, env=env)
     stderr = result.stderr.decode()
