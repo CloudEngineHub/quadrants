@@ -130,8 +130,7 @@ class Tensor:
 
     @property
     def layout(self) -> typing.Optional[typing.Tuple[int, ...]]:
-        # Forwards to the impl's ``layout`` property (symmetric across
-        # backends after stork-16).
+        # Forwards to the impl's ``layout`` property (symmetric across backends after stork-16).
         return self._impl.layout
 
     # ------------------------------------------------------------------
@@ -229,8 +228,8 @@ class Tensor:
         self._impl.fill(value)
 
     def copy_from(self, other: typing.Any) -> None:
-        # Accept either another ``Tensor`` or a bare impl (convenience:
-        # lets Genesis-style code pass raw fields during the migration).
+        # Accept either another ``Tensor`` or a bare impl (convenience: lets Genesis-style code pass raw fields
+        # during the migration).
         if isinstance(other, Tensor):
             other = other._impl
         self._impl.copy_from(other)
