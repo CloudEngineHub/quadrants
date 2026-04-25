@@ -59,7 +59,7 @@
     <script>DOCUMENTATION_OPTIONS.search_as_you_type = false;</script>
     <link rel="index" title="Index" href="../genindex.html" />
     <link rel="search" title="Search" href="../search.html" />
-    <link rel="next" title="Subgroup primitives" href="subgroup.html" />
+    <link rel="next" title="Automatic differentiation" href="autodiff.html" />
     <link rel="prev" title="Parallelization" href="parallelization.html" />
   <meta name="viewport" content="width=device-width, initial-scale=1"/>
   <meta name="docsearch:language" content="en"/>
@@ -297,6 +297,10 @@
 <ul class="current nav bd-sidenav">
 <li class="toctree-l1 current active"><a class="current reference internal" href="#">Numpy and Torch interop</a></li>
 </ul>
+<p aria-level="2" class="caption" role="heading"><span class="caption-text">Autodiff</span></p>
+<ul class="nav bd-sidenav">
+<li class="toctree-l1"><a class="reference internal" href="autodiff.html">Automatic differentiation</a></li>
+</ul>
 <p aria-level="2" class="caption" role="heading"><span class="caption-text">SIMT primitives</span></p>
 <ul class="nav bd-sidenav">
 <li class="toctree-l1"><a class="reference internal" href="subgroup.html">Subgroup primitives</a></li>
@@ -380,9 +384,10 @@
                   
   <section class="tex2jax_ignore mathjax_ignore" id="numpy-and-torch-interop">
 <h1>Numpy and Torch interop<a class="headerlink" href="#numpy-and-torch-interop" title="Link to this heading">#</a></h1>
-<p>Quadrants provides interop with both numpy and PyTorch. There are two mechanisms:</p>
+<p>Quadrants provides interop with both numpy and PyTorch. There are three mechanisms:</p>
 <ul class="simple">
 <li><p><strong>Copy-based</strong>: convert data between quadrants fields/ndarrays and numpy arrays or torch tensors</p></li>
+<li><p><strong>Zero-copy via DLPack</strong>: obtain a torch tensor or numpy array that aliases the underlying Quadrants memory</p></li>
 <li><p><strong>Direct pass-through</strong>: pass torch tensors directly into kernels as ndarray arguments (zero-copy)</p></li>
 </ul>
 <section id="copy-based-interop">
@@ -444,6 +449,129 @@
 <span class="n">m</span><span class="o">.</span><span class="n">from_numpy</span><span class="p">(</span><span class="n">arr</span><span class="p">)</span>
 </pre></div>
 </div>
+</section>
+</section>
+<section id="zero-copy-interop-via-dlpack">
+<h2>Zero-copy interop via DLPack<a class="headerlink" href="#zero-copy-interop-via-dlpack" title="Link to this heading">#</a></h2>
+<p><code class="docutils literal notranslate"><span class="pre">to_torch()</span></code> and <code class="docutils literal notranslate"><span class="pre">to_numpy()</span></code> accept a keyword-only <code class="docutils literal notranslate"><span class="pre">copy</span></code> argument that controls whether the returned tensor/array is an independent copy of the data or a zero-copy view that aliases the underlying Quadrants memory.</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">f</span> <span class="o">=</span> <span class="n">qd</span><span class="o">.</span><span class="n">field</span><span class="p">(</span><span class="n">qd</span><span class="o">.</span><span class="n">f32</span><span class="p">,</span> <span class="n">shape</span><span class="o">=</span><span class="p">(</span><span class="mi">1024</span><span class="p">,))</span>
+
+<span class="n">view</span>  <span class="o">=</span> <span class="n">f</span><span class="o">.</span><span class="n">to_torch</span><span class="p">(</span><span class="n">copy</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span>  <span class="c1"># zero-copy view: aliases f&#39;s memory</span>
+<span class="n">clone</span> <span class="o">=</span> <span class="n">f</span><span class="o">.</span><span class="n">to_torch</span><span class="p">(</span><span class="n">copy</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>   <span class="c1"># independent copy</span>
+<span class="n">auto</span>  <span class="o">=</span> <span class="n">f</span><span class="o">.</span><span class="n">to_torch</span><span class="p">()</span>            <span class="c1"># default: copy=None (see below)</span>
+</pre></div>
+</div>
+<p>Modifications via the view are visible to subsequent Quadrants kernel reads, and vice-versa. The view stays valid until the underlying storage is reallocated – typically on <code class="docutils literal notranslate"><span class="pre">qd.init()</span></code> or <code class="docutils literal notranslate"><span class="pre">qd.reset()</span></code>, after which a fresh call to <code class="docutils literal notranslate"><span class="pre">to_torch()</span></code> / <code class="docutils literal notranslate"><span class="pre">to_numpy()</span></code> returns a new view.</p>
+<section id="when-zero-copy-is-available">
+<h3>When zero-copy is available<a class="headerlink" href="#when-zero-copy-is-available" title="Link to this heading">#</a></h3>
+<p>Zero-copy uses <a class="reference external" href="https://github.com/dmlc/dlpack">DLPack</a> and requires:</p>
+<ul class="simple">
+<li><p>a backend with DLPack support: <code class="docutils literal notranslate"><span class="pre">cpu</span></code> (<code class="docutils literal notranslate"><span class="pre">x64</span></code>/<code class="docutils literal notranslate"><span class="pre">arm64</span></code>), <code class="docutils literal notranslate"><span class="pre">cuda</span></code>, <code class="docutils literal notranslate"><span class="pre">amdgpu</span></code>, or <code class="docutils literal notranslate"><span class="pre">metal</span></code> (Vulkan is not supported);</p></li>
+<li><p>a DLPack-supported dtype: <code class="docutils literal notranslate"><span class="pre">i32</span></code>, <code class="docutils literal notranslate"><span class="pre">i64</span></code>, <code class="docutils literal notranslate"><span class="pre">f32</span></code>, <code class="docutils literal notranslate"><span class="pre">f64</span></code>, <code class="docutils literal notranslate"><span class="pre">u1</span></code> (other dtypes such as <code class="docutils literal notranslate"><span class="pre">f16</span></code>, <code class="docutils literal notranslate"><span class="pre">u8</span></code>, <code class="docutils literal notranslate"><span class="pre">u16</span></code> fall back to the kernel-copy path);</p></li>
+<li><p>on Apple Metal, <code class="docutils literal notranslate"><span class="pre">torch</span> <span class="pre">&gt;=</span> <span class="pre">2.9.2</span></code> for fields (required for DLPack <code class="docutils literal notranslate"><span class="pre">bytes_offset</span></code> on MPS; see <a class="reference external" href="https://github.com/pytorch/pytorch/pull/168193">pytorch/pytorch#168193</a>);</p></li>
+<li><p>0-dim <code class="docutils literal notranslate"><span class="pre">ScalarField</span></code> instances are not zero-copyable on any backend (PyTorch DLPack <code class="docutils literal notranslate"><span class="pre">bytes_offset</span></code> limitation).</p></li>
+</ul>
+<p>Zero-copy <code class="docutils literal notranslate"><span class="pre">to_numpy()</span></code> additionally requires a CPU backend, because numpy arrays cannot reference GPU memory.</p>
+</section>
+<section id="semantics-of-copy">
+<h3>Semantics of <code class="docutils literal notranslate"><span class="pre">copy</span></code><a class="headerlink" href="#semantics-of-copy" title="Link to this heading">#</a></h3>
+<div class="pst-scrollable-table-container"><table class="table">
+<thead>
+<tr class="row-odd"><th class="head"><p>Value</p></th>
+<th class="head"><p>Behaviour</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">None</span></code> (default)</p></td>
+<td><p>Zero-copy view if supported, otherwise an independent copy. Never raises for support reasons.</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">False</span></code></p></td>
+<td><p>Zero-copy view, or <code class="docutils literal notranslate"><span class="pre">ValueError</span></code> if zero-copy is unsupported for this backend/dtype.</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">True</span></code></p></td>
+<td><p>Always returns an independent copy (clones the zero-copy view if available; otherwise allocates and runs the kernel-copy path).</p></td>
+</tr>
+</tbody>
+</table>
+</div>
+<p><code class="docutils literal notranslate"><span class="pre">copy=True</span></code> always returns a buffer that is safe to mutate without affecting the field/ndarray.</p>
+</section>
+<section id="examples">
+<h3>Examples<a class="headerlink" href="#examples" title="Link to this heading">#</a></h3>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">import</span><span class="w"> </span><span class="nn">quadrants</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">qd</span>
+
+<span class="n">qd</span><span class="o">.</span><span class="n">init</span><span class="p">(</span><span class="n">arch</span><span class="o">=</span><span class="n">qd</span><span class="o">.</span><span class="n">cuda</span><span class="p">)</span>
+
+<span class="n">f</span> <span class="o">=</span> <span class="n">qd</span><span class="o">.</span><span class="n">field</span><span class="p">(</span><span class="n">qd</span><span class="o">.</span><span class="n">f32</span><span class="p">,</span> <span class="n">shape</span><span class="o">=</span><span class="p">(</span><span class="mi">1024</span><span class="p">,))</span>
+<span class="n">f</span><span class="o">.</span><span class="n">fill</span><span class="p">(</span><span class="mf">1.0</span><span class="p">)</span>
+
+<span class="n">view</span> <span class="o">=</span> <span class="n">f</span><span class="o">.</span><span class="n">to_torch</span><span class="p">(</span><span class="n">copy</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span>
+<span class="n">view</span> <span class="o">*=</span> <span class="mf">2.0</span>           <span class="c1"># mutates f&#39;s underlying memory directly</span>
+<span class="n">qd</span><span class="o">.</span><span class="n">sync</span><span class="p">()</span>             <span class="c1"># not strictly required; safe pattern</span>
+
+<span class="nb">print</span><span class="p">(</span><span class="n">f</span><span class="p">[</span><span class="mi">0</span><span class="p">])</span>           <span class="c1"># 2.0</span>
+</pre></div>
+</div>
+<p>Round-trip with NumPy on a CPU backend:</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">qd</span><span class="o">.</span><span class="n">init</span><span class="p">(</span><span class="n">arch</span><span class="o">=</span><span class="n">qd</span><span class="o">.</span><span class="n">cpu</span><span class="p">)</span>
+
+<span class="n">a</span> <span class="o">=</span> <span class="n">qd</span><span class="o">.</span><span class="n">ndarray</span><span class="p">(</span><span class="n">qd</span><span class="o">.</span><span class="n">i32</span><span class="p">,</span> <span class="n">shape</span><span class="o">=</span><span class="p">(</span><span class="mi">8</span><span class="p">,))</span>
+<span class="n">a</span><span class="o">.</span><span class="n">from_numpy</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">arange</span><span class="p">(</span><span class="mi">8</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="n">np</span><span class="o">.</span><span class="n">int32</span><span class="p">))</span>
+
+<span class="n">view</span> <span class="o">=</span> <span class="n">a</span><span class="o">.</span><span class="n">to_numpy</span><span class="p">(</span><span class="n">copy</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span>
+<span class="n">view</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="o">=</span> <span class="mi">100</span>
+<span class="nb">print</span><span class="p">(</span><span class="n">a</span><span class="o">.</span><span class="n">to_numpy</span><span class="p">()[</span><span class="mi">0</span><span class="p">])</span>   <span class="c1"># 100  (default copy=None still returns the same view here)</span>
+</pre></div>
+</div>
+</section>
+<section id="caching">
+<h3>Caching<a class="headerlink" href="#caching" title="Link to this heading">#</a></h3>
+<p>Zero-copy views are cached on the source object: repeated calls to <code class="docutils literal notranslate"><span class="pre">to_torch()</span></code> / <code class="docutils literal notranslate"><span class="pre">to_numpy()</span></code> on the same field/ndarray return the same underlying tensor without rebuilding the DLPack capsule. The cache is invalidated automatically when the runtime is reinitialised or reset.</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">v1</span> <span class="o">=</span> <span class="n">f</span><span class="o">.</span><span class="n">to_torch</span><span class="p">(</span><span class="n">copy</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span>
+<span class="n">v2</span> <span class="o">=</span> <span class="n">f</span><span class="o">.</span><span class="n">to_torch</span><span class="p">(</span><span class="n">copy</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span>
+<span class="k">assert</span> <span class="n">v1</span><span class="o">.</span><span class="n">data_ptr</span><span class="p">()</span> <span class="o">==</span> <span class="n">v2</span><span class="o">.</span><span class="n">data_ptr</span><span class="p">()</span>   <span class="c1"># same view</span>
+
+<span class="n">qd</span><span class="o">.</span><span class="n">reset</span><span class="p">()</span>
+<span class="n">qd</span><span class="o">.</span><span class="n">init</span><span class="p">(</span><span class="n">arch</span><span class="o">=</span><span class="n">qd</span><span class="o">.</span><span class="n">cuda</span><span class="p">)</span>
+<span class="n">f2</span> <span class="o">=</span> <span class="n">qd</span><span class="o">.</span><span class="n">field</span><span class="p">(</span><span class="n">qd</span><span class="o">.</span><span class="n">f32</span><span class="p">,</span> <span class="n">shape</span><span class="o">=</span><span class="p">(</span><span class="mi">1024</span><span class="p">,))</span>
+<span class="n">v3</span> <span class="o">=</span> <span class="n">f2</span><span class="o">.</span><span class="n">to_torch</span><span class="p">(</span><span class="n">copy</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span>            <span class="c1"># fresh view; v1/v2 must not be used</span>
+</pre></div>
+</div>
+</section>
+<section id="apple-metal-synchronisation">
+<h3>Apple Metal: synchronisation<a class="headerlink" href="#apple-metal-synchronisation" title="Link to this heading">#</a></h3>
+<p>On Apple Metal, Quadrants and PyTorch MPS use separate Metal command queues. Quadrants kernel writes are made visible to the MPS-backed view via an automatic <code class="docutils literal notranslate"><span class="pre">qd.sync()</span></code> on every <code class="docutils literal notranslate"><span class="pre">to_torch()</span></code> / <code class="docutils literal notranslate"><span class="pre">to_numpy()</span></code> call. Cloning a view also synchronises MPS so that the clone sees the latest writes:</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">qd</span><span class="o">.</span><span class="n">init</span><span class="p">(</span><span class="n">arch</span><span class="o">=</span><span class="n">qd</span><span class="o">.</span><span class="n">metal</span><span class="p">)</span>
+<span class="n">f</span> <span class="o">=</span> <span class="n">qd</span><span class="o">.</span><span class="n">field</span><span class="p">(</span><span class="n">qd</span><span class="o">.</span><span class="n">f32</span><span class="p">,</span> <span class="n">shape</span><span class="o">=</span><span class="p">(</span><span class="mi">64</span><span class="p">,))</span>
+
+<span class="n">run_kernel</span><span class="p">(</span><span class="n">f</span><span class="p">)</span>            <span class="c1"># queues writes on the Quadrants Metal stream</span>
+<span class="n">view</span> <span class="o">=</span> <span class="n">f</span><span class="o">.</span><span class="n">to_torch</span><span class="p">()</span>      <span class="c1"># qd.sync() runs internally; view sees the writes</span>
+<span class="n">copy</span> <span class="o">=</span> <span class="n">view</span><span class="o">.</span><span class="n">clone</span><span class="p">()</span>      <span class="c1"># torch.mps.synchronize() runs internally; copy is up-to-date</span>
+</pre></div>
+</div>
+<p>You do not need to call <code class="docutils literal notranslate"><span class="pre">qd.sync()</span></code> or <code class="docutils literal notranslate"><span class="pre">torch.mps.synchronize()</span></code> yourself when using <code class="docutils literal notranslate"><span class="pre">to_torch()</span></code> / <code class="docutils literal notranslate"><span class="pre">to_numpy()</span></code>.</p>
+</section>
+<section id="lifetime-caveats">
+<h3>Lifetime caveats<a class="headerlink" href="#lifetime-caveats" title="Link to this heading">#</a></h3>
+<p>A zero-copy view becomes invalid when the underlying Quadrants storage is freed. This happens on <code class="docutils literal notranslate"><span class="pre">qd.reset()</span></code> and <code class="docutils literal notranslate"><span class="pre">qd.init()</span></code>. Holding a <code class="docutils literal notranslate"><span class="pre">copy=False</span></code> tensor across either is undefined behaviour:</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">view</span> <span class="o">=</span> <span class="n">f</span><span class="o">.</span><span class="n">to_torch</span><span class="p">(</span><span class="n">copy</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span>
+<span class="n">qd</span><span class="o">.</span><span class="n">reset</span><span class="p">()</span>
+<span class="n">view</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span>                 <span class="c1"># undefined: view aliases freed memory</span>
+</pre></div>
+</div>
+<p>If you need a tensor that outlives the runtime, use <code class="docutils literal notranslate"><span class="pre">copy=True</span></code> (or the default <code class="docutils literal notranslate"><span class="pre">None</span></code>, which produces a view but is bound to the same caveat once you opt into zero-copy).</p>
+</section>
+<section id="struct-fields">
+<h3>Struct fields<a class="headerlink" href="#struct-fields" title="Link to this heading">#</a></h3>
+<p><code class="docutils literal notranslate"><span class="pre">StructField.to_torch()</span></code> and <code class="docutils literal notranslate"><span class="pre">StructField.to_numpy()</span></code> return a dictionary mapping each member name to a zero-copy view of that member’s storage. Each member is a separate SNode leaf and is zero-copyable independently:</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">S</span> <span class="o">=</span> <span class="n">qd</span><span class="o">.</span><span class="n">types</span><span class="o">.</span><span class="n">struct</span><span class="p">(</span><span class="n">pos</span><span class="o">=</span><span class="n">qd</span><span class="o">.</span><span class="n">f32</span><span class="p">,</span> <span class="n">vel</span><span class="o">=</span><span class="n">qd</span><span class="o">.</span><span class="n">f32</span><span class="p">)</span>
+<span class="n">sf</span> <span class="o">=</span> <span class="n">S</span><span class="o">.</span><span class="n">field</span><span class="p">(</span><span class="n">shape</span><span class="o">=</span><span class="p">(</span><span class="mi">16</span><span class="p">,))</span>
+
+<span class="n">views</span> <span class="o">=</span> <span class="n">sf</span><span class="o">.</span><span class="n">to_torch</span><span class="p">(</span><span class="n">copy</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span>
+<span class="n">views</span><span class="p">[</span><span class="s2">&quot;pos&quot;</span><span class="p">][</span><span class="mi">0</span><span class="p">]</span> <span class="o">=</span> <span class="mf">1.0</span>          <span class="c1"># writes through to sf.pos</span>
+</pre></div>
+</div>
+<p><code class="docutils literal notranslate"><span class="pre">copy=</span></code> is forwarded uniformly to every member.</p>
 </section>
 </section>
 <section id="direct-torch-tensor-pass-through">
@@ -519,17 +647,22 @@
 </tr>
 </thead>
 <tbody>
-<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">to_numpy()</span></code> / <code class="docutils literal notranslate"><span class="pre">from_numpy()</span></code></p></td>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">to_numpy()</span></code> / <code class="docutils literal notranslate"><span class="pre">from_numpy()</span></code> (default)</p></td>
 <td><p>yes</p></td>
 <td><p>yes</p></td>
 <td><p>yes</p></td>
 </tr>
-<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">to_torch()</span></code> / <code class="docutils literal notranslate"><span class="pre">from_torch()</span></code></p></td>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">to_torch()</span></code> / <code class="docutils literal notranslate"><span class="pre">from_torch()</span></code> (default)</p></td>
 <td><p>yes</p></td>
 <td><p>yes</p></td>
-<td><p>no</p></td>
+<td><p>yes</p></td>
 </tr>
-<tr class="row-even"><td><p>Direct pass-through</p></td>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">to_numpy(copy=False)</span></code> / <code class="docutils literal notranslate"><span class="pre">to_torch(copy=False)</span></code></p></td>
+<td><p>no (DLPack view)</p></td>
+<td><p>yes</p></td>
+<td><p>yes</p></td>
+</tr>
+<tr class="row-odd"><td><p>Direct pass-through</p></td>
 <td><p>no</p></td>
 <td><p>no</p></td>
 <td><p>yes (as kernel arg)</p></td>
@@ -537,6 +670,7 @@
 </tbody>
 </table>
 </div>
+<p>The <code class="docutils literal notranslate"><span class="pre">copy</span></code> parameter is supported on <code class="docutils literal notranslate"><span class="pre">to_numpy()</span></code> and <code class="docutils literal notranslate"><span class="pre">to_torch()</span></code> for <code class="docutils literal notranslate"><span class="pre">ScalarField</span></code>, <code class="docutils literal notranslate"><span class="pre">MatrixField</span></code> (and <code class="docutils literal notranslate"><span class="pre">VectorField</span></code>), <code class="docutils literal notranslate"><span class="pre">StructField</span></code>, and all <code class="docutils literal notranslate"><span class="pre">Ndarray</span></code> types. See <a class="reference internal" href="#zero-copy-interop-via-dlpack">Zero-copy interop via DLPack</a> for the support matrix and lifetime rules.</p>
 </section>
 </section>
 
@@ -560,11 +694,11 @@
       </div>
     </a>
     <a class="right-next"
-       href="subgroup.html"
+       href="autodiff.html"
        title="next page">
       <div class="prev-next-info">
         <p class="prev-next-subtitle">next</p>
-        <p class="prev-next-title">Subgroup primitives</p>
+        <p class="prev-next-title">Automatic differentiation</p>
       </div>
       <i class="fa-solid fa-angle-right"></i>
     </a>
@@ -591,6 +725,16 @@
 <li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#fields">Fields</a></li>
 <li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#ndarrays">Ndarrays</a></li>
 <li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#shape-requirements">Shape requirements</a></li>
+</ul>
+</li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#zero-copy-interop-via-dlpack">Zero-copy interop via DLPack</a><ul class="nav section-nav flex-column">
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#when-zero-copy-is-available">When zero-copy is available</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#semantics-of-copy">Semantics of <code class="docutils literal notranslate"><span class="pre">copy</span></code></a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#examples">Examples</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#caching">Caching</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#apple-metal-synchronisation">Apple Metal: synchronisation</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#lifetime-caveats">Lifetime caveats</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#struct-fields">Struct fields</a></li>
 </ul>
 </li>
 <li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#direct-torch-tensor-pass-through">Direct torch tensor pass-through</a><ul class="nav section-nav flex-column">

@@ -297,6 +297,10 @@
 <ul class="nav bd-sidenav">
 <li class="toctree-l1"><a class="reference internal" href="interop.html">Numpy and Torch interop</a></li>
 </ul>
+<p aria-level="2" class="caption" role="heading"><span class="caption-text">Autodiff</span></p>
+<ul class="nav bd-sidenav">
+<li class="toctree-l1"><a class="reference internal" href="autodiff.html">Automatic differentiation</a></li>
+</ul>
 <p aria-level="2" class="caption" role="heading"><span class="caption-text">SIMT primitives</span></p>
 <ul class="nav bd-sidenav">
 <li class="toctree-l1"><a class="reference internal" href="subgroup.html">Subgroup primitives</a></li>
@@ -412,7 +416,8 @@
     <span class="n">p1</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="o">+=</span> <span class="mi">1</span>
 </pre></div>
 </div>
-<p>Note that the typing for NDArray is <code class="docutils literal notranslate"><span class="pre">qd.types.NDArray[data_type,</span> <span class="pre">number_dimensions]</span></code></p>
+<p>Note that the typing for NDArray is <code class="docutils literal notranslate"><span class="pre">qd.types.NDArray[data_type,</span> <span class="pre">number_dimensions]</span></code>.</p>
+<p><code class="docutils literal notranslate"><span class="pre">number_dimensions</span></code> is optional: <code class="docutils literal notranslate"><span class="pre">qd.types.NDArray[qd.i32]</span></code> is also valid, and leaves <code class="docutils literal notranslate"><span class="pre">ndim</span></code> unspecified.</p>
 </section>
 <section id="global-field">
 <h3>Global field<a class="headerlink" href="#global-field" title="Link to this heading">#</a></h3>
