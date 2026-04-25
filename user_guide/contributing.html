@@ -311,6 +311,10 @@
 <li class="toctree-l1"><a class="reference internal" href="graph.html">CUDA Graph</a></li>
 <li class="toctree-l1"><a class="reference internal" href="perf_dispatch.html">Performance Dispatch</a></li>
 </ul>
+<p aria-level="2" class="caption" role="heading"><span class="caption-text">Testing</span></p>
+<ul class="nav bd-sidenav">
+<li class="toctree-l1"><a class="reference internal" href="kernel_coverage.html">Kernel code coverage</a></li>
+</ul>
 <p aria-level="2" class="caption" role="heading"><span class="caption-text">Reference</span></p>
 <ul class="nav bd-sidenav">
 <li class="toctree-l1"><a class="reference internal" href="unsupported_python.html">Python features in kernel scope</a></li>
@@ -479,6 +483,41 @@
 <p>You can then use <code class="docutils literal notranslate"><span class="pre">LLVM_DIR</span></code> to point to the <code class="docutils literal notranslate"><span class="pre">LLVM</span></code> build directory.</p>
 </section>
 </section>
+<section id="ci-checks">
+<h2>CI checks<a class="headerlink" href="#ci-checks" title="Link to this heading">#</a></h2>
+<p>Pull requests are validated by several CI jobs. Most run automatically; a failing check blocks merge.</p>
+<section id="pre-commit-linters-linters-yml">
+<h3>Pre-commit / linters (<code class="docutils literal notranslate"><span class="pre">linters.yml</span></code>)<a class="headerlink" href="#pre-commit-linters-linters-yml" title="Link to this heading">#</a></h3>
+<p>Runs <code class="docutils literal notranslate"><span class="pre">pre-commit</span> <span class="pre">run</span> <span class="pre">-a</span></code> which enforces:</p>
+<ul class="simple">
+<li><p><strong>black</strong> — Python formatting with a 120-character line limit</p></li>
+<li><p><strong>clang-format</strong> — C/C++ formatting</p></li>
+<li><p><strong>trailing-whitespace</strong> and <strong>end-of-file-fixer</strong> — whitespace hygiene</p></li>
+<li><p><strong>ruff</strong> — Python linting</p></li>
+<li><p><strong>pylint</strong> — additional Python linting (scoped to <code class="docutils literal notranslate"><span class="pre">python/quadrants/</span></code>)</p></li>
+</ul>
+<p>You can run these locally with <code class="docutils literal notranslate"><span class="pre">pre-commit</span> <span class="pre">run</span> <span class="pre">-a</span></code> after <code class="docutils literal notranslate"><span class="pre">pip</span> <span class="pre">install</span> <span class="pre">pre-commit</span></code>.</p>
+</section>
+<section id="other-ci-jobs">
+<h3>Other CI jobs<a class="headerlink" href="#other-ci-jobs" title="Link to this heading">#</a></h3>
+<ul class="simple">
+<li><p><strong>pyright</strong> (<code class="docutils literal notranslate"><span class="pre">pyright_linter.yml</span></code>) — Python type checking</p></li>
+<li><p><strong>clang-tidy</strong> (<code class="docutils literal notranslate"><span class="pre">clang_tidy.yml</span></code>) — C++ static analysis</p></li>
+<li><p><strong>check-markup-links</strong> (<code class="docutils literal notranslate"><span class="pre">check_markup_links.yml</span></code>) — validates links in documentation</p></li>
+<li><p><strong>linux / macosx / win</strong> — build and test on each platform</p></li>
+<li><p><strong>test-gpu</strong> — GPU-specific tests</p></li>
+</ul>
+</section>
+<section id="line-wrapping-check-check-wrapping-yml">
+<h3>Line wrapping check (<code class="docutils literal notranslate"><span class="pre">check_wrapping.yml</span></code>)<a class="headerlink" href="#line-wrapping-check-check-wrapping-yml" title="Link to this heading">#</a></h3>
+<p>Uses an AI agent to check that lines in changed files follow wrapping conventions:</p>
+<ul class="simple">
+<li><p><strong>Markdown files (<code class="docutils literal notranslate"><span class="pre">.md</span></code>)</strong>: lines should not be hard-wrapped. Each paragraph should be a single long line.</p></li>
+<li><p><strong>Code comments and docstrings</strong>: lines should be wrapped at 120 characters, not at 80.</p></li>
+</ul>
+<p>The check runs only on files changed in the PR and reports up to 3 violations.</p>
+</section>
+</section>
 </section>
 
 
@@ -535,6 +574,12 @@
 <li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#advanced-usage">Advanced usage</a><ul class="nav section-nav flex-column">
 <li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#ci-convention-about-compilers-llvm">CI Convention about compilers/LLVM</a></li>
 <li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#building-llvm-for-debugging-it">Building LLVM for debugging it</a></li>
+</ul>
+</li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#ci-checks">CI checks</a><ul class="nav section-nav flex-column">
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#pre-commit-linters-linters-yml">Pre-commit / linters (<code class="docutils literal notranslate"><span class="pre">linters.yml</span></code>)</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#other-ci-jobs">Other CI jobs</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#line-wrapping-check-check-wrapping-yml">Line wrapping check (<code class="docutils literal notranslate"><span class="pre">check_wrapping.yml</span></code>)</a></li>
 </ul>
 </li>
 </ul>
