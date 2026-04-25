@@ -1,8 +1,7 @@
 """Tests for ``qd.Vector.tensor`` / ``qd.Matrix.tensor`` factory classmethods.
 
-These are the per-tensor backend dispatchers for vector- and matrix-element
-tensors, parallel to scalar ``qd.tensor()``. The dispatch implementation
-lives in ``quadrants/_tensor.py`` as ``_tensor_vec`` / ``_tensor_mat``
+These are the per-tensor backend dispatchers for vector- and matrix-element tensors, parallel to scalar
+``qd.tensor()``. The dispatch implementation lives in ``quadrants/_tensor.py`` as ``_tensor_vec`` / ``_tensor_mat``
 (private); the public surface is the classmethods exercised here.
 
 Each behavioural test is parametrized over both backends.
@@ -35,9 +34,8 @@ def _mat_reference(backend):
 
 @test_utils.test(arch=qd.cpu)
 def test_vector_tensor_default_backend_matches_vector_ndarray():
-    """Post stork-19 ``qd.Vector.tensor`` returns a ``qd.VectorTensor``
-    wrapper; the underlying impl must match what ``qd.Vector.ndarray``
-    returns directly."""
+    """Post stork-19 ``qd.Vector.tensor`` returns a ``qd.VectorTensor`` wrapper; the underlying impl must match what
+    ``qd.Vector.ndarray`` returns directly."""
     a = qd.Vector.tensor(3, qd.f32, shape=(4,))
     b = qd.Vector.ndarray(3, qd.f32, shape=(4,))
     assert isinstance(a, qd.VectorTensor)
@@ -63,10 +61,9 @@ def test_vector_tensor_invalid_backend_raises():
 
 @test_utils.test(arch=qd.cpu)
 def test_vector_tensor_rejects_unknown_kwarg():
-    """``qd.Vector.tensor`` shares the same kwarg-validation contract as
-    ``qd.tensor``, minus ``layout=`` (layout semantics over an extra
-    element axis are out of scope for now). ``order=`` raises with a
-    dedicated layout-pointing message."""
+    """``qd.Vector.tensor`` shares the same kwarg-validation contract as ``qd.tensor``, minus ``layout=`` (layout
+    semantics over an extra element axis are out of scope for now). ``order=`` raises with a dedicated layout-pointing
+    message."""
     with pytest.raises(TypeError, match="layout="):
         qd.Vector.tensor(3, qd.f32, shape=(4,), order="ji")
     with pytest.raises(TypeError, match="unexpected keyword"):
@@ -136,10 +133,9 @@ def test_matrix_tensor_invalid_backend_raises():
 
 @test_utils.test(arch=qd.cpu)
 def test_matrix_tensor_rejects_unknown_kwarg():
-    """``qd.Matrix.tensor`` shares the same kwarg-validation contract as
-    ``qd.tensor``, minus ``layout=`` (layout semantics over an extra
-    element axis are out of scope for now). ``order=`` raises with a
-    dedicated layout-pointing message."""
+    """``qd.Matrix.tensor`` shares the same kwarg-validation contract as ``qd.tensor``, minus ``layout=`` (layout
+    semantics over an extra element axis are out of scope for now). ``order=`` raises with a dedicated layout-pointing
+    message."""
     with pytest.raises(TypeError, match="layout="):
         qd.Matrix.tensor(2, 3, qd.f32, shape=(4,), order="ji")
     with pytest.raises(TypeError, match="unexpected keyword"):

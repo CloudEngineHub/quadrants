@@ -2,24 +2,18 @@
 
 Pins the wrapper behavior the user-facing factory relies on:
 
-- Interop forwards — ``to_numpy``/``from_numpy``/``to_torch``/``from_torch``/
-  ``to_dlpack``/``fill``/``copy_from`` all produce / consume canonical
-  views via the wrapper, on both backends, at every layout.
-- Pickle via ``__reduce__`` round-trips symmetrically on both backends
-  (the pre-existing ``Field`` asymmetry is closed *at the wrapper layer*
-  without touching the upstream ``Field`` type).
-- ``.grad`` wraps lazily, returns a ``Tensor`` (not the bare impl), and
-  is identity-stable across accesses (so autograd-tape identity checks
-  hold after migration).
-- ``VectorTensor`` / ``MatrixTensor`` carry ``element_shape`` and
-  round-trip via pickle on both backends.
+- Interop forwards — ``to_numpy``/``from_numpy``/``to_torch``/``from_torch``/``to_dlpack``/``fill``/``copy_from`` all
+  produce / consume canonical views via the wrapper, on both backends, at every layout.
+- Pickle via ``__reduce__`` round-trips symmetrically on both backends (the pre-existing ``Field`` asymmetry is closed
+  *at the wrapper layer* without touching the upstream ``Field`` type).
+- ``.grad`` wraps lazily, returns a ``Tensor`` (not the bare impl), and is identity-stable across accesses (so
+  autograd-tape identity checks hold after migration).
+- ``VectorTensor`` / ``MatrixTensor`` carry ``element_shape`` and round-trip via pickle on both backends.
 - ``qd.wrap`` picks the right subclass for a bare impl.
 
-Stork-19 flipped ``qd.tensor()`` (and the Vector/Matrix variants) to
-return wrappers, so most tests below can use the factory result
-directly. The ``qd.wrap`` tests still allocate bare impls (via
-``qd.field`` / ``qd.ndarray`` / ``qd.Vector.field`` / ``qd.Matrix.field``)
-and exercise the explicit wrap path.
+Stork-19 flipped ``qd.tensor()`` (and the Vector/Matrix variants) to return wrappers, so most tests below can use the
+factory result directly. The ``qd.wrap`` tests still allocate bare impls (via ``qd.field`` / ``qd.ndarray`` /
+``qd.Vector.field`` / ``qd.Matrix.field``) and exercise the explicit wrap path.
 """
 
 import itertools
@@ -97,9 +91,8 @@ def test_wrapper_to_torch_roundtrip(backend, layout):
 @pytest.mark.parametrize("layout", _LAYOUTS_RANK2)
 @test_utils.test(arch=qd.cpu)
 def test_wrapper_to_dlpack_canonical_shape(backend, layout):
-    # ``field_to_dlpack`` in C++ unconditionally imports torch to check
-    # its DLPack byte-offset support. Skip early when torch is absent
-    # so the test is marked "skipped" rather than crashing the worker.
+    # ``field_to_dlpack`` in C++ unconditionally imports torch to check its DLPack byte-offset support. Skip early when
+    # torch is absent so the test is marked "skipped" rather than crashing the worker.
     torch = pytest.importorskip("torch")
     canonical = (3, 4)
     t = qd.tensor(qd.f32, shape=canonical, backend=backend, layout=layout)
@@ -166,10 +159,9 @@ def test_wrapper_pickle_roundtrip(backend, layout):
 @pytest.mark.parametrize("layout", _LAYOUTS_RANK2)
 @test_utils.test(arch=qd.cpu)
 def test_wrapper_pickle_preserves_layout_at_canonical_indices(backend, layout):
-    """Round-tripped tensor must give the same *canonical* values at every
-    canonical coordinate, even for non-identity layouts. The underlying
-    physical layout on the reconstructed side isn't required to match
-    (pickle drops layout tags today), but the user-visible data must.
+    """Round-tripped tensor must give the same *canonical* values at every canonical coordinate, even for non-identity
+    layouts. The underlying physical layout on the reconstructed side isn't required to match (pickle drops layout tags
+    today), but the user-visible data must.
     """
     canonical = (3, 4)
     src = np.arange(12, dtype=np.int32).reshape(canonical)
@@ -202,20 +194,18 @@ def test_wrapper_grad_is_identity_stable(backend):
     t = qd.tensor(qd.f32, shape=(4,), backend=backend, needs_grad=True)
     g1 = t.grad
     g2 = t.grad
-    # ``cached_property`` guarantees the same wrapper object is returned
-    # on repeat access; needed for autograd-tape identity checks.
+    # ``cached_property`` guarantees the same wrapper object is returned on repeat access; needed for autograd-tape
+    # identity checks.
     assert g1 is g2
 
 
 @pytest.mark.parametrize("backend", BACKENDS, ids=BACKEND_IDS)
 @test_utils.test(arch=qd.cpu)
 def test_wrapper_grad_none_when_no_grad_int_dtype(backend):
-    # Pre-existing Quadrants asymmetry: a ``Field`` with a real dtype
-    # always has a zombie ``.grad`` stub created by ``create_field_member``
-    # regardless of ``needs_grad=``, while an ``Ndarray`` correctly reports
-    # ``grad = None``. Int dtypes skip the stub path on both backends, so
-    # this test uses ``qd.i32`` to get symmetric ``grad is None`` behaviour.
-    # Cleaning up the real-dtype asymmetry is tracked in the design doc and deferred to a follow-up branch.
+    # Pre-existing Quadrants asymmetry: a ``Field`` with a real dtype always has a zombie ``.grad`` stub created by
+    # ``create_field_member`` regardless of ``needs_grad=``, while an ``Ndarray`` correctly reports ``grad = None``.
+    # Int dtypes skip the stub path on both backends, so this test uses ``qd.i32`` to get symmetric ``grad is None``
+    # behaviour. Cleaning up the real-dtype asymmetry is tracked in the design doc and deferred to a follow-up branch.
     t = qd.tensor(qd.i32, shape=(4,), backend=backend)
     assert t.grad is None
 

@@ -1,11 +1,8 @@
-"""Tests for ``qd.Tensor`` as an annotation in ``@qd.func`` parameters
-and struct fields.
+"""Tests for ``qd.Tensor`` as an annotation in ``@qd.func`` parameters and struct fields.
 
-Pre-stork-23, ``qd.Tensor`` only worked as an annotation for top-level
-``@qd.kernel`` parameters (handled by ``_template_mapper_hotpath``).
-Using it in a ``@qd.func`` parameter or as a struct field annotation
-raised ``QuadrantsTypeError`` because ``_transform_func_arg`` had no
-dispatch branch for the ``Tensor`` class.
+Pre-stork-23, ``qd.Tensor`` only worked as an annotation for top-level ``@qd.kernel`` parameters (handled by
+``_template_mapper_hotpath``). Using it in a ``@qd.func`` parameter or as a struct field annotation raised
+``QuadrantsTypeError`` because ``_transform_func_arg`` had no dispatch branch for the ``Tensor`` class.
 
 Stork-23 adds that branch. These tests pin the invariant.
 """
@@ -95,8 +92,7 @@ def test_tensor_struct_field_kernel_data_oriented(backend):
 @pytest.mark.parametrize("backend", BACKENDS, ids=BACKEND_IDS)
 @test_utils.test(arch=qd.cpu)
 def test_tensor_struct_field_func_via_template(backend):
-    """A @qd.func receives a struct (containing qd.Tensor fields) as
-    a qd.template() arg."""
+    """A @qd.func receives a struct (containing qd.Tensor fields) as a qd.template() arg."""
     N = 4
 
     @qd.data_oriented
@@ -131,8 +127,7 @@ def test_tensor_struct_field_func_via_template(backend):
 @pytest.mark.parametrize("backend", BACKENDS, ids=BACKEND_IDS)
 @test_utils.test(arch=qd.cpu)
 def test_tensor_wrapper_in_struct_field_unwraps(backend):
-    """When the struct field stores a qd.Tensor *wrapper*, the AST
-    build_Attribute must unwrap it transparently."""
+    """When the struct field stores a qd.Tensor *wrapper*, the AST build_Attribute must unwrap it transparently."""
     N = 4
 
     @qd.data_oriented
@@ -165,8 +160,7 @@ def test_tensor_wrapper_in_struct_field_unwraps(backend):
 @pytest.mark.parametrize("backend", BACKENDS, ids=BACKEND_IDS)
 @test_utils.test(arch=qd.cpu)
 def test_mixed_tensor_and_scalar_struct_fields(backend):
-    """Struct with one qd.Tensor field and one scalar, both accessed
-    in a @qd.func via template."""
+    """Struct with one qd.Tensor field and one scalar, both accessed in a @qd.func via template."""
     N = 4
 
     @qd.data_oriented
@@ -222,18 +216,17 @@ def test_tensor_func_param_2d_with_layout(backend):
 
 
 # ---------------------------------------------------------------------------
-# 8. Struct with qd.Tensor vector-compound field — exercises
-#    populate_global_vars_from_dataclass + element_shape propagation
+# 8. Struct with qd.Tensor vector-compound field — exercises populate_global_vars_from_dataclass +
+#    element_shape propagation
 # ---------------------------------------------------------------------------
 
 
 @pytest.mark.parametrize("backend", BACKENDS, ids=BACKEND_IDS)
 @test_utils.test(arch=qd.cpu)
 def test_tensor_struct_vector_field_roundtrip(backend):
-    """Struct field holding a *vector*-element qd.Tensor allocated via
-    ``qd.tensor(vec3_type, ...)``.  Covers the ``_wrap_impl`` fix that
-    ensures VectorTensor is returned for compound dtypes, plus the struct
-    expansion path in ``populate_global_vars_from_dataclass``."""
+    """Struct field holding a *vector*-element qd.Tensor allocated via ``qd.tensor(vec3_type, ...)``.  Covers the
+    ``_wrap_impl`` fix that ensures VectorTensor is returned for compound dtypes, plus the struct expansion path in
+    ``populate_global_vars_from_dataclass``."""
     N = 4
     vec3 = qd.types.vector(3, qd.f32)
     t = qd.tensor(vec3, shape=(N,), backend=backend)
@@ -268,19 +261,16 @@ def test_tensor_struct_vector_field_roundtrip(backend):
 
 
 # ---------------------------------------------------------------------------
-# 9. Frozen dataclass with qd.Tensor field, kernel arg is struct TYPE
-#    (not qd.template()) — exercises _predeclare_struct_ndarrays +
-#    ndarray_to_any_array resolution in impl.subscript (Option C path)
+# 9. Frozen dataclass with qd.Tensor field, kernel arg is struct TYPE (not qd.template()) — exercises
+#    _predeclare_struct_ndarrays + ndarray_to_any_array resolution in impl.subscript (Option C path)
 # ---------------------------------------------------------------------------
 
 
 @test_utils.test(arch=qd.cpu)
 def test_tensor_struct_field_typed_kernel_arg_ndarray():
-    """A frozen dataclass with a qd.Tensor-annotated field passed to a
-    kernel as ``state: State`` (typed arg, not qd.template()). This
-    exercises the _predeclare_struct_ndarrays mechanism that registers
-    bare Ndarray fields in ndarray_to_any_array so impl.subscript can
-    resolve them."""
+    """A frozen dataclass with a qd.Tensor-annotated field passed to a kernel as ``state: State`` (typed arg, not
+    qd.template()). This exercises the _predeclare_struct_ndarrays mechanism that registers bare Ndarray fields in
+    ndarray_to_any_array so impl.subscript can resolve them."""
     N = 6
 
     @dataclasses.dataclass(frozen=True)
@@ -301,8 +291,7 @@ def test_tensor_struct_field_typed_kernel_arg_ndarray():
 
 @test_utils.test(arch=qd.cpu)
 def test_tensor_struct_field_typed_kernel_arg_field():
-    """Same as above but with FIELD backend and @qd.data_oriented struct,
-    kernel arg typed as the struct class."""
+    """Same as above but with FIELD backend and @qd.data_oriented struct, kernel arg typed as the struct class."""
     N = 6
 
     @qd.data_oriented
@@ -419,9 +408,8 @@ def test_mixed_tensor_and_ndarray_frozen_dataclass_kernel():
 
 @test_utils.test(arch=qd.cpu)
 def test_mixed_many_tensor_and_ndarray_fields():
-    """Frozen dataclass with multiple qd.Tensor and multiple qd.types.ndarray()
-    fields interleaved — mirrors Genesis ConstraintState which has ~6 Tensor
-    fields among ~30 ndarray fields."""
+    """Frozen dataclass with multiple qd.Tensor and multiple qd.types.ndarray() fields interleaved — mirrors Genesis
+    ConstraintState which has ~6 Tensor fields among ~30 ndarray fields."""
     N = 4
 
     @dataclasses.dataclass(frozen=True)
@@ -466,10 +454,8 @@ def test_mixed_many_tensor_and_ndarray_fields():
 
 @test_utils.test(arch=qd.cpu)
 def test_mixed_tensor_and_field_dataoriented_template():
-    """@qd.data_oriented struct with mixed qd.Tensor + qd.field, passed
-    via qd.template(). FIELD backend. This is the genesis field-mode
-    pattern (data_oriented structs are not dataclasses, so they are
-    passed as templates)."""
+    """@qd.data_oriented struct with mixed qd.Tensor + qd.field, passed via qd.template(). FIELD backend. This is the
+    genesis field-mode pattern (data_oriented structs are not dataclasses, so they are passed as templates)."""
     N = 4
 
     @qd.data_oriented

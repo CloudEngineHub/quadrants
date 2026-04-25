@@ -1,12 +1,10 @@
 """Tests for ``qd.tensor`` scalar dispatch.
 
-Scope: scalar-element tensor allocation via ``qd.tensor()`` dispatching to
-``qd.field`` or ``qd.ndarray`` based on the ``backend=`` kwarg. No layout,
-no vec/mat.
+Scope: scalar-element tensor allocation via ``qd.tensor()`` dispatching to ``qd.field`` or ``qd.ndarray`` based on the
+``backend=`` kwarg. No layout, no vec/mat.
 
-Each behavioural test is parametrized over both backends so coverage stays
-symmetric. Tests that probe a single dispatch path (default backend,
-unknown-kwarg rejection, error paths) keep their original shape.
+Each behavioural test is parametrized over both backends so coverage stays symmetric. Tests that probe a single dispatch
+path (default backend, unknown-kwarg rejection, error paths) keep their original shape.
 """
 
 import pytest
@@ -78,14 +76,11 @@ def test_tensor_invalid_backend_raises():
 
 @test_utils.test(arch=qd.cpu)
 def test_tensor_rejects_unknown_kwarg():
-    """Backend-specific knobs and typos are rejected up front; users who
-    genuinely need a backend-specific knob must drop down to ``qd.field``
-    or ``qd.ndarray`` directly.
+    """Backend-specific knobs and typos are rejected up front; users who genuinely need a backend-specific knob must
+    drop down to ``qd.field`` or ``qd.ndarray`` directly.
 
-    ``order=`` gets its own dedicated rejection in
-    :func:`test_tensor_layout.test_order_kwarg_rejected` because the
-    factory raises a different error message pointing users at
-    ``layout=``."""
+    ``order=`` gets its own dedicated rejection in :func:`test_tensor_layout.test_order_kwarg_rejected` because the
+    factory raises a different error message pointing users at ``layout=``."""
     with pytest.raises(TypeError, match="unexpected keyword"):
         qd.tensor(qd.f32, shape=(4, 5), offset=(1, 1))
     with pytest.raises(TypeError, match="unexpected keyword"):
@@ -97,9 +92,8 @@ def test_tensor_rejects_unknown_kwarg():
 def test_tensor_kernel_roundtrip(backend):
     """Allocate via ``qd.tensor()``, fill in a kernel, read back via numpy.
 
-    Uses the backend-appropriate annotation (``qd.template()`` for FIELD,
-    ``qd.types.ndarray()`` for NDARRAY); the polymorphic ``qd.Tensor``
-    annotation is not yet available on this branch.
+    Uses the backend-appropriate annotation (``qd.template()`` for FIELD, ``qd.types.ndarray()`` for NDARRAY); the
+    polymorphic ``qd.Tensor`` annotation is not yet available on this branch.
     """
     a = qd.tensor(qd.i32, shape=(4,), backend=backend)
 
@@ -129,8 +123,8 @@ def test_tensor_kernel_roundtrip(backend):
 @pytest.mark.parametrize("backend", BACKENDS, ids=BACKEND_IDS)
 @test_utils.test(arch=qd.cpu)
 def test_tensor_compound_vector_returns_vector_tensor(backend):
-    """``qd.tensor(vec3_type, shape)`` must return a ``VectorTensor``, not
-    the base ``Tensor``, so that ``element_shape`` is available."""
+    """``qd.tensor(vec3_type, shape)`` must return a ``VectorTensor``, not the base ``Tensor``, so that
+    ``element_shape`` is available."""
     vec3 = qd.types.vector(3, qd.f32)
     a = qd.tensor(vec3, shape=(4,), backend=backend)
     assert isinstance(a, qd.VectorTensor), f"expected VectorTensor, got {type(a).__name__}"

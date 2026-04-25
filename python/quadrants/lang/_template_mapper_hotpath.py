@@ -1,31 +1,28 @@
 # pyright: reportAttributeAccessIssue=false
 
 """
-This function '_extract_arg' is called so often during physics simulation with Genesis that
-it becomes a major bottleneck for simple scenes running faster than 10M FPS. In practice, it
-adds about 100% overhead when running 20M FPS, and things get worst as FPS increases. At this
-scale, it is necessary to chase not just us (microseconds) but also ns (nanoseconds). This
-requires special optimization technics, to name a few:
-* Avoid attribute lookup as much as possible, indirectly for submodules, instance methods and
-  class attributes.
-* Do not define local-scope function, because the definition itself is costly, and called
-  methods that are not in global scope is slowe
+This function '_extract_arg' is called so often during physics simulation with Genesis that it becomes a major
+bottleneck for simple scenes running faster than 10M FPS. In practice, it adds about 100% overhead when running 20M
+FPS, and things get worst as FPS increases. At this scale, it is necessary to chase not just us (microseconds) but
+also ns (nanoseconds). This requires special optimization technics, to name a few:
+* Avoid attribute lookup as much as possible, indirectly for submodules, instance methods and class attributes.
+* Do not define local-scope function, because the definition itself is costly, and called methods that are not in
+  global scope is slowe
 * Avoid function indirection as much as possible, especially for very short method
 * Prefer list comprehension over tuple + generator
 * Prefer using 'in' operator of set if possible, otherwise tuple, instead of list
-* Avoid redundant operations by inlining complementary methods, i.e. 'dataclasses.is_dataclass'
-  in conjunction with 'dataclasses.fields'.
-* Prefer using 'arg_type = type(arg)' plus 'issubclass' over 'isinstance' when doing many checks
-  successively
+* Avoid redundant operations by inlining complementary methods, i.e. 'dataclasses.is_dataclass' in conjunction with
+  'dataclasses.fields'.
+* Prefer using 'arg_type = type(arg)' plus 'issubclass' over 'isinstance' when doing many checks successively
 * Prefer 'is' operator over '==', 'isinstance' and 'issubclass' whenever it is applicable
 * Order branches by hit probability
-* Guard complex manually debug checks with 'if __debug__ and __builtins__["__debug__"]'
-  to allow disabling them at runtime instead of compile time only
+* Guard complex manually debug checks with 'if __debug__ and __builtins__["__debug__"]' to allow disabling them at
+  runtime instead of compile time only
 * Use 'getattr' on class rather than instances for static properties
 
-A direct consequence of this breaking type checking because pyright is not able to understand that
-'arg_type' is immutably bound to 'type(arg)'. Moreover, some privates fields of standard module
-'dataclass' had to be imported as a consequence of inlining 'is_dataclass' and 'fields'.
+A direct consequence of this breaking type checking because pyright is not able to understand that 'arg_type' is
+immutably bound to 'type(arg)'. Moreover, some privates fields of standard module 'dataclass' had to be imported as
+a consequence of inlining 'is_dataclass' and 'fields'.
 """
 
 import weakref

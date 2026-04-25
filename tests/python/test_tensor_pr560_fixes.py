@@ -25,9 +25,8 @@ from tests import test_utils
 
 @test_utils.test(arch=qd.cpu)
 def test_anyarray_shape_canonical_in_kernel_rank2():
-    """x.shape[i] inside a kernel on a layout-tagged NDARRAY must return
-    canonical sizes, not physical ones. Otherwise for non-square shapes
-    the idiomatic ``for i in range(x.shape[0])`` loop produces OOB writes.
+    """x.shape[i] inside a kernel on a layout-tagged NDARRAY must return canonical sizes, not physical ones. Otherwise
+    for non-square shapes the idiomatic ``for i in range(x.shape[0])`` loop produces OOB writes.
     """
     N, B = 3, 5
 
@@ -81,9 +80,8 @@ def test_anyarray_shape_canonical_identity_layout():
 
 @test_utils.test(arch=qd.cpu)
 def test_fastcache_layout_distinct_keys():
-    """Two ndarrays of the same dtype/rank but different layouts must NOT
-    share a fastcache entry, otherwise the second call reuses IR compiled
-    for the first layout and silently mis-indexes.
+    """Two ndarrays of the same dtype/rank but different layouts must NOT share a fastcache entry, otherwise the second
+    call reuses IR compiled for the first layout and silently mis-indexes.
     """
     from quadrants.lang._fast_caching.args_hasher import stringify_obj_type
 
@@ -141,8 +139,8 @@ def test_fastcache_matrix_ndarray_layout_distinct():
 
 @test_utils.test(arch=qd.cpu)
 def test_scalar_field_offset_with_order():
-    """qd.field with order= and non-zero offset must permute the offset
-    so that canonical indexing lands at the correct physical cell.
+    """qd.field with order= and non-zero offset must permute the offset so that canonical indexing lands at the correct
+    physical cell.
     """
     x = qd.field(qd.i32, shape=(4, 6), order="ji", offset=(1, 2))
 
@@ -156,9 +154,7 @@ def test_scalar_field_offset_with_order():
 
 @test_utils.test(arch=qd.cpu)
 def test_matrix_field_offset_with_order():
-    """Matrix.field with order= and non-zero offset must permute the
-    offset so canonical indexing is correct.
-    """
+    """Matrix.field with order= and non-zero offset must permute the offset so canonical indexing is correct."""
     m = qd.Matrix.field(2, 2, qd.i32, shape=(4, 6), order="ji", offset=(1, 2))
 
     @qd.kernel
@@ -180,8 +176,8 @@ def test_matrix_field_offset_with_order():
 
 @test_utils.test(arch=qd.cpu)
 def test_vector_tensor_order_hint_no_dead_end():
-    """The error message for order= on Vector.tensor must NOT suggest
-    layout= since Vector.tensor doesn't accept layout= either.
+    """The error message for order= on Vector.tensor must NOT suggest layout= since Vector.tensor doesn't accept
+    layout= either.
     """
     with pytest.raises(TypeError, match="does not accept order=") as exc_info:
         qd.Vector.tensor(3, qd.f32, shape=(4,), order="ji")
@@ -201,9 +197,7 @@ def test_matrix_tensor_order_hint_no_dead_end():
 
 @test_utils.test(arch=qd.cpu)
 def test_scalar_tensor_order_hint_still_suggests_layout():
-    """The scalar qd.tensor() factory DOES accept layout=, so the hint
-    should still point to it.
-    """
+    """The scalar qd.tensor() factory DOES accept layout=, so the hint should still point to it."""
     with pytest.raises(TypeError, match="pass layout="):
         qd.tensor(qd.f32, shape=(4,), order="ji")
 

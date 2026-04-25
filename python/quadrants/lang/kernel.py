@@ -79,10 +79,10 @@ _ARCH_PYTHON = Arch.python
 
 
 class LaunchContextBufferCache:
-    # Here, we are tracking whether a launch context buffer can be cached.
-    # The point of caching the launch context buffer is allowing skipping recursive processing of all the input
-    # arguments one-by-one, which is adding a significant overhead, without changing anything in regards of the
-    # function calls to the launch context that must be made for a given kernel.
+    # Here, we are tracking whether a launch context buffer can be cached. The point of caching the launch context
+    # buffer is allowing skipping recursive processing of all the input arguments one-by-one, which is adding a
+    # significant overhead, without changing anything in regards of the function calls to the launch context that
+    # must be made for a given kernel.
     # You can understand this as resolving the static part of the entire control flow of '_recursive_set_args'
     # for a given set of arguments, which is (mostly surely uniquely) characterized by its hash, gathering all
     # the instructions that cannot be evaluated statically and packing them in a buffer without evaluating them at
@@ -226,8 +226,8 @@ class ASTGenerator:
                 struct_locals = _kernel_impl_dataclass.extract_struct_locals_from_context(ctx)
             else:
                 struct_locals = pruning.used_vars_by_func_id[ctx.func.func_id]
-            # struct locals are the expanded py dataclass fields that we will write to
-            # local variables, and will then be available to use in build_Call, later.
+            # struct locals are the expanded py dataclass fields that we will write to local variables, and will then
+            # be available to use in build_Call, later.
             tree = _kernel_impl_dataclass.unpack_ast_struct_expressions(self.tree, struct_locals=struct_locals)
             ctx.only_parse_function_def = self.only_parse_function_def
             transform_tree(tree, ctx)

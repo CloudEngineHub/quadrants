@@ -61,24 +61,20 @@ class _DLManagedTensor(ctypes.Structure):
 
 
 def _patch_field_dlpack_canonical(capsule, layout):
-    """Mutate the DLManagedTensor inside *capsule* so its shape/strides
-    expose a canonical view of the permuted-physical field buffer.
+    """Mutate the DLManagedTensor inside *capsule* so its shape/strides expose a canonical view of the
+    permuted-physical field buffer.
 
     Invariants (input):
-      * ``shape[i]`` = physical shape along axis ``i`` of the SNode
-        (which is the *permuted* shape the field was allocated at).
-      * ``strides[i]`` = physical stride along axis ``i`` (row-major
-        over the permuted shape).
+      * ``shape[i]`` = physical shape along axis ``i`` of the SNode (which is the *permuted* shape the field was
+        allocated at).
+      * ``strides[i]`` = physical stride along axis ``i`` (row-major over the permuted shape).
 
     Invariants (output):
-      * ``shape[a]`` = canonical-axis-``a`` extent = input
-        ``shape[invperm[a]]``.
-      * ``strides[a]`` = canonical-axis-``a`` stride = input
-        ``strides[invperm[a]]``.
+      * ``shape[a]`` = canonical-axis-``a`` extent = input ``shape[invperm[a]]``.
+      * ``strides[a]`` = canonical-axis-``a`` stride = input ``strides[invperm[a]]``.
 
-    ``invperm`` inverts the ``_qd_layout`` permutation by the convention
-    that ``layout[p]`` is the canonical axis at physical nesting
-    position ``p``, so ``invperm[canonical_axis] = physical_axis``.
+    ``invperm`` inverts the ``_qd_layout`` permutation by the convention that ``layout[p]`` is the canonical axis at
+    physical nesting position ``p``, so ``invperm[canonical_axis] = physical_axis``.
     """
     ndim = len(layout)
     if ndim == 0:
@@ -174,16 +170,13 @@ class Field:
     def layout(self):
         """Canonical-axis-permutation tuple, or ``None`` for identity.
 
-        Mirrors :attr:`Ndarray.layout`: returns the same value the
-        caller passed to ``qd.tensor(..., layout=...)`` (or ``None`` if
-        that kwarg was omitted / was the identity permutation). Lets
-        downstream code introspect the physical layout without having
-        to know which backend produced the tensor.
+        Mirrors :attr:`Ndarray.layout`: returns the same value the caller passed to ``qd.tensor(..., layout=...)``
+        (or ``None`` if that kwarg was omitted / was the identity permutation). Lets downstream code introspect the
+        physical layout without having to know which backend produced the tensor.
 
-        Fields constructed directly via ``qd.field(..., order=...)``
-        also report their layout here — the ``order=`` axis-string is
-        translated into an integer permutation and stashed on the same
-        ``_qd_layout`` attribute that layout-tagged ndarrays use.
+        Fields constructed directly via ``qd.field(..., order=...)`` also report their layout here — the ``order=``
+        axis-string is translated into an integer permutation and stashed on the same ``_qd_layout`` attribute that
+        layout-tagged ndarrays use.
         """
         layout = getattr(self, "_qd_layout", None)
         if layout is None:
@@ -357,8 +350,7 @@ class ScalarField(Field):
 
     def to_dlpack(self):
         """
-        Note: caller is responsible for calling qd.sync() between modifying the field, and
-        reading it.
+        Note: caller is responsible for calling qd.sync() between modifying the field, and reading it.
         """
         impl.get_runtime().materialize()
         try:

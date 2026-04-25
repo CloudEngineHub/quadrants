@@ -134,8 +134,8 @@ def _layout_to_order(layout, ndim):
     each successive memory-nesting level, outermost first. ``layout=(1, 0)`` for a 2-D tensor means axis 1 is the
     outer SNode, axis 0 is the inner one (i.e. transposed storage), which translates to ``order='ji'``.
 
-    Returns ``None`` for the identity permutation, so the caller can omit
-    ``order=`` entirely (matches the unsuffixed default).
+    Returns ``None`` for the identity permutation, so the caller can omit ``order=`` entirely (matches the unsuffixed
+    default).
     """
     if not isinstance(layout, tuple):
         layout = tuple(layout)

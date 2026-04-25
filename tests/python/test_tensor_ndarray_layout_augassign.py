@@ -1,7 +1,6 @@
 """Extended AugAssign coverage for layout-tagged ndarrays.
 
-an earlier change already covered the basic ``x[i, j] += scalar`` case. This file
-exercises the trickier paths:
+an earlier change already covered the basic ``x[i, j] += scalar`` case. This file exercises the trickier paths:
 - every augmented operator (+=, -=, *=, //=, etc.)
 - read-and-write on the same call (``x[i, j] = x[i, j] * 2 + x[i, j]``)
 - dependence on neighbouring canonical indices (``x[i, j] += x[i, j-1]``)
@@ -146,10 +145,7 @@ def test_layout_neighbour_dependence_along_canonical_j():
 
 @test_utils.test(arch=qd.cpu)
 def test_layout_mixed_with_untagged_in_same_kernel():
-    """Two ndarrays in one kernel: one layout-tagged, one not.
-
-    The rewrite must apply only to the tagged one.
-    """
+    """Two ndarrays in one kernel: one layout-tagged, one not. The rewrite must apply only to the tagged one."""
     M, N = 3, 4
     src = qd.tensor(qd.i32, shape=(M, N), backend=qd.Backend.NDARRAY)  # untagged
     dst = _allocate_layout10(M, N)  # tagged layout=(1, 0)
@@ -169,8 +165,8 @@ def test_layout_mixed_with_untagged_in_same_kernel():
 
     src_np = src.to_numpy()
     dst_np = dst.to_numpy()
-    # Both ``to_numpy()`` return canonical views, so the two arrays
-    # compare equal element-for-element regardless of dst's tag.
+    # Both ``to_numpy()`` return canonical views, so the two arrays compare equal element-for-element regardless of
+    # dst's tag.
     assert src_np.shape == (M, N)
     assert dst_np.shape == (M, N)
     np.testing.assert_array_equal(src_np, dst_np)

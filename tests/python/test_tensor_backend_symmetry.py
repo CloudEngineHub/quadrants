@@ -1,10 +1,8 @@
 """Cross-backend symmetry tests for ``qd.tensor()``.
 
-These tests pin the contract that the entire user-facing tensor surface
-behaves identically on ``Backend.FIELD`` and ``Backend.NDARRAY`` for any
-layout (identity or non-identity). Downstream code (Genesis-style
-``GS_ENABLE_NDARRAY`` switching, ``layout=`` perf tuning) should never
-have to special-case the backend or the layout.
+These tests pin the contract that the entire user-facing tensor surface behaves identically on ``Backend.FIELD`` and
+``Backend.NDARRAY`` for any layout (identity or non-identity). Downstream code (Genesis-style ``GS_ENABLE_NDARRAY``
+switching, ``layout=`` perf tuning) should never have to special-case the backend or the layout.
 
 Each test parametrises over both backends and at least one non-identity layout. If a future change re-introduces an
 asymmetry (e.g. one backend gains a kwarg the other doesn't), one of these tests will fail.
@@ -50,8 +48,8 @@ def test_layout_property_none_when_layout_omitted(backend):
 
 
 # ----------------------------------------------------------------------------
-# to_torch() / from_torch(): both backends expose the same method with the
-# same canonical-view contract under any layout.
+# to_torch() / from_torch(): both backends expose the same method with the same canonical-view contract under
+# any layout.
 # ----------------------------------------------------------------------------
 
 

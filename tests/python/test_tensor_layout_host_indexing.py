@@ -2,28 +2,22 @@
 
 Background
 ----------
-The canonical -> physical index permutation for layout-tagged tensors is
-implemented in ``ast_transformer.py`` (``build_Subscript`` and
-``build_struct_for``), which only fires inside ``@qd.kernel`` bodies.
-Python-scope (host) ``__getitem__`` / ``__setitem__`` on the *bare*
-``Ndarray`` is **not** layout-aware — the index hits the host accessor
-directly. Field is layout-aware for free because its host accessor walks
-the SNode tree (which applies ``order=``).
+The canonical -> physical index permutation for layout-tagged tensors is implemented in ``ast_transformer.py``
+(``build_Subscript`` and ``build_struct_for``), which only fires inside ``@qd.kernel`` bodies. Python-scope (host)
+``__getitem__`` / ``__setitem__`` on the *bare* ``Ndarray`` is **not** layout-aware — the index hits the host
+accessor directly. Field is layout-aware for free because its host accessor walks the SNode tree (which applies
+``order=``).
 
-Per the user-stated rule that ``layout=`` must be invisible to users
-("anything that doesn't work with non-identity layout is also useless"),
-host-side indexing has to return the *canonical* element, identical to
+Per the user-stated rule that ``layout=`` must be invisible to users ("anything that doesn't work with non-identity
+layout is also useless"), host-side indexing has to return the *canonical* element, identical to
 ``a.to_numpy()[i, j]``.
 
-The ``qd.Tensor`` wrapper owns this fix: on a layout-tagged ndarray it
-translates the canonical user key to physical coords before hitting the
-impl accessor; on a field it simply delegates. Both paths give the user
-the canonical view, symmetric across backends.
+The ``qd.Tensor`` wrapper owns this fix: on a layout-tagged ndarray it translates the canonical user key to physical
+coords before hitting the impl accessor; on a field it simply delegates. Both paths give the user the canonical view,
+symmetric across backends.
 
-Stork-19 flips ``qd.tensor()`` (and the Vector/Matrix variants) to
-return ``qd.Tensor`` wrappers, so the natural user path here goes
-through the wrapper and the previous gotcha-B xfails turn into
-unconditional passes.
+Stork-19 flips ``qd.tensor()`` (and the Vector/Matrix variants) to return ``qd.Tensor`` wrappers, so the natural
+user path here goes through the wrapper and the previous gotcha-B xfails turn into unconditional passes.
 """
 
 import itertools
@@ -47,9 +41,8 @@ def _is_identity(layout):
 
 
 def _fill_via_from_numpy(a, canonical_shape):
-    """Populate ``a`` with distinct, position-encoding values via the
-    layout-aware ``from_numpy`` path. Returns the source numpy array so
-    the test can use it as the canonical reference."""
+    """Populate ``a`` with distinct, position-encoding values via the layout-aware ``from_numpy`` path. Returns the
+    source numpy array so the test can use it as the canonical reference."""
     src = np.arange(int(np.prod(canonical_shape)), dtype=np.int32).reshape(canonical_shape)
     a.from_numpy(src)
     return src
@@ -100,9 +93,8 @@ def test_host_getitem_canonical_rank3(backend, layout):
 @pytest.mark.parametrize("layout", _LAYOUTS_RANK2)
 @test_utils.test(arch=qd.cpu)
 def test_host_setitem_canonical_rank2(backend, layout):
-    """``a[i, j] = v`` at host scope must place ``v`` at canonical
-    coordinate ``(i, j)``, i.e. ``a.to_numpy()[i, j] == v``.
-    """
+    """``a[i, j] = v`` at host scope must place ``v`` at canonical coordinate ``(i, j)``, i.e.
+    ``a.to_numpy()[i, j] == v``."""
     canonical = (3, 4)
     a = qd.tensor(qd.i32, shape=canonical, backend=backend, layout=layout)
 
@@ -116,16 +108,15 @@ def test_host_setitem_canonical_rank2(backend, layout):
 
 
 # ----------------------------------------------------------------------
-# Bare-impl path: same canonical-view contract must hold when the user
-# constructs the wrapper explicitly from a bare impl (i.e. allocates via
-# ``qd.field`` / ``qd.ndarray`` and wraps with ``qd.Tensor(impl)``).
-# Sanity check that the wrapper's host-side fix isn't tied to the factory codepath.
+# Bare-impl path: same canonical-view contract must hold when the user constructs the wrapper explicitly from a bare
+# impl (i.e. allocates via ``qd.field`` / ``qd.ndarray`` and wraps with ``qd.Tensor(impl)``). Sanity check that the
+# wrapper's host-side fix isn't tied to the factory codepath.
 # ----------------------------------------------------------------------
 
 
 def _alloc_bare(backend, dtype, canonical, layout):
-    """Allocate a bare impl with the given layout, mirroring the factory
-    logic. Used by the wrapper-from-bare tests below."""
+    """Allocate a bare impl with the given layout, mirroring the factory logic. Used by the wrapper-from-bare tests
+    below."""
     if backend is qd.Backend.FIELD:
         if _is_identity(layout):
             return qd.field(dtype, canonical)

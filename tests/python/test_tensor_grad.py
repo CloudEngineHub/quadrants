@@ -1,15 +1,12 @@
 """Tests for ``needs_grad=True`` on the tensor factories.
 
-The factories pass ``needs_grad`` through to ``qd.field`` / ``qd.ndarray``
-via ``**kwargs``; ``qd.Vector.ndarray`` / ``qd.Matrix.ndarray`` accept
-``needs_grad`` and allocate a companion grad ndarray of matching shape and
-element type (real-only). These tests lock that behaviour as part of the
-public contract on every (factory, backend) combination.
+The factories pass ``needs_grad`` through to ``qd.field`` / ``qd.ndarray`` via ``**kwargs``; ``qd.Vector.ndarray`` /
+``qd.Matrix.ndarray`` accept ``needs_grad`` and allocate a companion grad ndarray of matching shape and element type
+(real-only). These tests lock that behaviour as part of the public contract on every (factory, backend) combination.
 
-Behavioural tests are parametrized over both backends. The int-dtype
-rejection check is NDARRAY-only because the FIELD path goes through the
-older Vector/Matrix.field code which raises a different error (out of
-scope for this branch's contract).
+Behavioural tests are parametrized over both backends. The int-dtype rejection check is NDARRAY-only because the FIELD
+path goes through the older Vector/Matrix.field code which raises a different error (out of scope for this branch's
+contract).
 """
 
 import pytest
@@ -179,10 +176,9 @@ def test_tensor_mat_grad_kernel_roundtrip(backend):
 
 
 # ----------------------------------------------------------------------------
-# Negative path: int dtype + needs_grad on the NDARRAY backend.
-# Kept NDARRAY-only because the FIELD path raises through the legacy
-# create_field machinery with a different error class / message; the
-# Vector.ndarray / Matrix.ndarray rejection added in this branch is the focused contract.
+# Negative path: int dtype + needs_grad on the NDARRAY backend. Kept NDARRAY-only because the FIELD path raises
+# through the legacy create_field machinery with a different error class / message; the Vector.ndarray / Matrix.ndarray
+# rejection added in this branch is the focused contract.
 # ----------------------------------------------------------------------------
 
 

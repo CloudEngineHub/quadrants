@@ -1,12 +1,12 @@
 """Skeleton tests for the ``qd.Tensor`` wrapper introspection surface.
 
-Pins the wrapper's basic introspection (``shape``, ``dtype``, ``layout``,
-``_unwrap()``, ``repr``). Layout-aware host indexing and surface-method
-forwards live in ``test_tensor_layout_host_indexing.py`` and ``test_tensor_wrapper_surface.py`` respectively.
+Pins the wrapper's basic introspection (``shape``, ``dtype``, ``layout``, ``_unwrap()``, ``repr``). Layout-aware host
+indexing and surface-method forwards live in ``test_tensor_layout_host_indexing.py`` and
+``test_tensor_wrapper_surface.py`` respectively.
 
-Stork-19 flipped ``qd.tensor()`` to return wrappers, so we can use it
-directly here. To exercise the explicit-construction path
-(``qd.Tensor(impl)``), we drop down to ``qd.field`` / ``qd.ndarray`` (which still return bare impls).
+Stork-19 flipped ``qd.tensor()`` to return wrappers, so we can use it directly here. To exercise the
+explicit-construction path (``qd.Tensor(impl)``), we drop down to ``qd.field`` / ``qd.ndarray`` (which still return
+bare impls).
 """
 
 import pytest
@@ -41,8 +41,8 @@ def test_wrapper_construction_forwards_basic_attrs(backend):
 @test_utils.test(arch=qd.cpu)
 def test_wrapper_layout_is_canonical_and_introspectable(backend, layout):
     t = qd.tensor(qd.f32, shape=(3, 4), backend=backend, layout=layout)
-    # ``shape`` is always canonical; ``layout`` reflects the user-supplied
-    # permutation (or ``None`` for identity, normalised at the impl layer).
+    # ``shape`` is always canonical; ``layout`` reflects the user-supplied permutation (or ``None`` for identity,
+    # normalised at the impl layer).
     assert t.shape == (3, 4)
     if layout == (0, 1):
         assert t.layout is None
@@ -58,8 +58,8 @@ def test_wrapper_rejects_non_tensor():
 
 
 def test_wrapper_rejects_double_wrap():
-    """Wrapping an existing wrapper would silently confuse identity; the
-    constructor rejects it with a clear TypeError."""
+    """Wrapping an existing wrapper would silently confuse identity; the constructor rejects it with a clear
+    TypeError."""
     qd.init(arch=qd.x64)
     t = qd.tensor(qd.i32, shape=(4,))
     with pytest.raises(TypeError, match="Tensor.*requires"):

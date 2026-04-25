@@ -189,15 +189,13 @@ class FunctionDefTransformer:
 
     @staticmethod
     def _predeclare_struct_ndarrays(ctx: ASTTransformerFuncContext) -> None:
-        """Walk template args that are structs and pre-declare any
-        ``Ndarray`` attributes as kernel args (via ``decl_ndarray_arg``)
-        so they are registered before ``finalize_params``.  The resulting
-        ``AnyArray`` objects are cached on the global context for later
-        lookup by ``build_Attribute``.
+        """Walk template args that are structs and pre-declare any ``Ndarray`` attributes as kernel args (via
+        ``decl_ndarray_arg``) so they are registered before ``finalize_params``. The resulting ``AnyArray`` objects are
+        cached on the global context for later lookup by ``build_Attribute``.
 
         Also stores ``(arg_id, template_arg_idx, attr_chain)`` tuples in
-        ``ctx.global_context.struct_ndarray_launch_info`` so the launch
-        path can populate the corresponding slots in the launch context.
+        ``ctx.global_context.struct_ndarray_launch_info`` so the launch path can populate the corresponding slots in
+        the launch context.
         """
         from quadrants.lang.util import cook_dtype  # pylint: disable=C0415
 

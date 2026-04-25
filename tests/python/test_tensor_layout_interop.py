@@ -2,21 +2,17 @@
 
 Pins the canonical-view contract end-to-end on layout-tagged tensors, across both backends. The contract under test:
 
-- ``a.shape``, ``a.to_numpy().shape``, ``a.to_torch().shape``, and the
-  shape carried by ``a.to_dlpack()`` all report the **canonical** shape
-  (the same shape the user passed to ``qd.tensor(..., shape=)``),
-  regardless of ``_qd_layout``.
+- ``a.shape``, ``a.to_numpy().shape``, ``a.to_torch().shape``, and the shape carried by ``a.to_dlpack()`` all report
+  the **canonical** shape (the same shape the user passed to ``qd.tensor(..., shape=)``), regardless of
+  ``_qd_layout``.
 - Element values match canonical indexing in every accessor.
-- ``from_numpy(canonical_arr)`` round-trips: ``to_numpy()`` of the
-  loaded ndarray equals the input.
-- ``a.grad`` accessors mirror the primal: same canonical view, same
-  element values written by the kernel.
-- DLPack carries non-trivial strides on layout-tagged ndarrays (the
-  layout shows up as a stride pattern, not a shape permutation).
+- ``from_numpy(canonical_arr)`` round-trips: ``to_numpy()`` of the loaded ndarray equals the input.
+- ``a.grad`` accessors mirror the primal: same canonical view, same element values written by the kernel.
+- DLPack carries non-trivial strides on layout-tagged ndarrays (the layout shows up as a stride pattern, not a shape
+  permutation).
 
-A small Genesis-shaped smoke test at the bottom exercises the
-``(n_dofs, _B)`` + ``layout=(1, 0)`` combination that motivates this
-work, ensuring it round-trips through both numpy and torch.
+A small Genesis-shaped smoke test at the bottom exercises the ``(n_dofs, _B)`` + ``layout=(1, 0)`` combination that
+motivates this work, ensuring it round-trips through both numpy and torch.
 """
 
 import itertools
@@ -38,9 +34,8 @@ BACKEND_IDS = ["field", "ndarray"]
 
 
 def _expected_canonical(shape):
-    """Return a numpy array whose entry at canonical index ``ci`` is a
-    distinct integer encoding ``ci`` (large enough to catch single-axis
-    swaps). Matches the kernel-side fill below."""
+    """Return a numpy array whose entry at canonical index ``ci`` is a distinct integer encoding ``ci`` (large enough
+    to catch single-axis swaps). Matches the kernel-side fill below."""
     out = np.zeros(shape, dtype=np.int32)
     base = 1
     for dim in reversed(shape):
@@ -58,14 +53,12 @@ def _expected_canonical(shape):
 
 
 def _make_fill_kernel(shape, backend):
-    """Build a kernel that fills its argument with the same canonical
-    values as :func:`_expected_canonical`, using explicit per-axis
-    ``x[i, j, ...]`` indexing (one kernel per rank).
+    """Build a kernel that fills its argument with the same canonical values as :func:`_expected_canonical`, using
+    explicit per-axis ``x[i, j, ...]`` indexing (one kernel per rank).
 
     The complementary single-Vector form ``x[I]`` (with ``I`` from ``qd.grouped(...)``) is exercised separately in
-    :func:`test_grouped_vector_subscript_canonical_view_*` below; both
-    forms must agree on canonical-view semantics for layout-tagged
-    ndarrays.
+    :func:`test_grouped_vector_subscript_canonical_view_*` below; both forms must agree on canonical-view semantics
+    for layout-tagged ndarrays.
     """
     coeffs = []
     rolling = 1
@@ -100,8 +93,8 @@ def _make_fill_kernel(shape, backend):
     return fill
 
 
-# Representative layouts: identity, full reverse, an inner-axis swap, and
-# a non-trivial cyclic shift. Keeping the set small so the cross-product (backend × layout × accessor) stays cheap.
+# Representative layouts: identity, full reverse, an inner-axis swap, and a non-trivial cyclic shift. Keeping the set
+# small so the cross-product (backend × layout × accessor) stays cheap.
 _LAYOUTS_RANK2 = [(0, 1), (1, 0)]
 _LAYOUTS_RANK3 = [(0, 1, 2), (2, 1, 0), (2, 0, 1), (1, 2, 0)]
 
@@ -170,9 +163,8 @@ def test_from_numpy_to_numpy_roundtrip_rank3(backend, layout):
 @pytest.mark.parametrize("layout", _LAYOUTS_RANK2)
 @test_utils.test(arch=qd.cpu)
 def test_from_numpy_rejects_physical_shape(backend, layout):
-    """Passing the *physical* shape (instead of canonical) on a
-    layout-tagged ndarray must raise a clear shape-mismatch error,
-    not silently scramble the data."""
+    """Passing the *physical* shape (instead of canonical) on a layout-tagged ndarray must raise a clear shape-mismatch
+    error, not silently scramble the data."""
     canonical = (3, 4)
     a = qd.tensor(qd.i32, shape=canonical, backend=backend, layout=layout)
     physical = tuple(canonical[axis] for axis in layout)
@@ -192,9 +184,8 @@ def test_from_numpy_rejects_physical_shape(backend, layout):
 @pytest.mark.parametrize("layout", _LAYOUTS_RANK2)
 @test_utils.test(arch=qd.cpu)
 def test_to_dlpack_canonical_shape_rank2(backend, layout):
-    """``from_dlpack(t.to_dlpack())`` must report the canonical shape and
-    canonical-indexed values, regardless of ``_qd_layout`` / SNode
-    ``order=``. Both backends are required to behave identically."""
+    """``from_dlpack(t.to_dlpack())`` must report the canonical shape and canonical-indexed values, regardless of
+    ``_qd_layout`` / SNode ``order=``. Both backends are required to behave identically."""
     torch = pytest.importorskip("torch")
     canonical = (3, 4)
     a = qd.tensor(qd.i32, shape=canonical, backend=backend, layout=layout)
@@ -223,9 +214,8 @@ def test_to_dlpack_canonical_shape_rank3(backend, layout):
 
 @test_utils.test(arch=qd.cpu)
 def test_to_dlpack_layout_shows_up_as_strides_not_shape():
-    """The DLPack export must keep the canonical *shape* but reflect the
-    layout via non-contiguous *strides*; i.e. the resulting torch tensor
-    is logically transposed but physically still the same buffer."""
+    """The DLPack export must keep the canonical *shape* but reflect the layout via non-contiguous *strides*; i.e. the
+    resulting torch tensor is logically transposed but physically still the same buffer."""
     torch = pytest.importorskip("torch")
     canonical = (3, 4)
     a = qd.tensor(qd.i32, shape=canonical, backend=qd.Backend.NDARRAY, layout=(1, 0))
@@ -234,8 +224,8 @@ def test_to_dlpack_layout_shows_up_as_strides_not_shape():
 
     t = torch.utils.dlpack.from_dlpack(a.to_dlpack())
     assert tuple(t.shape) == canonical
-    # On a non-identity layout the dlpack view is by construction not
-    # contiguous in the canonical sense — calling ``.contiguous()`` is how the canonical layout would be materialised.
+    # On a non-identity layout the dlpack view is by construction not contiguous in the canonical sense — calling
+    # ``.contiguous()`` is how the canonical layout would be materialised.
     assert not t.is_contiguous()
     np.testing.assert_array_equal(t.contiguous().cpu().numpy(), _expected_canonical(canonical))
 
@@ -285,8 +275,8 @@ def test_grad_to_numpy_canonical_view_rank2(backend, layout):
 @pytest.mark.parametrize("layout", _LAYOUTS_RANK3)
 @test_utils.test(arch=qd.cpu)
 def test_grad_to_numpy_canonical_view_rank3(backend, layout):
-    """Rank-3 coverage for ``.grad`` under the canonical-view contract.
-    Guards against rank-2 symmetries hiding a permutation bug in the grad-tag propagation from :func:`_with_layout`."""
+    """Rank-3 coverage for ``.grad`` under the canonical-view contract. Guards against rank-2 symmetries hiding a
+    permutation bug in the grad-tag propagation from :func:`_with_layout`."""
     canonical = (2, 3, 4)
     a = qd.tensor(qd.f32, shape=canonical, backend=backend, layout=layout, needs_grad=True)
     assert a.grad is not None
@@ -321,8 +311,8 @@ def test_grad_to_numpy_canonical_view_rank3(backend, layout):
 
 
 # ----------------------------------------------------------------------------
-# Identity-layout / no-layout paths must remain byte-identical to legacy
-# (no extra allocation, no transpose, no behavioural drift).
+# Identity-layout / no-layout paths must remain byte-identical to legacy (no extra allocation, no transpose, no
+# behavioural drift).
 # ----------------------------------------------------------------------------
 
 
@@ -349,20 +339,19 @@ def test_identity_layout_to_numpy_unchanged():
 
 
 # ----------------------------------------------------------------------------
-# Single-Vector subscript ``x[I]`` (from ``qd.grouped(...)``) must obey
-# the same canonical-view contract as multi-arg ``x[i, j, ...]`` on layout-tagged ndarrays.
+# Single-Vector subscript ``x[I]`` (from ``qd.grouped(...)``) must obey the same canonical-view contract as
+# multi-arg ``x[i, j, ...]`` on layout-tagged ndarrays.
 #
-# Regression for the AST rewrite in :func:`build_Subscript`: prior to
-# the fix, ``x[I]`` skipped the canonical→physical permutation because
-# the subscript arity (1) didn't match ``len(_qd_layout)`` (N). On a
-# permuted layout this silently wrote at canonical indices into a
-# differently-shaped physical buffer — out-of-bounds for any non-square canonical shape.
+# Regression for the AST rewrite in :func:`build_Subscript`: prior to the fix, ``x[I]`` skipped the
+# canonical→physical permutation because the subscript arity (1) didn't match ``len(_qd_layout)`` (N). On a permuted
+# layout this silently wrote at canonical indices into a differently-shaped physical buffer — out-of-bounds for any
+# non-square canonical shape.
 # ----------------------------------------------------------------------------
 
 
 def _make_grouped_ndrange_fill_kernel(shape, backend):
-    """Companion to :func:`_make_fill_kernel` that uses ``x[I]`` with
-    ``I`` coming from ``qd.grouped(qd.ndrange(...))``."""
+    """Companion to :func:`_make_fill_kernel` that uses ``x[I]`` with ``I`` coming from
+    ``qd.grouped(qd.ndrange(...))``."""
     coeffs = []
     rolling = 1
     for dim in reversed(shape):
@@ -428,10 +417,8 @@ def test_grouped_vector_subscript_canonical_view_rank3(backend, layout):
 @pytest.mark.parametrize("layout", _LAYOUTS_RANK2)
 @test_utils.test(arch=qd.cpu)
 def test_grouped_struct_for_vector_subscript_rank2(backend, layout):
-    """``for I in qd.grouped(x)`` is the other source of single-Vector
-    subscripts in real kernels — the loop var ``I`` has rank
-    ``len(x.shape)`` and is used as ``x[I]``. Pin canonical-view
-    behaviour here too."""
+    """``for I in qd.grouped(x)`` is the other source of single-Vector subscripts in real kernels — the loop var ``I``
+    has rank ``len(x.shape)`` and is used as ``x[I]``. Pin canonical-view behaviour here too."""
     canonical = (3, 4)
     a = qd.tensor(qd.i32, shape=canonical, backend=backend, layout=layout)
 
@@ -456,13 +443,10 @@ def test_grouped_struct_for_vector_subscript_rank2(backend, layout):
 @pytest.mark.parametrize("layout", list(itertools.permutations(range(3))))
 @test_utils.test(arch=qd.cpu)
 def test_grouped_struct_for_vector_subscript_rank3_all_permutations(backend, layout):
-    """Extend the ``for I in qd.grouped(x)`` coverage to every rank-3
-    permutation: this is where ``build_struct_for``'s
-    canonical-reorder-of-physical-indices fix can regress silently on
-    symmetric rank-2 layouts (``(0,1)`` / ``(1,0)`` are self-inverse, so
-    confusing ``layout`` with ``invperm(layout)`` still passes). Rank 3
-    has permutations that are **not** self-inverse (e.g. ``(1, 2, 0)``),
-    which catch that class of bug."""
+    """Extend the ``for I in qd.grouped(x)`` coverage to every rank-3 permutation: this is where
+    ``build_struct_for``'s canonical-reorder-of-physical-indices fix can regress silently on symmetric rank-2 layouts
+    (``(0,1)`` / ``(1,0)`` are self-inverse, so confusing ``layout`` with ``invperm(layout)`` still passes). Rank 3
+    has permutations that are **not** self-inverse (e.g. ``(1, 2, 0)``), which catch that class of bug."""
     canonical = (2, 3, 4)
     a = qd.tensor(qd.i32, shape=canonical, backend=backend, layout=layout)
 
@@ -485,12 +469,10 @@ def test_grouped_struct_for_vector_subscript_rank3_all_permutations(backend, lay
 
 
 # ----------------------------------------------------------------------------
-# Multi-target ``for i, j in x`` on a layout-tagged tensor: the runtime
-# delivers *physical* loop indices, but ``build_struct_for`` rebinds the
-# user names to canonical positions via the inverse permutation, so the
-# user's ``i`` is always canonical-axis-0 regardless of layout. Mirrors
-# the canonical->physical translation in :func:`build_Subscript`.
-# Verified on both backends so ``GS_ENABLE_NDARRAY``-style switching is transparent.
+# Multi-target ``for i, j in x`` on a layout-tagged tensor: the runtime delivers *physical* loop indices, but
+# ``build_struct_for`` rebinds the user names to canonical positions via the inverse permutation, so the user's ``i``
+# is always canonical-axis-0 regardless of layout. Mirrors the canonical->physical translation in
+# :func:`build_Subscript`. Verified on both backends so ``GS_ENABLE_NDARRAY``-style switching is transparent.
 # ----------------------------------------------------------------------------
 
 
@@ -528,8 +510,7 @@ def test_multi_target_struct_for_on_layout_tagged_tensor(backend, layout):
 @pytest.mark.parametrize("backend", BACKENDS, ids=BACKEND_IDS)
 @test_utils.test(arch=qd.cpu)
 def test_grouped_vector_subscript_matches_per_axis(backend):
-    """Cross-check: ``x[I]`` and ``x[i, j]`` must produce byte-identical
-    results on the same layout-tagged tensor."""
+    """Cross-check: ``x[I]`` and ``x[i, j]`` must produce byte-identical results on the same layout-tagged tensor."""
     canonical = (3, 5)
     layout = (1, 0)
     via_grouped = qd.tensor(qd.i32, shape=canonical, backend=backend, layout=layout)
@@ -544,10 +525,9 @@ def test_grouped_vector_subscript_matches_per_axis(backend):
 # ----------------------------------------------------------------------------
 # Genesis-shaped smoke test: (n_dofs, _B) with layout=(1, 0).
 #
-# This is the shape pattern used by linesearch / Mgrad / aref-style
-# tensors in the rigid solver. Migrating those into ``layout=(1, 0)``
-# is the immediate motivation for canonicalising every Python accessor;
-# this test exercises the round-trip end-to-end on both backends.
+# This is the shape pattern used by linesearch / Mgrad / aref-style tensors in the rigid solver. Migrating those
+# into ``layout=(1, 0)`` is the immediate motivation for canonicalising every Python accessor; this test exercises
+# the round-trip end-to-end on both backends.
 # ----------------------------------------------------------------------------
 
 
@@ -588,12 +568,10 @@ def test_genesis_shaped_dofs_batch_layout(backend):
 
 
 # ----------------------------------------------------------------------------
-# Pickle: as of stork-19 ``qd.tensor()`` returns a ``qd.Tensor`` wrapper,
-# whose ``__reduce__`` round-trips via ``to_numpy()`` (the canonical view)
-# and rebuilds a fresh wrapper through the factory. The factory is given
-# the original ``layout=`` kwarg, so the restored tensor preserves the
-# layout *and* its canonical-indexed values match the original. See 8.7
-# in ``perso_hugh/doc/quadrants-tensor.md`` for rationale.
+# Pickle: as of stork-19 ``qd.tensor()`` returns a ``qd.Tensor`` wrapper, whose ``__reduce__`` round-trips via
+# ``to_numpy()`` (the canonical view) and rebuilds a fresh wrapper through the factory. The factory is given the
+# original ``layout=`` kwarg, so the restored tensor preserves the layout *and* its canonical-indexed values match
+# the original. See 8.7 in ``perso_hugh/doc/quadrants-tensor.md`` for rationale.
 # ----------------------------------------------------------------------------
 
 
@@ -617,12 +595,11 @@ def test_pickle_layout_tagged_ndarray_roundtrip_preserves_layout(layout):
 
 
 # ----------------------------------------------------------------------------
-# .fill(val) and copy_from(other): the two non-kernel Python entry points
-# that mutate an ndarray via quadrants-internal kernels. fill(val) uses a
-# C++ bulk-fill on x64/cuda so it's layout-agnostic by construction, but
-# pin the observable behaviour so a future switch to the kernel path
-# doesn't regress silently. copy_from expects the physical shapes to
-# match (enforced in ``Ndarray.copy_from``), so we test the natural use case: two ndarrays with the same layout.
+# .fill(val) and copy_from(other): the two non-kernel Python entry points that mutate an ndarray via
+# quadrants-internal kernels. fill(val) uses a C++ bulk-fill on x64/cuda so it's layout-agnostic by construction,
+# but pin the observable behaviour so a future switch to the kernel path doesn't regress silently. copy_from expects
+# the physical shapes to match (enforced in ``Ndarray.copy_from``), so we test the natural use case: two ndarrays
+# with the same layout.
 # ----------------------------------------------------------------------------
 
 
@@ -652,9 +629,9 @@ def test_copy_from_matching_layout(layout):
 
 
 # ----------------------------------------------------------------------------
-# .grad.to_dlpack() on a layout-tagged ndarray must carry the canonical
-# shape too (grad-tag propagation + dlpack layout path working together).
-# Hardening: ensures the permuted-strides code path is exercised on the grad buffer, not only the primal.
+# .grad.to_dlpack() on a layout-tagged ndarray must carry the canonical shape too (grad-tag propagation + dlpack
+# layout path working together). Hardening: ensures the permuted-strides code path is exercised on the grad buffer,
+# not only the primal.
 # ----------------------------------------------------------------------------
 
 
@@ -683,11 +660,10 @@ def test_grad_to_dlpack_canonical_view_rank2(layout):
 
 
 # ----------------------------------------------------------------------------
-# Mixed kernel arguments: a layout-tagged ndarray and an untagged ndarray
-# of the same canonical shape, written in the same kernel. This is the
-# Genesis-migration pattern ("this one solver tensor is layout=..., the
-# rest stay default") and must Just Work: canonical indices on either
-# side produce canonical-view results through ``to_numpy()``.
+# Mixed kernel arguments: a layout-tagged ndarray and an untagged ndarray of the same canonical shape, written in
+# the same kernel. This is the Genesis-migration pattern ("this one solver tensor is layout=..., the rest stay
+# default") and must Just Work: canonical indices on either side produce canonical-view results through
+# ``to_numpy()``.
 # ----------------------------------------------------------------------------
 
 

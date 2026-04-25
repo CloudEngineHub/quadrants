@@ -1,10 +1,9 @@
-"""Layout + needs_grad combination: canonical indexing on the grad buffer
-must keep working for non-identity physical layouts on both backends.
+"""Layout + needs_grad combination: canonical indexing on the grad buffer must keep working for non-identity physical
+layouts on both backends.
 
-Pre-impl POC Q3b established this works on FIELD (axis_seq propagation
-to the grad SNode); the NDARRAY equivalent is the ``_qd_layout`` tag
-being copied onto the companion grad ndarray. These tests pin both
-contracts in the suite so an upstream regression surfaces immediately.
+Pre-impl POC Q3b established this works on FIELD (axis_seq propagation to the grad SNode); the NDARRAY equivalent is
+the ``_qd_layout`` tag being copied onto the companion grad ndarray. These tests pin both contracts in the suite so
+an upstream regression surfaces immediately.
 """
 
 import itertools
@@ -22,9 +21,8 @@ BACKEND_IDS = ["field", "ndarray"]
 def _to_numpy_shape(canonical, layout, backend):
     """Shape of ``a.to_numpy()`` after a layout-tagged allocation.
 
-    Both FIELD and NDARRAY return the canonical view from ``to_numpy()``;
-    the layout is purely an internal storage hint. The signature is kept
-    for backwards compatibility with the rest of this file.
+    Both FIELD and NDARRAY return the canonical view from ``to_numpy()``; the layout is purely an internal storage
+    hint. The signature is kept for backwards compatibility with the rest of this file.
     """
     del layout, backend  # the canonical view is the same on both backends
     return canonical
@@ -178,10 +176,9 @@ def test_layout_grad_all_rank3_permutations(layout, backend):
 
 
 # ----------------------------------------------------------------------------
-# NDARRAY-only: the _qd_layout tag is the NDARRAY-side mechanism for
-# carrying the layout to kernels and to the companion grad. FIELD uses a
-# different storage mechanism (axis_seq inside the SNode tree); see the
-# rank-2/3 kernel-roundtrip tests above for the FIELD-side equivalent of this contract.
+# NDARRAY-only: the _qd_layout tag is the NDARRAY-side mechanism for carrying the layout to kernels and to the
+# companion grad. FIELD uses a different storage mechanism (axis_seq inside the SNode tree); see the rank-2/3
+# kernel-roundtrip tests above for the FIELD-side equivalent of this contract.
 # ----------------------------------------------------------------------------
 
 

@@ -1,19 +1,16 @@
 """Tests for the AnyArray subscript-rewrite.
 
-Covers the metadata-flow + AST-rewrite plumbing only. To exercise the
-rewrite end-to-end without going through the public ``qd.tensor``
-factory, this file uses the internal ``_with_layout`` helper to tag an
-ndarray allocated at the *physical* shape with a canonical-axis layout.
+Covers the metadata-flow + AST-rewrite plumbing only. To exercise the rewrite end-to-end without going through the
+public ``qd.tensor`` factory, this file uses the internal ``_with_layout`` helper to tag an ndarray allocated at the
+*physical* shape with a canonical-axis layout.
 
 Conventions:
 - The ndarray is allocated at the **physical** shape, then tagged.
-- ``ndarray.shape`` reports the **canonical** shape (the inverse
-  permutation of the physical shape under the tag).
-- Inside a kernel, indices are interpreted as **canonical**: ``x[i, j]``
-  means logical index ``(i, j)`` and the rewrite turns it into physical
-  ``(j, i)`` for ``layout=(1, 0)``.
-- ``to_numpy()`` returns the **canonical** view (a transposed view of
-  the underlying physical buffer; no data movement on the kernel side).
+- ``ndarray.shape`` reports the **canonical** shape (the inverse permutation of the physical shape under the tag).
+- Inside a kernel, indices are interpreted as **canonical**: ``x[i, j]`` means logical index ``(i, j)`` and the
+  rewrite turns it into physical ``(j, i)`` for ``layout=(1, 0)``.
+- ``to_numpy()`` returns the **canonical** view (a transposed view of the underlying physical buffer; no data movement
+  on the kernel side).
 """
 
 import itertools
@@ -64,7 +61,7 @@ def test_subscript_identity_layout_is_byte_identical():
 
 
 # ----------------------------------------------------------------------------
-# Non-identity layout: AST rewrite turns canonical indexing into permuted physical indexing.
+# Non-identity layout: AST rewrite turns canonical indexing into permuted physical indexing
 # ----------------------------------------------------------------------------
 
 
@@ -74,8 +71,8 @@ def test_subscript_rank2_transpose_layout_matches_transposed_storage():
 
     Allocate two ndarrays:
     - direct: canonical (3, 4); kernel writes x[i, j] in canonical order.
-    - tagged: physical (4, 3); tagged with layout=(1, 0) so canonical shape is (3, 4).
-      Kernel iterates the canonical (3, 4) range and writes x[i, j]. Rewrite turns this into physical[j, i].
+    - tagged: physical (4, 3); tagged with layout=(1, 0) so canonical shape is (3, 4). Kernel iterates the canonical
+      (3, 4) range and writes x[i, j]. Rewrite turns this into physical[j, i].
     Both ``to_numpy()`` calls return the canonical view, so the two arrays must compare equal element-for-element.
     """
     M, N = 3, 4

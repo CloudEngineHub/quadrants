@@ -1,16 +1,14 @@
 """Higher-rank coverage for layout-tagged ndarrays.
 
-an earlier change's parametrized rank-3 test exercises every permutation, but only on
-a single canonical cell. an earlier change widens that to:
+an earlier change's parametrized rank-3 test exercises every permutation, but only on a single canonical cell.
+an earlier change widens that to:
 
 - Rank 4: every permutation, full-grid value comparison.
 - Rank 5 and 6: spot checks (24 / 720 perms is too many to enumerate).
 - AugAssign + grad on a rank-4 layout-tagged ndarray.
 
-The Quadrants ``quadrants_max_num_indices`` is 12, so up to 12-D should
-work in principle; in practice ndrange of higher dimensions becomes
-expensive, and 6-D is enough to demonstrate the rewrite scales linearly
-with rank.
+The Quadrants ``quadrants_max_num_indices`` is 12, so up to 12-D should work in principle; in practice ndrange of
+higher dimensions becomes expensive, and 6-D is enough to demonstrate the rewrite scales linearly with rank.
 """
 
 import itertools
@@ -25,8 +23,7 @@ from tests import test_utils
 
 
 def _allocate_with_layout(canonical_shape, layout, dtype=qd.i32, needs_grad=False):
-    """Helper: allocate at the *physical* shape implied by canonical_shape +
-    layout, then tag."""
+    """Helper: allocate at the *physical* shape implied by canonical_shape + layout, then tag."""
     physical_shape = tuple(canonical_shape[axis] for axis in layout)
     a = qd.tensor(dtype, shape=physical_shape, backend=qd.Backend.NDARRAY, needs_grad=needs_grad)
     _with_layout(a, layout)
@@ -183,9 +180,8 @@ def test_layout_rank4_tagged_matches_direct_permuted():
 
     @qd.kernel
     def fill_direct(x: qd.types.ndarray()):
-        # Iterate over *physical* axes; map back to canonical for the value.
-        # We index physical[a, b, c, d] -> canonical position is the inverse.
-        # For layout=(2, 0, 3, 1): physical axis 0 is canonical axis 2, etc.
+        # Iterate over *physical* axes; map back to canonical for the value. We index physical[a, b, c, d] ->
+        # canonical position is the inverse. For layout=(2, 0, 3, 1): physical axis 0 is canonical axis 2, etc.
         # So canonical i (axis 0) is physical axis 1, canonical j (axis 1) is physical axis 3,
         # canonical k (axis 2) is physical axis 0, canonical l (axis 3) is physical axis 2.
         for a, b, c, d in qd.ndrange(*physical):
@@ -197,10 +193,9 @@ def test_layout_rank4_tagged_matches_direct_permuted():
 
     fill_tagged(tagged)
     fill_direct(direct)
-    # ``tagged.to_numpy()`` is canonical-shaped (M, N, ...); ``direct``
-    # holds the same canonical data but laid out at the *physical* shape.
-    # Transposing ``direct`` by the inverse permutation recovers the
-    # canonical view, which must then equal ``tagged.to_numpy()``.
+    # ``tagged.to_numpy()`` is canonical-shaped (M, N, ...); ``direct`` holds the same canonical data but laid out at
+    # the *physical* shape. Transposing ``direct`` by the inverse permutation recovers the canonical view, which must
+    # then equal ``tagged.to_numpy()``.
     invperm = [0] * len(layout)
     for src, dst in enumerate(layout):
         invperm[dst] = src

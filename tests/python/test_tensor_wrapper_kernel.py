@@ -2,19 +2,15 @@
 
 Pins two contracts:
 
-1. **Cache stability under wrapping.** Calling the same kernel with a
-   ``Tensor(impl)`` wrapper and with the bare ``impl`` must produce
-   exactly *one* compiled-kernel cache entry, not two. This is gotcha A
-   from the design doc (§8.11): the unwrap hook must run *before*
-   ``TemplateMapper.lookup`` computes ``id``-based hashes.
+1. **Cache stability under wrapping.** Calling the same kernel with a ``Tensor(impl)`` wrapper and with the bare
+   ``impl`` must produce exactly *one* compiled-kernel cache entry, not two. This is gotcha A from the design doc
+   (§8.11): the unwrap hook must run *before* ``TemplateMapper.lookup`` computes ``id``-based hashes.
 
-2. **Functional equivalence.** A kernel called with a wrapper must read
-   and write the same memory as the same kernel called with the bare
-   impl, on both backends. No data corruption, no shape confusion.
+2. **Functional equivalence.** A kernel called with a wrapper must read and write the same memory as the same kernel
+   called with the bare impl, on both backends. No data corruption, no shape confusion.
 
-Stork-19 flipped ``qd.tensor()`` to return wrappers, so to construct a
-*bare* impl for these tests we drop down to ``qd.field`` / ``qd.ndarray``
-directly. Wrapping then goes through ``qd.Tensor(impl)``.
+Stork-19 flipped ``qd.tensor()`` to return wrappers, so to construct a *bare* impl for these tests we drop down to
+``qd.field`` / ``qd.ndarray`` directly. Wrapping then goes through ``qd.Tensor(impl)``.
 """
 
 import pytest
@@ -55,9 +51,7 @@ def test_kernel_accepts_wrapper_and_writes_correctly(backend):
 @pytest.mark.parametrize("backend", BACKENDS, ids=BACKEND_IDS)
 @test_utils.test(arch=qd.cpu)
 def test_kernel_cache_no_fragmentation_under_wrapping(backend):
-    """Calling with bare impl and with ``Tensor(impl)`` must hit the same
-    cache entry: gotcha A regression test.
-    """
+    """Calling with bare impl and with ``Tensor(impl)`` must hit the same cache entry: gotcha A regression test."""
 
     annotation = qd.template() if backend is qd.Backend.FIELD else qd.types.ndarray()
 
@@ -91,9 +85,7 @@ def test_kernel_cache_no_fragmentation_under_wrapping(backend):
 @pytest.mark.parametrize("backend", BACKENDS, ids=BACKEND_IDS)
 @test_utils.test(arch=qd.cpu)
 def test_kernel_wrapper_round_trips_through_to_numpy(backend):
-    """End-to-end: write via wrapper, read via wrapper.to_numpy() (which
-    forwards to impl.to_numpy()), values match.
-    """
+    """End-to-end: write via wrapper, read via wrapper.to_numpy() (which forwards to impl.to_numpy()), values match."""
 
     annotation = qd.template() if backend is qd.Backend.FIELD else qd.types.ndarray()
 

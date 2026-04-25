@@ -6,8 +6,7 @@ regardless of which impl it contains.
 
 Promoted to ``qd.Tensor`` in ``hp/tensor-stork-19``: the class is now the public name, doubles as the polymorphic
 kernel-arg annotation (``def f(x: qd.Tensor): ...``), and is what ``qd.tensor()``, ``qd.Vector.tensor()``,
-``qd.Matrix.tensor()`` return. Bare impls are still reachable via ``qd.field``, ``qd.ndarray``,
-``qd.Vector.field`` etc.
+``qd.Matrix.tensor()`` return. Bare impls are still reachable via ``qd.field``, ``qd.ndarray``, ``qd.Vector.field`` etc.
 
 Surface:
 

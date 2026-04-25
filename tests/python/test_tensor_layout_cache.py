@@ -1,14 +1,12 @@
 """Layout participates in the kernel cache key.
 
-an earlier change plumbed the ``_qd_layout`` slot through ``TemplateMapper`` features,
-making it part of the kernel cache key automatically. This file pins
-that contract down via direct ``Kernel.mapper.mapping`` inspection so a
+an earlier change plumbed the ``_qd_layout`` slot through ``TemplateMapper`` features, making it part of the kernel
+cache key automatically. This file pins that contract down via direct ``Kernel.mapper.mapping`` inspection so a
 future refactor that drops the slot would surface immediately.
 
-Why this matters: if two different layouts shared a single compiled
-kernel, the AST subscript rewrite would happen exactly once (for the
-layout chosen at first compile time), and subsequent calls with a
-different layout would either silently mis-index or crash.
+Why this matters: if two different layouts shared a single compiled kernel, the AST subscript rewrite would happen
+exactly once (for the layout chosen at first compile time), and subsequent calls with a different layout would either
+silently mis-index or crash.
 """
 
 import quadrants as qd
@@ -55,9 +53,9 @@ def test_two_layouts_produce_two_cache_entries():
 def test_untagged_vs_identity_tagged_are_different_cache_entries():
     """layout=None and layout=(0, 1) are distinct cache entries.
 
-    They produce byte-identical IR (the AST hook short-circuits on
-    identity), but they're keyed differently because ``None != (0, 1)``.
-    Documenting this so a future "normalise identity to None" refactor is a deliberate decision rather than an accident.
+    They produce byte-identical IR (the AST hook short-circuits on identity), but they're keyed differently because
+    ``None != (0, 1)``. Documenting this so a future "normalise identity to None" refactor is a deliberate decision
+    rather than an accident.
     """
 
     @qd.kernel
@@ -152,9 +150,8 @@ def test_layout_is_trailing_feature_slot():
 
 @test_utils.test(arch=qd.cpu)
 def test_ndim_distinct_in_cache_key():
-    """Distinct kernel objects keep their mappers separate; verify a rank-1
-    and rank-2 (layout-tagged) ndarray each get exactly one cache entry on
-    their own kernel — no cross-pollution."""
+    """Distinct kernel objects keep their mappers separate; verify a rank-1 and rank-2 (layout-tagged) ndarray each get
+    exactly one cache entry on their own kernel — no cross-pollution."""
 
     @qd.kernel
     def k1d(x: qd.types.ndarray()):

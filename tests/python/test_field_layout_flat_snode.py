@@ -1,9 +1,8 @@
 """Tests for the flat-SNode field layout implementation.
 
-Validates that ``qd.field(..., order=...)`` produces a single rank-N dense
-SNode (not N nested rank-1 SNodes), uses AST subscript rewrites instead
-of nested SNode lookup, and preserves identical semantics for host and
-kernel access, ``get_addr``, ``to_dlpack``, and autograd.
+Validates that ``qd.field(..., order=...)`` produces a single rank-N dense SNode (not N nested rank-1 SNodes), uses
+AST subscript rewrites instead of nested SNode lookup, and preserves identical semantics for host and kernel access,
+``get_addr``, ``to_dlpack``, and autograd.
 """
 
 import itertools
@@ -38,8 +37,8 @@ def _all_non_identity_perms(dim):
 @pytest.mark.parametrize("layout", [(1, 0), (0, 1)])
 @test_utils.test(arch=qd.cpu)
 def test_flat_snode_rank2(layout):
-    """A field with order= must produce exactly ONE dense SNode above its
-    place node — not ``dim`` nested rank-1 SNodes."""
+    """A field with order= must produce exactly ONE dense SNode above its place node — not ``dim`` nested rank-1
+    SNodes."""
     X, Y = 5, 7
     order = _order_string(layout)
     f = qd.field(qd.f32, shape=(X, Y), order=order)
@@ -127,8 +126,8 @@ def test_kernel_host_roundtrip_rank2(layout):
 @pytest.mark.parametrize("layout", [(1, 0)])
 @test_utils.test(arch=qd.cpu)
 def test_get_addr_matches_default_layout(layout):
-    """Physical address pattern of layout-tagged field must match a
-    default-layout field whose shape is the physical (permuted) shape."""
+    """Physical address pattern of layout-tagged field must match a default-layout field whose shape is the physical
+    (permuted) shape."""
     X, Y = 5, 7
     order = _order_string(layout)
     f_layout = qd.field(qd.i32, shape=(X, Y), order=order)
@@ -279,8 +278,8 @@ def test_tensor_field_backend_layout():
 
 @test_utils.test(arch=qd.cpu)
 def test_grad_field_has_flat_snode():
-    """The gradient field of a layout-tagged field should also have a flat
-    SNode (same depth) and be tagged with _qd_layout."""
+    """The gradient field of a layout-tagged field should also have a flat SNode (same depth) and be tagged with
+    _qd_layout."""
     X, Y = 5, 7
     f = qd.field(qd.f32, shape=(X, Y), order="ji", needs_grad=True)
     qd.sync()

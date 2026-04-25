@@ -1,25 +1,17 @@
-"""Aliasing of layout metadata across the supported Quadrants aliasing
-patterns.
+"""Aliasing of layout metadata across the supported Quadrants aliasing patterns.
 
-Note: in-kernel rebinding (``y = x; y[i, j] = ...``) is **not** supported
-by Quadrants for any ndarray — that's an upstream limitation not specific
-to tensor (it raises ``QuadrantsTypeError: Invalid constant
-scalar data type: <class 'quadrants.lang.any_array.AnyArray'>``). So this
-file pins down the aliasing patterns Quadrants *does* support and that
-tensor layout metadata must propagate through:
+Note: in-kernel rebinding (``y = x; y[i, j] = ...``) is **not** supported by Quadrants for any ndarray — that's an
+upstream limitation not specific to tensor (it raises ``QuadrantsTypeError: Invalid constant scalar data type:
+<class 'quadrants.lang.any_array.AnyArray'>``). So this file pins down the aliasing patterns Quadrants *does* support
+and that tensor layout metadata must propagate through:
 
-1. Same ``Ndarray`` passed twice to the same kernel — two distinct
-   ``AnyArray`` instances inside the kernel, both must carry the same
-   layout.
-2. Same ``Ndarray`` shared across two consecutive kernel calls — the
-   layout cannot leak or get lost between calls.
-3. Repeated access through ``.grad`` inside a single kernel — every call
-   must return an ``AnyArray`` with the same layout (an earlier change covered the
-   single-access path; this exercises the repeated-access cache).
-4. The same ``Ndarray`` via two different kernel signatures (one
-   annotated as ``qd.types.ndarray()`` directly, one via a wrapper) —
-   metadata must travel via the runtime feature tuple, not the
-   annotation.
+1. Same ``Ndarray`` passed twice to the same kernel — two distinct ``AnyArray`` instances inside the kernel, both must
+   carry the same layout.
+2. Same ``Ndarray`` shared across two consecutive kernel calls — the layout cannot leak or get lost between calls.
+3. Repeated access through ``.grad`` inside a single kernel — every call must return an ``AnyArray`` with the same
+   layout (an earlier change covered the single-access path; this exercises the repeated-access cache).
+4. The same ``Ndarray`` via two different kernel signatures (one annotated as ``qd.types.ndarray()`` directly, one via
+   a wrapper) — metadata must travel via the runtime feature tuple, not the annotation.
 """
 
 import numpy as np
@@ -154,8 +146,7 @@ def test_layout_consistent_across_different_kernel_signatures():
 
 @test_utils.test(arch=qd.cpu)
 def test_layout_isolated_between_args():
-    """One tagged + one untagged ndarray in the same kernel: each carries
-    its own (or no) layout."""
+    """One tagged + one untagged ndarray in the same kernel: each carries its own (or no) layout."""
     M, N = 2, 3
     untagged = qd.tensor(qd.i32, shape=(M, N), backend=qd.Backend.NDARRAY)  # canonical (M, N)
     tagged = _allocate_layout10(M, N)
@@ -167,9 +158,8 @@ def test_layout_isolated_between_args():
             t[i, j] = i * 10 + j  # rewrite to t[j, i]
 
     k(untagged, tagged)
-    # Both ndarrays were filled by the same kernel writing canonical
-    # values; both ``to_numpy()`` calls return canonical views, so the
-    # numpy arrays compare equal element-for-element regardless of the tagged ndarray's physical layout.
+    # Both ndarrays were filled by the same kernel writing canonical values; both ``to_numpy()`` calls return canonical
+    # views, so the numpy arrays compare equal element-for-element regardless of the tagged ndarray's physical layout.
     np.testing.assert_array_equal(untagged.to_numpy(), tagged.to_numpy())
 
 

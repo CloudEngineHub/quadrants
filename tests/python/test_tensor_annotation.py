@@ -1,9 +1,7 @@
 """Tests for ``qd.Tensor``: value-dispatch kernel-argument annotation.
 
-A kernel parameter annotated with ``qd.Tensor`` accepts either a Field
-(handled like ``qd.template()``) or an Ndarray (handled like
-``qd.types.ndarray()``). The same kernel object compiles distinct cache
-entries for each branch.
+A kernel parameter annotated with ``qd.Tensor`` accepts either a Field (handled like ``qd.template()``) or an Ndarray
+(handled like ``qd.types.ndarray()``). The same kernel object compiles distinct cache entries for each branch.
 """
 
 import numpy as np
@@ -19,11 +17,9 @@ from tests import test_utils
 
 
 def test_tensor_is_a_class():
-    """As of stork-19, ``qd.Tensor`` is the wrapper *class* (not a
-    Template singleton). Used both as kernel-arg annotation and as a
-    constructor: ``qd.Tensor(impl)`` produces a wrapper. The annotation
-    branch in ``_func_base.py`` recognises ``annotation is qd.Tensor``
-    explicitly.
+    """As of stork-19, ``qd.Tensor`` is the wrapper *class* (not a Template singleton). Used both as kernel-arg
+    annotation and as a constructor: ``qd.Tensor(impl)`` produces a wrapper. The annotation branch in
+    ``_func_base.py`` recognises ``annotation is qd.Tensor`` explicitly.
     """
     assert isinstance(qd.Tensor, type)
 
@@ -39,8 +35,8 @@ def test_tensor_factory_returns_wrapper():
 
 @test_utils.test(arch=qd.cpu)
 def test_tensor_double_wrap_rejected():
-    """``qd.Tensor`` requires an Ndarray or Field impl; rejects wrapping
-    another wrapper to avoid silent identity confusion."""
+    """``qd.Tensor`` requires an Ndarray or Field impl; rejects wrapping another wrapper to avoid silent identity
+    confusion."""
     a = qd.tensor(qd.i32, shape=(4,), backend=qd.Backend.NDARRAY)
     with pytest.raises(TypeError):
         qd.Tensor(a)
@@ -169,8 +165,8 @@ BACKEND_IDS = ["field", "ndarray"]
 
 @pytest.mark.parametrize("backend", BACKENDS, ids=BACKEND_IDS)
 def test_tensor_dispatch_vector_element(backend):
-    """qd.Tensor must accept Vector-element tensors on both backends and
-    let kernels write each component through canonical indexing."""
+    """qd.Tensor must accept Vector-element tensors on both backends and let kernels write each component through
+    canonical indexing."""
     qd.init(arch=qd.x64)
     a = qd.Vector.tensor(3, qd.f32, shape=(4,), backend=backend)
 
@@ -270,28 +266,22 @@ def test_module_level_qd_tensor_kernel(backend, layout):
 
 @test_utils.test()
 def test_module_level_qd_tensor_kernel_all_combos_share_decl():
-    """The same module-level kernel object, called against all four
-    (backend × layout) combos, must produce correct canonical values
-    *and* not fragment the JIT cache beyond what each backend genuinely
-    needs.
+    """The same module-level kernel object, called against all four (backend × layout) combos, must produce correct
+    canonical values *and* not fragment the JIT cache beyond what each backend genuinely needs.
 
     Cache-entry expectations (per backend):
 
-    - **Ndarray**: layout is fused into the kernel body at compile time
-      via the AST rewrite, so each layout needs its own compiled entry
-      (2 entries for 2 layouts).
-    - **Field**: layout is encoded in the SNode order and dispatched at
-      runtime, so the same compiled kernel handles every layout
-      (1 entry covers both layouts).
+    - **Ndarray**: layout is fused into the kernel body at compile time via the AST rewrite, so each layout needs its
+      own compiled entry (2 entries for 2 layouts).
+    - **Field**: layout is encoded in the SNode order and dispatched at runtime, so the same compiled kernel handles
+      every layout (1 entry covers both layouts).
 
-    Total expected: 3 entries for 4 combos. Anything higher means the
-    wrapper-unwrap hook is leaking wrapper identity into the cache key
-    and re-fragmenting per call. Anything lower on the ndarray side
-    would mean two layouts collided onto one compiled body, which the
-    value asserts above already catch independently.
+    Total expected: 3 entries for 4 combos. Anything higher means the wrapper-unwrap hook is leaking wrapper identity
+    into the cache key and re-fragmenting per call. Anything lower on the ndarray side would mean two layouts collided
+    onto one compiled body, which the value asserts above already catch independently.
 
-    Mirrors the Genesis pattern after the stork-20 ``set_gravity``
-    collapse: one decl, multiple backend/layout instances at runtime.
+    Mirrors the Genesis pattern after the stork-20 ``set_gravity`` collapse: one decl, multiple backend/layout
+    instances at runtime.
     """
     expected = _expected_canonical()
     n_before = len(_module_level_fill_2d._primal.mapper.mapping)

@@ -1,8 +1,7 @@
 """Tests for ``layout=`` on the ``qd.tensor()`` factory.
 
-Phase 2 ships layout support for the field backend only. Non-identity
-layouts on the ndarray backend raise NotImplementedError until the AST
-rewrite lands in an earlier change.
+Phase 2 ships layout support for the field backend only. Non-identity layouts on the ndarray backend raise
+NotImplementedError until the AST rewrite lands in an earlier change.
 """
 
 import itertools
@@ -74,8 +73,8 @@ BACKEND_IDS = ["field", "ndarray"]
 @pytest.mark.parametrize("backend", BACKENDS, ids=BACKEND_IDS)
 @pytest.mark.parametrize("layout", list(itertools.permutations(range(3))))
 def test_layout_rank3_all_permutations(layout, backend):
-    """Every rank-3 permutation must allocate without error on both
-    backends, and ``shape`` is canonical regardless of layout."""
+    """Every rank-3 permutation must allocate without error on both backends, and ``shape`` is canonical regardless of
+    layout."""
     qd.init(arch=qd.x64)
     canonical = (2, 3, 4)
     a = qd.tensor(qd.f32, shape=canonical, backend=backend, layout=layout)
@@ -85,20 +84,18 @@ def test_layout_rank3_all_permutations(layout, backend):
 @pytest.mark.parametrize("backend", BACKENDS, ids=BACKEND_IDS)
 @pytest.mark.parametrize("layout", list(itertools.permutations(range(4))))
 def test_layout_rank4_all_permutations(layout, backend):
-    """Every rank-4 permutation must allocate without error on both
-    backends, and ``shape`` is canonical regardless of layout."""
+    """Every rank-4 permutation must allocate without error on both backends, and ``shape`` is canonical regardless of
+    layout."""
     qd.init(arch=qd.x64)
     canonical = (2, 3, 4, 5)
     a = qd.tensor(qd.f32, shape=canonical, backend=backend, layout=layout)
     assert tuple(a.shape) == canonical
 
 
-# Higher-rank sampled layouts: full enumeration is infeasible (rank 12 alone
-# is 12! ≈ 479M permutations). The rank-3/rank-4 sweeps above already
-# enumerate exhaustively; the cases below random-sample the higher-rank
-# space to back the user-guide claim that "any permutation up to
-# quadrants_max_num_indices (12) is supported". A fixed seed per (rank,
-# trial) keeps the suite deterministic so a regression on a particular permutation always reproduces.
+# Higher-rank sampled layouts: full enumeration is infeasible (rank 12 alone is 12! ≈ 479M permutations). The
+# rank-3/rank-4 sweeps above already enumerate exhaustively; the cases below random-sample the higher-rank space to
+# back the user-guide claim that "any permutation up to quadrants_max_num_indices (12) is supported". A fixed seed per
+# (rank, trial) keeps the suite deterministic so a regression on a particular permutation always reproduces.
 def _sampled_layouts(rank, num_samples, seed_base=0):
     import random  # pylint: disable=import-outside-toplevel
 
@@ -120,10 +117,9 @@ def _sampled_layouts(rank, num_samples, seed_base=0):
 @pytest.mark.parametrize("rank", [5, 8, 12])
 @pytest.mark.parametrize("trial", list(range(4)))
 def test_layout_higher_rank_sampled_permutations(rank, trial, backend):
-    """Random-sample the rank-5 / rank-8 / rank-12 layout space on both
-    backends and check that every sampled permutation allocates and
-    reports the canonical shape unchanged. Backs the user-guide claim
-    of 'any permutation up to quadrants_max_num_indices (12)'."""
+    """Random-sample the rank-5 / rank-8 / rank-12 layout space on both backends and check that every sampled
+    permutation allocates and reports the canonical shape unchanged. Backs the user-guide claim of 'any permutation
+    up to quadrants_max_num_indices (12)'."""
     qd.init(arch=qd.x64)
     layouts = _sampled_layouts(rank, num_samples=5)
     layout = layouts[trial % len(layouts)]
@@ -160,8 +156,8 @@ def test_order_kwarg_rejected():
 
 # ----------------------------------------------------------------------------
 # Ndarray non-identity layout: enabled in an earlier change.
-# These cases are exercised in depth in test_tensor_factory_layout_ndarray.py;
-# this file just pins the smoke "factory does not raise" contract that replaces the PR-6-era NotImplementedError gating.
+# These cases are exercised in depth in test_tensor_factory_layout_ndarray.py; this file just pins the smoke "factory
+# does not raise" contract that replaces the PR-6-era NotImplementedError gating.
 # ----------------------------------------------------------------------------
 
 

@@ -868,10 +868,9 @@ def _field(
 def field(dtype, shape=None, *args, **kwargs):
     """Defines a Quadrants field.
 
-    A Quadrants field can be viewed as an abstract N-dimensional array, hiding away
-    the complexity of how its underlying :class:`~quadrants.lang.snode.SNode` are
-    actually defined. The data in a Quadrants field can be directly accessed by
-    a Quadrants :func:`~quadrants.lang.kernel_impl.kernel`.
+    A Quadrants field can be viewed as an abstract N-dimensional array, hiding away the complexity of how its
+    underlying :class:`~quadrants.lang.snode.SNode` are actually defined. The data in a Quadrants field can be
+    directly accessed by a Quadrants :func:`~quadrants.lang.kernel_impl.kernel`.
 
     See also https://docs.taichi-lang.org/docs/field
 
@@ -881,10 +880,10 @@ def field(dtype, shape=None, *args, **kwargs):
         order (str, optional): order of the shape laid out in memory.
         name (str, optional): name of the field.
         offset (Union[int, tuple[int]], optional): offset of the field domain.
-        needs_grad (bool, optional): whether this field participates in autodiff (reverse mode)
-            and thus needs an adjoint field to store the gradients.
-        needs_dual (bool, optional): whether this field participates in autodiff (forward mode)
-            and thus needs an dual field to store the gradients.
+        needs_grad (bool, optional): whether this field participates in autodiff (reverse mode) and thus needs an
+            adjoint field to store the gradients.
+        needs_dual (bool, optional): whether this field participates in autodiff (forward mode) and thus needs a dual
+            field to store the gradients.
 
     Example::
 
@@ -1204,9 +1203,8 @@ def static(x, *xs) -> Any:
             >>>     else:
             >>>         do_b()
 
-        Depending on the value of ``cond``, ``run()`` will be directly compiled
-        into either ``do_a()`` or ``do_b()``. Thus there won't be a runtime
-        condition check.
+        Depending on the value of ``cond``, ``run()`` will be directly compiled into either ``do_a()`` or ``do_b()``.
+        Thus there won't be a runtime condition check.
 
         Another common usage is for compile-time loop unrolling::
 
@@ -1331,9 +1329,8 @@ def get_max_shared_memory_bytes(*, is_lowerbound_ok):
     """Return the maximum shared memory per block in bytes.
 
     Args:
-        is_lowerbound_ok: If True, return a conservative lower bound based on
-            hardware specifications. If False, raise RuntimeError for backends
-            where the exact value cannot be queried.
+        is_lowerbound_ok: If True, return a conservative lower bound based on hardware specifications. If False,
+            raise RuntimeError for backends where the exact value cannot be queried.
     """
     arch = current_cfg().arch
     if arch == _qd_core.cuda:

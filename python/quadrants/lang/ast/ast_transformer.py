@@ -121,8 +121,7 @@ class ASTTransformer(Builder):
 
         Args:
            ctx (ast_builder_utils.BuilderContext): The builder context.
-           target (ast.Name): A variable name. `target.id` holds the name as
-           a string.
+           target (ast.Name): A variable name. `target.id` holds the name as a string.
            annotation: A type we hope to assign to the target
            value: A node representing the value.
            is_static_assign: A boolean value indicating whether this is a static assignment
@@ -262,19 +261,16 @@ class ASTTransformer(Builder):
 
     @staticmethod
     def _unpack_layout_vector_index(ast_builder, index, layout_len):
-        """If ``index`` is a rank-1 Vector of length ``layout_len``, return
-        its component list so the layout permutation can be applied
-        per-axis. Otherwise return ``[index]`` unchanged.
+        """If ``index`` is a rank-1 Vector of length ``layout_len``, return its component list so the layout permutation
+        can be applied per-axis. Otherwise return ``[index]`` unchanged.
 
         Handles both forms a single subscript can take inside a kernel:
 
-        - ``Matrix`` (Python class) — produced when the kernel runs on the
-          python backend, e.g. ``qd.grouped(field)`` returning a
-          ``[Matrix([i, j])]`` list.
-        - ``Expr`` with tensor shape ``(N,)`` — produced by
-          ``matrix.make_matrix(loop_indices, ...)`` in
-          :func:`build_struct_for` / :func:`build_grouped_ndrange_for`,
-          which is what real kernels see for ``for I in qd.grouped(...)``.
+        - ``Matrix`` (Python class) — produced when the kernel runs on the python backend, e.g. ``qd.grouped(field)``
+          returning a ``[Matrix([i, j])]`` list.
+        - ``Expr`` with tensor shape ``(N,)`` — produced by ``matrix.make_matrix(loop_indices, ...)`` in
+          :func:`build_struct_for` / :func:`build_grouped_ndrange_for`, which is what real kernels see for
+          ``for I in qd.grouped(...)``.
         """
         if isinstance(index, Matrix) and index.n == layout_len and index.m == 1:
             return index.to_list()
