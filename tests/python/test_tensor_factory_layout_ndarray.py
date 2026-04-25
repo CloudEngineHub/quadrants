@@ -1,22 +1,17 @@
 """Tests for ``qd.tensor(..., backend=NDARRAY, layout=...)``.
 
-an earlier change added the AST subscript-rewrite plumbing for layout-tagged
-``AnyArray``s; an earlier change wires it through the public factory so users no
-longer need the internal ``_with_layout`` helper.
+an earlier change added the AST subscript-rewrite plumbing for layout-tagged ``AnyArray``s; an earlier change wires it
+through the public factory so users no longer need the internal ``_with_layout`` helper.
 
 Contract verified here:
 
-- ``shape`` is the **canonical** shape the user indexes inside kernels;
-  ``Ndarray.shape`` inverts the layout permutation when ``_qd_layout``
-  is set so the user-facing contract is consistent across backends.
-- The underlying allocation is sized to the *physical* (permuted) shape
-  (``_physical_shape``), but ``to_numpy()`` permutes back to the
-  canonical view so callers never have to reason about the layout.
-- The instance is auto-tagged with ``_qd_layout`` so kernel subscripts
-  ``x[i, j, ...]`` are rewritten correctly.
+- ``shape`` is the **canonical** shape the user indexes inside kernels; ``Ndarray.shape`` inverts the layout permutation
+  when ``_qd_layout`` is set so the user-facing contract is consistent across backends.
+- The underlying allocation is sized to the *physical* (permuted) shape (``_physical_shape``), but ``to_numpy()``
+  permutes back to the canonical view so callers never have to reason about the layout.
+- The instance is auto-tagged with ``_qd_layout`` so kernel subscripts ``x[i, j, ...]`` are rewritten correctly.
 - ``order=`` is still rejected as a keyword.
-- Identity layouts produce no tag and behave exactly like a plain
-  untagged ndarray.
+- Identity layouts produce no tag and behave exactly like a plain untagged ndarray.
 """
 
 import itertools
@@ -101,8 +96,8 @@ def test_factory_layout_rank2_transpose_matches_direct_canonical():
     """Same kernel + same canonical shape, two ndarrays:
     - direct (no layout): canonical == physical == (3, 4).
     - factory-tagged (layout=(1, 0)): canonical == (3, 4), physical == (4, 3).
-    ``to_numpy()`` returns the canonical view in both cases, so the two
-    numpy arrays must compare equal element-for-element.
+    ``to_numpy()`` returns the canonical view in both cases, so the two numpy arrays must compare equal
+    element-for-element.
     """
     M, N = 3, 4
     direct = qd.tensor(qd.i32, shape=(M, N), backend=qd.Backend.NDARRAY)

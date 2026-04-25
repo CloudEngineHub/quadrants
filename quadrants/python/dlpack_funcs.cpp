@@ -145,15 +145,12 @@ std::pair<uint8_t, uint8_t> get_type_info(Arch arch, DataType dt) {
   return std::make_pair(data_type_code, element_bits);
 }
 
-// Walk the SNode chain root -> place and return the memory-layout
-// permutation as a list of canonical-axis indices in the order they
-// appear in physical memory (outermost first). For a 2-D field allocated
-// with ``order='ji'`` this returns ``{1, 0}``; for ``order='ij'`` (or no
-// ``order=``) it returns ``{0, 1}``.
+// Walk the SNode chain root -> place and return the memory-layout permutation as a list of canonical-axis indices in
+// the order they appear in physical memory (outermost first). For a 2-D field allocated with ``order='ji'`` this
+// returns ``{1, 0}``; for ``order='ij'`` (or no ``order=``) it returns ``{0, 1}``.
 //
-// The returned vector is exactly the ``layout`` permutation accepted by
-// ``ndarray_to_dlpack``, so the canonicalising shape/stride code path
-// can be shared between the two backends.
+// The returned vector is exactly the ``layout`` permutation accepted by ``ndarray_to_dlpack``, so the canonicalising
+// shape/stride code path can be shared between the two backends.
 std::vector<int> extract_memory_layout_order(SNode *snode) {
   std::vector<int> memory_layout_order;
   std::vector<const SNode *> path;
@@ -246,21 +243,18 @@ pybind11::capsule field_to_dlpack(Program *program, SNode *snode, int element_nd
 
   int ndim = snode->num_active_indices;
 
-  // Derive the field's physical-memory axis order from the SNode chain.
-  // For a 2-D field with ``order='ji'`` this yields ``{1, 0}``; for the
-  // default (no ``order=``) it yields ``{0, 1, ..., ndim-1}``.
+  // Derive the field's physical-memory axis order from the SNode chain. For a 2-D field with ``order='ji'`` this
+  // yields ``{1, 0}``; for the default (no ``order=``) it yields ``{0, 1, ..., ndim-1}``.
   //
-  // The element axes (``n``, ``m`` for VectorField/MatrixField) always
-  // sit innermost and are never permuted, so we extend ``layout`` with
-  // identity entries to cover them.
+  // The element axes (``n``, ``m`` for VectorField/MatrixField) always sit innermost and are never permuted, so we
+  // extend ``layout`` with identity entries to cover them.
   std::vector<int> mem_layout = extract_memory_layout_order(snode);
   if (static_cast<int>(mem_layout.size()) != ndim) {
     QD_ERROR("field_to_dlpack: SNode chain produced %d memory axes for a %d-D field",
              static_cast<int>(mem_layout.size()), ndim);
   }
-  // mem_layout must be a permutation of {0, 1, ..., ndim-1}. Fields
-  // built with non-contiguous axis identifiers (e.g. qd.i + qd.l, skipping
-  // qd.j and qd.k) are rejected — the canonical view is undefined.
+  // mem_layout must be a permutation of {0, 1, ..., ndim-1}. Fields built with non-contiguous axis identifiers (e.g.
+  // qd.i + qd.l, skipping qd.j and qd.k) are rejected — the canonical view is undefined.
   {
     std::vector<int> sorted_layout = mem_layout;
     std::sort(sorted_layout.begin(), sorted_layout.end());
@@ -288,10 +282,9 @@ pybind11::capsule field_to_dlpack(Program *program, SNode *snode, int element_nd
     }
     int64_t *phys_strides = calc_strides(phys_shape, full_ndim);
 
-    // Now apply the inverse permutation to expose a *canonical* view to
-    // the DLPack consumer: ``shape[j]`` is the canonical-axis-j extent,
-    // ``strides[j]`` is its physical-memory stride. Element axes (last
-    // ``element_ndim`` entries) are identity, never permuted.
+    // Now apply the inverse permutation to expose a *canonical* view to the DLPack consumer: ``shape[j]`` is the
+    // canonical-axis-j extent, ``strides[j]`` is its physical-memory stride. Element axes (last ``element_ndim``
+    // entries) are identity, never permuted.
     bool is_identity = true;
     for (int i = 0; i < ndim; i++) {
       if (mem_layout[i] != i) {
@@ -370,12 +363,10 @@ pybind11::capsule ndarray_to_dlpack(Program *program,
   void *raw_ptr = nullptr;
   std::tie(raw_ptr, device_type) = get_raw_ptr(arch, program, devalloc);
 
-  // ``ndarray_shape`` is the *physical* (storage) shape of the buffer.
-  // When ``layout`` is non-empty it lists the canonical-axis index at
-  // each successive physical-memory axis (outermost first). We expose
-  // a *canonical* view to DLPack consumers by permuting both the
-  // shape and the strides via the inverse permutation, leaving the
-  // raw pointer and byte offset untouched (no data movement).
+  // ``ndarray_shape`` is the *physical* (storage) shape of the buffer. When ``layout`` is non-empty it lists the
+  // canonical-axis index at each successive physical-memory axis (outermost first). We expose a *canonical* view to
+  // DLPack consumers by permuting both the shape and the strides via the inverse permutation, leaving the raw pointer
+  // and byte offset untouched (no data movement).
   std::vector<int> ndarray_shape = ndarray->total_shape();
   int ndim = ndarray_shape.size();
 

@@ -9,8 +9,7 @@ accessor directly. Field is layout-aware for free because its host accessor walk
 ``order=``).
 
 Per the user-stated rule that ``layout=`` must be invisible to users ("anything that doesn't work with non-identity
-layout is also useless"), host-side indexing has to return the *canonical* element, identical to
-``a.to_numpy()[i, j]``.
+layout is also useless"), host-side indexing has to return the *canonical* element, identical to ``a.to_numpy()[i, j]``.
 
 The ``qd.Tensor`` wrapper owns this fix: on a layout-tagged ndarray it translates the canonical user key to physical
 coords before hitting the impl accessor; on a field it simply delegates. Both paths give the user the canonical view,
