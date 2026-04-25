@@ -7,7 +7,7 @@ from typing import Any, Sequence
 import numpy as np
 
 from quadrants import _logging, _tensor_wrapper
-from quadrants._tensor_wrapper import Tensor as _TensorClass
+from quadrants._tensor_wrapper import _TENSOR_WRAPPER_TYPES
 from quadrants.types.annotations import Template
 
 from .._ndarray import ScalarNdarray
@@ -82,11 +82,11 @@ def stringify_obj_type(
     # ``qd.Tensor`` wrappers: unwrap to the bare impl so the type checks below match. After unwrap, ``_qd_layout``
     # (if any) is on the impl.
     #
-    # PERF-CRITICAL: The _any_tensor_constructed guard makes the isinstance zero-cost when no qd.Tensor has been
-    # created. Without this guard the per-arg isinstance check causes a measurable CPU regression. Do not remove the
-    # guard or move the isinstance outside of it.
-    if _tensor_wrapper._any_tensor_constructed and isinstance(
-        obj, _TensorClass
+    # PERF-CRITICAL: The _any_tensor_constructed guard makes this check zero-cost when no qd.Tensor has been created.
+    # ``type(obj) in _TENSOR_WRAPPER_TYPES`` is used instead of ``isinstance`` because it is a pointer comparison
+    # (~10 ns) vs an MRO walk (~100–200 ns). Do not replace with isinstance or remove the guard.
+    if (
+        _tensor_wrapper._any_tensor_constructed and type(obj) in _TENSOR_WRAPPER_TYPES
     ):  # pyright: ignore[reportOptionalMemberAccess]
         obj = obj._unwrap()
     arg_type = type(obj)

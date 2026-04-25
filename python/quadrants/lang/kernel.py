@@ -25,7 +25,7 @@ from quadrants._lib.core.quadrants_python import (
     KernelCxx,
     KernelLaunchContext,
 )
-from quadrants._tensor_wrapper import Tensor as _Tensor_cls
+from quadrants._tensor_wrapper import _TENSOR_WRAPPER_TYPES
 from quadrants.lang import _kernel_impl_dataclass, impl, runtime_ops
 from quadrants.lang._fast_caching import src_hasher
 from quadrants.lang._wrap_inspect import FunctionSourceInfo, get_source_info_and_src
@@ -575,7 +575,7 @@ class Kernel(FuncBase):
             obj = args[template_arg_idx]
             for attr_name in attr_chain:
                 obj = getattr(obj, attr_name)
-            if isinstance(obj, _Tensor_cls):
+            if type(obj) in _TENSOR_WRAPPER_TYPES:
                 obj = obj._unwrap()
             assert isinstance(obj, Ndarray), f"Expected Ndarray at {attr_chain}, got {type(obj)}"
             v_primal = obj.arr
@@ -611,16 +611,16 @@ class Kernel(FuncBase):
         # ``id(Tensor(impl))`` differs across constructions, but ``id(impl)`` is stable, so wrapper-or-not yields
         # identical cache keys.
         #
-        # Fast path: most calls have no wrappers. ``isinstance`` is used so VectorTensor/MatrixTensor subclasses are
-        # also unwrapped. The check short-circuits on the first non-wrapper.
+        # Fast path: most calls have no wrappers. VectorTensor/MatrixTensor subclasses are also unwrapped. The
+        # check short-circuits on the first non-wrapper.
         #
-        # PERF-CRITICAL: The _any_tensor_constructed guard makes the isinstance loop zero-cost when no qd.Tensor
-        # has been created. Without this guard, the per-arg isinstance check causes a ~4% CPU regression on Genesis
-        # benchmarks. Do not remove the guard or move the isinstance outside of it.
+        # PERF-CRITICAL: The _any_tensor_constructed guard makes this loop zero-cost when no qd.Tensor has been
+        # created. ``type(a) in _TENSOR_WRAPPER_TYPES`` is used instead of ``isinstance`` because it is a pointer
+        # comparison (~10 ns) vs an MRO walk (~100–200 ns). Do not replace with isinstance or remove the guard.
         if _tensor_wrapper._any_tensor_constructed:  # pyright: ignore[reportOptionalMemberAccess]
             for _a in py_args:
-                if isinstance(_a, _Tensor_cls):
-                    py_args = tuple(a._impl if isinstance(a, _Tensor_cls) else a for a in py_args)
+                if type(_a) in _TENSOR_WRAPPER_TYPES:
+                    py_args = tuple(a._impl if type(a) in _TENSOR_WRAPPER_TYPES else a for a in py_args)
                     break
 
         # Transform the primal kernel to forward mode grad kernel

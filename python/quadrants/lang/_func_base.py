@@ -24,6 +24,7 @@ import numpy as np
 from quadrants import _tensor_wrapper
 from quadrants._lib import core as _qd_core
 from quadrants._lib.core.quadrants_python import KernelLaunchContext
+from quadrants._tensor_wrapper import _TENSOR_WRAPPER_TYPES
 from quadrants._tensor_wrapper import Tensor as _TensorClass
 from quadrants.lang import _kernel_impl_dataclass, impl
 from quadrants.lang._dataclass_util import create_flat_name
@@ -476,11 +477,11 @@ class FuncBase:
         # instance. Unwrap defensively so the rest of the function sees the bare impl, matching what callers expect
         # post-stork-19. Idempotent for top-level args (already unwrapped).
         #
-        # PERF-CRITICAL: The _any_tensor_constructed guard makes the isinstance zero-cost when no qd.Tensor has
-        # been created. Without this guard the per-arg isinstance check causes a measurable CPU regression. Do not
-        # remove the guard or move the isinstance outside of it.
-        if _tensor_wrapper._any_tensor_constructed and isinstance(
-            v, _TensorClass
+        # PERF-CRITICAL: The _any_tensor_constructed guard makes this check zero-cost when no qd.Tensor has been
+        # created. ``type(v) in _TENSOR_WRAPPER_TYPES`` is used instead of ``isinstance`` because it is a pointer
+        # comparison (~10 ns) vs an MRO walk (~100–200 ns). Do not replace with isinstance or remove the guard.
+        if (
+            _tensor_wrapper._any_tensor_constructed and type(v) in _TENSOR_WRAPPER_TYPES
         ):  # pyright: ignore[reportOptionalMemberAccess]
             v = v._unwrap()
 
@@ -492,7 +493,7 @@ class FuncBase:
         # ``Kernel.__call__``, plus the defensive in-struct unwrap immediately above); by the time we get here ``v``
         # is always the bare impl.
         if needed_arg_type is _TensorClass:
-            if isinstance(v, _TensorClass):
+            if type(v) in _TENSOR_WRAPPER_TYPES:
                 v = v._unwrap()
             if isinstance(v, Ndarray):
                 needed_arg_type = cast(Type, _TENSOR_T_NDARRAY_LAUNCH_ANNOTATION)

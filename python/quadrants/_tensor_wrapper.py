@@ -361,6 +361,13 @@ class MatrixTensor(Tensor):
         )
 
 
+# PERF-CRITICAL: Hotpath code uses ``type(arg) in _TENSOR_WRAPPER_TYPES`` instead of ``isinstance(arg, Tensor)``
+# because ``type(x) is cls`` is a single pointer comparison (~10 ns) whereas ``isinstance`` walks the MRO for
+# non-matching types (~100–200 ns). With ~43 struct fields checked per kernel invocation in Genesis, the cumulative
+# savings are significant. Keep this tuple in sync with the Tensor class hierarchy.
+_TENSOR_WRAPPER_TYPES = (Tensor, VectorTensor, MatrixTensor)
+
+
 # ----------------------------------------------------------------------
 # Public helpers
 # ----------------------------------------------------------------------

@@ -38,6 +38,7 @@ from quadrants._tensor import (
     _TENSOR_T_FIELD_MARKER,
     _TENSOR_T_NDARRAY_MARKER,
 )
+from quadrants._tensor_wrapper import _TENSOR_WRAPPER_TYPES
 from quadrants._tensor_wrapper import Tensor as _TensorClass
 from quadrants.lang._dataclass_util import create_flat_name
 from quadrants.lang._ndarray import Ndarray
@@ -79,11 +80,12 @@ def _extract_arg(raise_on_templated_floats: bool, arg: Any, annotation: Annotati
     # (line ~149) which technically reads ``.shape`` off the wrapper but produces a meaningless cache key. See
     # ``perso_hugh/doc/quadrants-tensor.md`` §8.14. Idempotent for top-level args.
     #
-    # PERF-CRITICAL: The _any_tensor_constructed guard makes the isinstance zero-cost when no qd.Tensor has been
-    # created. This function runs on *every* argument of *every* kernel invocation; without the guard the cumulative
-    # isinstance overhead causes a ~4% CPU regression. Do not remove the guard or move the isinstance outside of it.
-    if _tensor_wrapper._any_tensor_constructed and isinstance(
-        arg, _TensorClass
+    # PERF-CRITICAL: The _any_tensor_constructed guard makes this check zero-cost when no qd.Tensor has been created.
+    # This function runs on *every* argument of *every* kernel invocation. ``type(arg) in _TENSOR_WRAPPER_TYPES`` is
+    # used instead of ``isinstance`` because it is a pointer comparison (~10 ns) vs an MRO walk (~100–200 ns). Do not
+    # replace with isinstance or remove the guard.
+    if (
+        _tensor_wrapper._any_tensor_constructed and type(arg) in _TENSOR_WRAPPER_TYPES
     ):  # pyright: ignore[reportOptionalMemberAccess]
         arg = arg._unwrap()
     annotation_type = type(annotation)
@@ -92,7 +94,7 @@ def _extract_arg(raise_on_templated_floats: bool, arg: Any, annotation: Annotati
     # disambiguate. The annotation is the wrapper *class* (``qd.Tensor``); ``arg`` is always a bare impl by the time
     # we get here (``Kernel.__call__`` unwraps ``Tensor`` instances).
     if annotation is _TensorClass:
-        if isinstance(arg, _TensorClass):
+        if type(arg) in _TENSOR_WRAPPER_TYPES:
             arg = arg._unwrap()
         arg_type = type(arg)
         if issubclass(arg_type, (Ndarray, AnyArray)):
