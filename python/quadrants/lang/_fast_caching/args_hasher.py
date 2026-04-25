@@ -88,7 +88,7 @@ def stringify_obj_type(
     if (
         _tensor_wrapper._any_tensor_constructed and type(obj) in _TENSOR_WRAPPER_TYPES
     ):  # pyright: ignore[reportOptionalMemberAccess]
-        obj = obj._unwrap()
+        obj = obj._unwrap()  # pyright: ignore[reportAttributeAccessIssue]
     arg_type = type(obj)
     _layout = getattr(obj, "_qd_layout", None)
     _layout_tag = "" if _layout is None else f"-L{_layout!r}"
