@@ -4,6 +4,7 @@
 import ast
 import inspect
 import math
+import os
 import sys
 import textwrap
 import types
@@ -22,6 +23,12 @@ from typing import TYPE_CHECKING, Any, Callable, DefaultDict, Type, cast
 import numpy as np
 
 from quadrants import _tensor_wrapper
+
+
+def _kernel_coverage_enabled() -> bool:
+    return os.environ.get("QD_KERNEL_COVERAGE") == "1"
+
+
 from quadrants._lib import core as _qd_core
 from quadrants._lib.core.quadrants_python import KernelLaunchContext
 from quadrants._tensor_wrapper import _TENSOR_WRAPPER_TYPES
@@ -269,9 +276,21 @@ class FuncBase:
 
         autodiff_mode = current_kernel.autodiff_mode
 
+        _kcov = None
+        if _kernel_coverage_enabled() and autodiff_mode == _qd_core.AutodiffMode.NONE:
+            from . import (  # pylint: disable=import-outside-toplevel
+                _kernel_coverage as _kcov,
+            )
+
+            tree = _kcov.rewrite_ast(tree, function_source_info.filepath, function_source_info.start_lineno)
+
         quadrants_callable = current_kernel.quadrants_callable
         is_pure = quadrants_callable is not None and quadrants_callable.is_pure
         global_vars = self._get_global_vars(self.func)
+        if _kcov is not None:
+            cov_field = _kcov.get_field()
+            if cov_field is not None:
+                global_vars[_kcov.FIELD_VAR_NAME] = cov_field
 
         template_vars = {}
         if is_kernel or is_real_function:
