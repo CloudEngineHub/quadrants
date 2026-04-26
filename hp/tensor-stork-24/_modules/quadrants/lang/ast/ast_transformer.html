@@ -642,21 +642,21 @@
         <span class="n">build_stmt</span><span class="p">(</span><span class="n">ctx</span><span class="p">,</span> <span class="n">node</span><span class="o">.</span><span class="n">slice</span><span class="p">)</span>
         <span class="k">if</span> <span class="ow">not</span> <span class="n">ASTTransformer</span><span class="o">.</span><span class="n">is_tuple</span><span class="p">(</span><span class="n">node</span><span class="o">.</span><span class="n">slice</span><span class="p">):</span>
             <span class="n">node</span><span class="o">.</span><span class="n">slice</span><span class="o">.</span><span class="n">ptr</span> <span class="o">=</span> <span class="p">[</span><span class="n">node</span><span class="o">.</span><span class="n">slice</span><span class="o">.</span><span class="n">ptr</span><span class="p">]</span>
-        <span class="c1"># Tensors layout: a layout-tagged Ndarray or Field with a non-identity ``_qd_layout`` has its canonical</span>
-        <span class="c1"># indices permuted into physical-storage order before forwarding. ``None`` and identity layouts are handled</span>
+        <span class="c1"># Tensors layout: a layout-tagged Ndarray or Field with a non-identity ``_qd_layout`` has its canonical indices</span>
+        <span class="c1"># permuted into physical-storage order before forwarding. ``None`` and identity layouts are handled</span>
         <span class="c1"># transparently (no rewrite =&gt; byte-identical IR for legacy code).</span>
         <span class="c1">#</span>
         <span class="c1"># Both backends use the same attribute name (``_qd_layout``) and the same storage contract: the underlying</span>
-        <span class="c1"># buffer is allocated at the permuted physical shape (``[shape[a] for a in layout]``) with natural axis</span>
-        <span class="c1"># order, and the rewrite here translates each user-supplied canonical index tuple ``(i0, ..., i_{N-1})``</span>
-        <span class="c1"># into ``(i_{layout[0]}, ..., i_{layout[N-1]})`` — the physical index tuple that the flat rank-N SNode /</span>
-        <span class="c1"># Ndarray expects.</span>
+        <span class="c1"># buffer is allocated at the permuted physical shape (``[shape[a] for a in layout]``) with natural axis order,</span>
+        <span class="c1"># and the rewrite here translates each user-supplied canonical index tuple ``(i0, ..., i_{N-1})`` into</span>
+        <span class="c1"># ``(i_{layout[0]}, ..., i_{layout[N-1]})`` — the physical index tuple that the flat rank-N SNode / Ndarray</span>
+        <span class="c1"># expects.</span>
         <span class="c1">#</span>
         <span class="c1"># Two indexing forms must be permuted:</span>
         <span class="c1"># 1. Multi-arg subscript ``x[i, j, ...]``: ``node.slice.ptr`` is already a list of N scalars; permute by axis.</span>
-        <span class="c1"># 2. Single-Vector subscript ``x[I]`` where I is a rank-N Matrix coming from ``qd.grouped(...)``: unpack</span>
-        <span class="c1">#    into N scalars first, then permute. Without this, ``x[I]`` writes at canonical indices into the smaller</span>
-        <span class="c1">#    physical buffer — silently OOB on permuted layouts.</span>
+        <span class="c1"># 2. Single-Vector subscript ``x[I]`` where I is a rank-N Matrix coming from ``qd.grouped(...)``: unpack into N</span>
+        <span class="c1">#    scalars first, then permute. Without this, ``x[I]`` writes at canonical indices into the smaller physical</span>
+        <span class="c1">#    buffer — silently OOB on permuted layouts.</span>
         <span class="n">layout</span> <span class="o">=</span> <span class="nb">getattr</span><span class="p">(</span><span class="n">node</span><span class="o">.</span><span class="n">value</span><span class="o">.</span><span class="n">ptr</span><span class="p">,</span> <span class="s2">&quot;_qd_layout&quot;</span><span class="p">,</span> <span class="kc">None</span><span class="p">)</span>
         <span class="k">if</span> <span class="n">layout</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
             <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">node</span><span class="o">.</span><span class="n">slice</span><span class="o">.</span><span class="n">ptr</span><span class="p">)</span> <span class="o">==</span> <span class="mi">1</span><span class="p">:</span>
@@ -1066,9 +1066,8 @@
 
     <span class="nd">@staticmethod</span>
     <span class="k">def</span><span class="w"> </span><span class="nf">_promote_ndarray_if_declared</span><span class="p">(</span><span class="n">ctx</span><span class="p">:</span> <span class="n">ASTTransformerFuncContext</span><span class="p">,</span> <span class="n">value</span><span class="p">:</span> <span class="n">Any</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Any</span><span class="p">:</span>
-<span class="w">        </span><span class="sd">&quot;&quot;&quot;If *value* is a bare ``Ndarray`` that was pre-declared as a kernel arg (in</span>
-<span class="sd">        ``_predeclare_struct_ndarrays``), return the ``AnyArray`` proxy from the cache. Otherwise return *value*</span>
-<span class="sd">        unchanged.&quot;&quot;&quot;</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;If *value* is a bare ``Ndarray`` that was pre-declared as a kernel arg (in ``_predeclare_struct_ndarrays``),</span>
+<span class="sd">        return the ``AnyArray`` proxy from the cache. Otherwise return *value* unchanged.&quot;&quot;&quot;</span>
         <span class="kn">from</span><span class="w"> </span><span class="nn">quadrants.lang._ndarray</span><span class="w"> </span><span class="kn">import</span> <span class="n">Ndarray</span>  <span class="c1"># pylint: disable=C0415</span>
 
         <span class="k">if</span> <span class="ow">not</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">value</span><span class="p">,</span> <span class="n">Ndarray</span><span class="p">):</span>

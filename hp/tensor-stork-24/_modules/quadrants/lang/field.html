@@ -341,11 +341,10 @@
 <span class="c1"># DLPack canonical-view patch for layout-tagged fields.</span>
 <span class="c1">#</span>
 <span class="c1"># The C++ ``field_to_dlpack`` derives the physical-memory axis order from the SNode chain. For layout-tagged fields</span>
-<span class="c1"># built via the new flat-rank-N allocation path (see ``lang/impl.py::_field``), the SNode chain is in natural order</span>
-<span class="c1"># and C++ reports the *permuted physical* shape with identity strides. We patch the returned DLManagedTensor in place</span>
-<span class="c1"># here so consumers (``torch.utils.dlpack.from_dlpack`` et al.) observe the canonical shape and matching permuted</span>
-<span class="c1"># strides — byte-identical to the view layout-tagged ndarrays produce via the ``ndarray_to_dlpack`` ``layout=``</span>
-<span class="c1"># parameter.</span>
+<span class="c1"># built via the new flat-rank-N allocation path (see ``lang/impl.py::_field``), the SNode chain is in natural order and</span>
+<span class="c1"># C++ reports the *permuted physical* shape with identity strides. We patch the returned DLManagedTensor in place here</span>
+<span class="c1"># so consumers (``torch.utils.dlpack.from_dlpack`` et al.) observe the canonical shape and matching permuted strides —</span>
+<span class="c1"># byte-identical to the view layout-tagged ndarrays produce via the ``ndarray_to_dlpack`` ``layout=`` parameter.</span>
 <span class="c1">#</span>
 <span class="c1"># The struct layouts below match the DLPack v1 ABI exactly. Only the fields we need to read (``ndim``) and mutate</span>
 <span class="c1"># (``shape``, ``strides``) are referenced, so additions to DLTensor / DLManagedTensor that land after this writes in</span>
@@ -678,11 +677,10 @@
         <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">key</span><span class="p">)</span> <span class="o">!=</span> <span class="nb">len</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">shape</span><span class="p">):</span>
             <span class="k">raise</span> <span class="ne">AssertionError</span><span class="p">(</span><span class="s2">&quot;Slicing is not supported on qd.field&quot;</span><span class="p">)</span>
 
-        <span class="c1"># For layout-tagged fields (``_qd_layout = (a0, a1, ..., a_{N-1})`` canonical-axis permutation), the user</span>
-        <span class="c1"># writes indices in canonical order but the underlying flat rank-N SNode is allocated at the permuted physical</span>
-        <span class="c1"># shape and expects physical-order indices. Mirrors ``Tensor._permute_key`` in ``_tensor_wrapper.py``. Uses</span>
-        <span class="c1"># the same convention as :func:`build_Subscript`: physical index at nesting level ``p`` is</span>
-        <span class="c1"># ``canonical[layout[p]]``.</span>
+        <span class="c1"># For layout-tagged fields (``_qd_layout = (a0, a1, ..., a_{N-1})`` canonical-axis permutation), the user writes</span>
+        <span class="c1"># indices in canonical order but the underlying flat rank-N SNode is allocated at the permuted physical shape</span>
+        <span class="c1"># and expects physical-order indices. Mirrors ``Tensor._permute_key`` in ``_tensor_wrapper.py``. Uses the same</span>
+        <span class="c1"># convention as :func:`build_Subscript`: physical index at nesting level ``p`` is ``canonical[layout[p]]``.</span>
         <span class="n">layout</span> <span class="o">=</span> <span class="nb">getattr</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="s2">&quot;_qd_layout&quot;</span><span class="p">,</span> <span class="kc">None</span><span class="p">)</span>
         <span class="k">if</span> <span class="n">layout</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
             <span class="n">layout_t</span> <span class="o">=</span> <span class="nb">tuple</span><span class="p">(</span><span class="n">layout</span><span class="p">)</span>
