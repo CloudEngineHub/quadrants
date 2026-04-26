@@ -643,9 +643,9 @@ class ASTTransformer(Builder):
 
     @staticmethod
     def _promote_ndarray_if_declared(ctx: ASTTransformerFuncContext, value: Any) -> Any:
-        """If *value* is a bare ``Ndarray`` that was pre-declared as a
-        kernel arg (in ``_predeclare_struct_ndarrays``), return the ``AnyArray``
-        proxy from the cache.  Otherwise return *value* unchanged."""
+        """If *value* is a bare ``Ndarray`` that was pre-declared as a kernel arg (in
+        ``_predeclare_struct_ndarrays``), return the ``AnyArray`` proxy from the cache. Otherwise return *value*
+        unchanged."""
         from quadrants.lang._ndarray import Ndarray  # pylint: disable=C0415
 
         if not isinstance(value, Ndarray):

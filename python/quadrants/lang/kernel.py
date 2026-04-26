@@ -576,8 +576,7 @@ class Kernel(FuncBase):
         launch_ctx_buffer: dict,
         is_launch_ctx_cacheable: bool,
     ) -> None:
-        """Set ndarray kernel args that were pre-declared from struct
-        template fields during compilation."""
+        """Set ndarray kernel args that were pre-declared from struct template fields during compilation."""
         from quadrants.lang._ndarray import Ndarray  # pylint: disable=C0415
 
         for arg_id, template_arg_idx, attr_chain in launch_info:

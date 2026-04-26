@@ -249,8 +249,7 @@ class Ndarray:
         without any python-side transpose.
 
         Args:
-            arr (numpy.ndarray): The source numpy array, in canonical
-                axis order.
+            arr (numpy.ndarray): The source numpy array, in canonical axis order.
         """
         if not isinstance(arr, np.ndarray):
             raise TypeError(f"{np.ndarray} expected, but {type(arr)} provided")
