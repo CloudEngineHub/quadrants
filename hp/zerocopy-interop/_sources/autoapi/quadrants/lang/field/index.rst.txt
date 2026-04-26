@@ -172,13 +172,12 @@ Module Contents
 
       Converts this field to a `numpy.ndarray`.
 
-      :param dtype: Optional target numpy dtype. Incompatible with ``copy=False`` if it differs
-                    from the field's native dtype.
-      :param copy: ``None`` (default) and ``True`` return an independent copy. ``False`` returns a
-                   zero-copy DLPack view (requires CPU backend and a supported dtype) or raises
-                   ``ValueError``. Note: zero-copy numpy arrays alias the field's underlying C++
-                   runtime memory; callers opting into ``copy=False`` are responsible for the buffer
-                   lifetime.
+      :param dtype: Optional target numpy dtype. Incompatible with ``copy=False`` if it differs from the field's native
+                    dtype.
+      :param copy: ``None`` (default) and ``True`` return an independent copy. ``False`` returns a zero-copy DLPack view
+                   (requires CPU backend and a supported dtype) or raises ``ValueError``. Note: zero-copy numpy arrays
+                   alias the field's underlying C++ runtime memory; callers opting into ``copy=False`` are responsible for
+                   the buffer lifetime.
 
 
 
@@ -186,10 +185,10 @@ Module Contents
 
       Converts this field to a `torch.tensor`.
 
-      :param device: Optional torch device. Incompatible with ``copy=False`` if it differs from
-                     the field's native device.
-      :param copy: ``None`` (default) prefers zero-copy, ``True`` forces an independent copy,
-                   ``False`` requires zero-copy or raises.
+      :param device: Optional torch device. Incompatible with ``copy=False`` if it differs from the field's native
+                     device.
+      :param copy: ``None`` (default) prefers zero-copy, ``True`` forces an independent copy, ``False`` requires
+                   zero-copy or raises.
 
 
 

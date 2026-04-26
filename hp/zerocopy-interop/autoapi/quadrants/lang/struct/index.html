@@ -630,11 +630,11 @@ between corresponding items can be performed.</p>
 <dt class="sig sig-object py" id="quadrants.lang.struct.StructField.to_numpy">
 <span class="sig-name descname"><span class="pre">to_numpy</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="o"><span class="pre">*</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">copy</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../../../../_modules/quadrants/lang/struct.html#StructField.to_numpy"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#quadrants.lang.struct.StructField.to_numpy" title="Link to this definition">#</a></dt>
 <dd><p>Converts the Struct field instance to a dictionary of NumPy arrays.</p>
-<p>Struct fields use AOS cell layout, but Quadrants’ C++ <code class="docutils literal notranslate"><span class="pre">field_to_dlpack</span></code> does not currently
-emit cell-stride-aware DLPack views for individual members (it computes contiguous strides
-at the member dtype size, which would interleave neighboring members’ bytes). Until the C++
-export is taught about AOS strides, <code class="docutils literal notranslate"><span class="pre">StructField</span></code> always returns independent copies; the
-<code class="docutils literal notranslate"><span class="pre">copy</span></code> argument is accepted for API symmetry but <code class="docutils literal notranslate"><span class="pre">copy=False</span></code> is rejected.</p>
+<p>Struct fields use AOS cell layout, but Quadrants’ C++ <code class="docutils literal notranslate"><span class="pre">field_to_dlpack</span></code> does not currently emit
+cell-stride-aware DLPack views for individual members (it computes contiguous strides at the member dtype
+size, which would interleave neighboring members’ bytes). Until the C++ export is taught about AOS strides,
+<code class="docutils literal notranslate"><span class="pre">StructField</span></code> always returns independent copies; the <code class="docutils literal notranslate"><span class="pre">copy</span></code> argument is accepted for API symmetry but
+<code class="docutils literal notranslate"><span class="pre">copy=False</span></code> is rejected.</p>
 <p>The dictionary may be nested when converting nested structs.</p>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters<span class="colon">:</span></dt>
@@ -653,8 +653,7 @@ export is taught about AOS strides, <code class="docutils literal notranslate"><
 <dt class="sig sig-object py" id="quadrants.lang.struct.StructField.to_torch">
 <span class="sig-name descname"><span class="pre">to_torch</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">device</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">*</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">copy</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../../../../_modules/quadrants/lang/struct.html#StructField.to_torch"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#quadrants.lang.struct.StructField.to_torch" title="Link to this definition">#</a></dt>
 <dd><p>Converts the Struct field instance to a dictionary of PyTorch tensors.</p>
-<p>See <a class="reference internal" href="#quadrants.lang.struct.StructField.to_numpy" title="quadrants.lang.struct.StructField.to_numpy"><code class="xref py py-meth docutils literal notranslate"><span class="pre">to_numpy()</span></code></a> for why members are always returned as independent copies. <code class="docutils literal notranslate"><span class="pre">copy=False</span></code>
-is rejected.</p>
+<p>See <a class="reference internal" href="#quadrants.lang.struct.StructField.to_numpy" title="quadrants.lang.struct.StructField.to_numpy"><code class="xref py py-meth docutils literal notranslate"><span class="pre">to_numpy()</span></code></a> for why members are always returned as independent copies. <code class="docutils literal notranslate"><span class="pre">copy=False</span></code> is rejected.</p>
 <p>The dictionary may be nested when converting nested structs.</p>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters<span class="colon">:</span></dt>

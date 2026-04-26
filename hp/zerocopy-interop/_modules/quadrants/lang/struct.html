@@ -929,11 +929,11 @@
     <span class="k">def</span><span class="w"> </span><span class="nf">to_numpy</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="o">*</span><span class="p">,</span> <span class="n">copy</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
 <span class="w">        </span><span class="sd">&quot;&quot;&quot;Converts the Struct field instance to a dictionary of NumPy arrays.</span>
 
-<span class="sd">        Struct fields use AOS cell layout, but Quadrants&#39; C++ ``field_to_dlpack`` does not currently</span>
-<span class="sd">        emit cell-stride-aware DLPack views for individual members (it computes contiguous strides</span>
-<span class="sd">        at the member dtype size, which would interleave neighboring members&#39; bytes). Until the C++</span>
-<span class="sd">        export is taught about AOS strides, ``StructField`` always returns independent copies; the</span>
-<span class="sd">        ``copy`` argument is accepted for API symmetry but ``copy=False`` is rejected.</span>
+<span class="sd">        Struct fields use AOS cell layout, but Quadrants&#39; C++ ``field_to_dlpack`` does not currently emit</span>
+<span class="sd">        cell-stride-aware DLPack views for individual members (it computes contiguous strides at the member dtype</span>
+<span class="sd">        size, which would interleave neighboring members&#39; bytes). Until the C++ export is taught about AOS strides,</span>
+<span class="sd">        ``StructField`` always returns independent copies; the ``copy`` argument is accepted for API symmetry but</span>
+<span class="sd">        ``copy=False`` is rejected.</span>
 
 <span class="sd">        The dictionary may be nested when converting nested structs.</span>
 
@@ -957,8 +957,7 @@
     <span class="k">def</span><span class="w"> </span><span class="nf">to_torch</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">device</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="o">*</span><span class="p">,</span> <span class="n">copy</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
 <span class="w">        </span><span class="sd">&quot;&quot;&quot;Converts the Struct field instance to a dictionary of PyTorch tensors.</span>
 
-<span class="sd">        See :meth:`to_numpy` for why members are always returned as independent copies. ``copy=False``</span>
-<span class="sd">        is rejected.</span>
+<span class="sd">        See :meth:`to_numpy` for why members are always returned as independent copies. ``copy=False`` is rejected.</span>
 
 <span class="sd">        The dictionary may be nested when converting nested structs.</span>
 
