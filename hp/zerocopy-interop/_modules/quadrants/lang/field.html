@@ -625,9 +625,12 @@
 <span class="sd">        ``pyquadrants.cache_holders`` so the cache is invalidated on ``qd.reset()`` / ``qd.init()`` BEFORE C++ teardown.</span>
 <span class="sd">        &quot;&quot;&quot;</span>
         <span class="c1"># A ScalarField that is a member of a multi-member StructField has AOS layout: its parent SNode (the struct</span>
-        <span class="c1"># cell) holds multiple `place` children, and consecutive elements of the same member are sizeof(cell) bytes</span>
-        <span class="c1"># apart. The C++ field_to_dlpack does not emit those strides yet, so zerocopy would produce an interleaved</span>
-        <span class="c1"># (broken) view. Skip it.</span>
+        <span class="c1"># cell) holds multiple `place` children (one for each sibling struct member), and consecutive elements of</span>
+        <span class="c1"># the same member are sizeof(cell) bytes apart. The C++ field_to_dlpack does not emit those strides yet,</span>
+        <span class="c1"># so zerocopy would produce an interleaved (broken) view. Skip it.</span>
+        <span class="c1"># A standalone ScalarField has exactly one component, so ``parent.get_num_ch() == 1``; ``&gt; 1`` therefore</span>
+        <span class="c1"># uniquely identifies the multi-member-struct case. (The MatrixField version generalizes to ``&gt; n*m``,</span>
+        <span class="c1"># since a vec/mat field&#39;s own components are also siblings of its parent SNode.)</span>
         <span class="n">parent_snode</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">parent</span><span class="p">()</span><span class="o">.</span><span class="n">_snode</span><span class="o">.</span><span class="n">ptr</span>
         <span class="n">is_aos_struct_member</span> <span class="o">=</span> <span class="n">parent_snode</span><span class="o">.</span><span class="n">get_num_ch</span><span class="p">()</span> <span class="o">&gt;</span> <span class="mi">1</span>
         <span class="k">return</span> <span class="n">_interop</span><span class="o">.</span><span class="n">make_zerocopy_cache_if_supported</span><span class="p">(</span>
