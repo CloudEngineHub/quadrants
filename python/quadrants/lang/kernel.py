@@ -322,6 +322,7 @@ class Kernel(FuncBase):
 
         self.launch_context_buffer_cache = LaunchContextBufferCache()
         self._struct_ndarray_launch_info_by_key: dict[CompiledKernelKeyType, list] = {}
+        self._tensor_unwrap_indices: tuple[int, ...] | None = None
 
     def ast_builder(self) -> ASTBuilder:
         assert self.kernel_cpp is not None
@@ -619,17 +620,24 @@ class Kernel(FuncBase):
         # ``id(Tensor(impl))`` differs across constructions, but ``id(impl)`` is stable, so wrapper-or-not yields
         # identical cache keys.
         #
-        # Fast path: most calls have no wrappers. VectorTensor/MatrixTensor subclasses are also unwrapped. The
-        # check short-circuits on the first non-wrapper.
-        #
-        # PERF-CRITICAL: The _any_tensor_constructed guard makes this loop zero-cost when no qd.Tensor has been
-        # created. ``type(a) in _TENSOR_WRAPPER_TYPES`` is used instead of ``isinstance`` because it is a pointer
-        # comparison (~10 ns) vs an MRO walk (~100–200 ns). Do not replace with isinstance or remove the guard.
+        # PERF: On first call, record which arg positions are Tensor wrappers. On subsequent calls, skip entirely
+        # (empty indices) or unwrap only the cached positions (no full-arg scan). For a kernel with 30 args and 1
+        # Tensor, this reduces per-call type checks from 30 to 1.
         if _tensor_wrapper._any_tensor_constructed:  # pyright: ignore[reportOptionalMemberAccess]
-            for _a in py_args:
-                if type(_a) in _TENSOR_WRAPPER_TYPES:
-                    py_args = tuple(a._impl if type(a) in _TENSOR_WRAPPER_TYPES else a for a in py_args)
-                    break
+            _indices = self._tensor_unwrap_indices
+            if _indices is None:
+                _indices = tuple(i for i, a in enumerate(py_args) if type(a) in _TENSOR_WRAPPER_TYPES)
+                self._tensor_unwrap_indices = _indices
+                if _indices:
+                    py_args_l = list(py_args)
+                    for i in _indices:
+                        py_args_l[i] = py_args_l[i]._impl  # pyright: ignore[reportAttributeAccessIssue]
+                    py_args = tuple(py_args_l)
+            elif _indices:
+                py_args_l = list(py_args)
+                for i in _indices:
+                    py_args_l[i] = py_args_l[i]._impl  # pyright: ignore[reportAttributeAccessIssue]
+                py_args = tuple(py_args_l)
 
         # Transform the primal kernel to forward mode grad kernel
         # then recover to primal when exiting the forward mode manager
