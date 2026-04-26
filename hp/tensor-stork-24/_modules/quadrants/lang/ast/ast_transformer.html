@@ -1066,9 +1066,9 @@
 
     <span class="nd">@staticmethod</span>
     <span class="k">def</span><span class="w"> </span><span class="nf">_promote_ndarray_if_declared</span><span class="p">(</span><span class="n">ctx</span><span class="p">:</span> <span class="n">ASTTransformerFuncContext</span><span class="p">,</span> <span class="n">value</span><span class="p">:</span> <span class="n">Any</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Any</span><span class="p">:</span>
-<span class="w">        </span><span class="sd">&quot;&quot;&quot;If *value* is a bare ``Ndarray`` that was pre-declared as a</span>
-<span class="sd">        kernel arg (in ``_predeclare_struct_ndarrays``), return the ``AnyArray``</span>
-<span class="sd">        proxy from the cache.  Otherwise return *value* unchanged.&quot;&quot;&quot;</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;If *value* is a bare ``Ndarray`` that was pre-declared as a kernel arg (in</span>
+<span class="sd">        ``_predeclare_struct_ndarrays``), return the ``AnyArray`` proxy from the cache. Otherwise return *value*</span>
+<span class="sd">        unchanged.&quot;&quot;&quot;</span>
         <span class="kn">from</span><span class="w"> </span><span class="nn">quadrants.lang._ndarray</span><span class="w"> </span><span class="kn">import</span> <span class="n">Ndarray</span>  <span class="c1"># pylint: disable=C0415</span>
 
         <span class="k">if</span> <span class="ow">not</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">value</span><span class="p">,</span> <span class="n">Ndarray</span><span class="p">):</span>
