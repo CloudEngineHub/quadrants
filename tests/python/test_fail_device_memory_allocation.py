@@ -5,11 +5,13 @@ import quadrants as qd
 from tests import test_utils
 
 
-@test_utils.test(arch=qd.gpu)
+@test_utils.test(arch=qd.gpu, exclude=[qd.metal])
 def test_huge_allocation_fail_at_allocate_time():
     """Ensure huge allocation fails at allocate time and not at memset to 0"""
-    # No match= filter: the exact error message varies across backends (LLVM pool, CUDA malloc_async, Metal, Vulkan).
+    # No match= filter: the exact error message varies across backends (LLVM pool, CUDA malloc_async, Vulkan).
     # We only care that OOM raises a RuntimeError rather than crashing or silently succeeding.
+    # Metal is excluded: its unified memory model means GPU allocations consume system RAM, and the unbounded loop
+    # can OOM-kill the CI runner before Metal reports an allocation failure.
     with pytest.raises(RuntimeError):
         allocations = []
         while True:
