@@ -200,9 +200,6 @@ def pytest_handlecrashitem(crashitem, report, sched):
 
 
 import importlib
-import sys
-
-import pytest
 
 
 @pytest.fixture
