@@ -215,7 +215,7 @@ assert t._unwrap() is a   # same underlying impl
 
 ## Cross-backend `copy_from` is not supported
 
-`tensor.copy_from(other)` requires both tensors to share the same backend. Mixed-backend copies are deliberately unsupported because the intended deployment model is process-wide, homogeneous backend selection (e.g. via a `GS_ENABLE_NDARRAY` env var):
+`tensor.copy_from(other)` requires both tensors to share the same backend:
 
 ```python
 a = qd.tensor(qd.f32, shape=(4,), backend=qd.Backend.FIELD)
