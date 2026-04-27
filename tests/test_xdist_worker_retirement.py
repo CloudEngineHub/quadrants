@@ -35,20 +35,55 @@ def xdist_project(pytester):
     pytester.makeconftest(
         """
         import os
+        import tempfile
         import pytest
 
-        @pytest.hookimpl(trylast=True)
+        def _exit_marker_dir():
+            return os.environ.get("_QD_XDIST_EXIT_MARKER_DIR")
+
+        def pytest_configure(config):
+            if os.environ.get("PYTEST_XDIST_WORKER"):
+                return
+            if os.environ.get("_QD_XDIST_EXIT_MARKER_DIR"):
+                return
+            d = os.path.join(tempfile.gettempdir(), f"qd_xdist_exits_{os.getpid()}")
+            os.makedirs(d, exist_ok=True)
+            os.environ["_QD_XDIST_EXIT_MARKER_DIR"] = d
+
+        @pytest.hookimpl(wrapper=True, tryfirst=True)
         def pytest_runtest_logreport(report):
-            if not os.environ.get("PYTEST_XDIST_WORKER"):
-                return
-            if report.outcome not in ("error", "failed"):
-                return
-            os._exit(1)
+            if getattr(report, "_qd_suppress", False):
+                return None
+            result = yield
+            if os.environ.get("PYTEST_XDIST_WORKER") and report.outcome in ("error", "failed"):
+                d = _exit_marker_dir()
+                if d:
+                    worker_id = os.environ["PYTEST_XDIST_WORKER"]
+                    try:
+                        with open(os.path.join(d, worker_id), "w") as f:
+                            f.write(report.nodeid)
+                    except OSError:
+                        pass
+                os._exit(1)
+            return result
 
         def pytest_handlecrashitem(crashitem, report, sched):
-            report.outcome = "passed"
-            report.when = "teardown"
-            report.longrepr = None
+            d = _exit_marker_dir()
+            if not d:
+                return
+            node = getattr(report, "node", None)
+            if not node:
+                return
+            worker_id = node.gateway.id
+            marker = os.path.join(d, worker_id)
+            if not os.path.exists(marker):
+                return
+            try:
+                os.unlink(marker)
+            except OSError:
+                pass
+            report._qd_suppress = True
+            return True
         """
     )
     return pytester

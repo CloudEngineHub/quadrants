@@ -1,6 +1,7 @@
 import gc
 import os
 import sys
+import tempfile
 
 import pytest
 
@@ -112,37 +113,90 @@ def pytest_generate_tests(metafunc):
         metafunc.parametrize("req_arch,req_options", [(None, None)], ids=["none"])
 
 
-@pytest.hookimpl(trylast=True)
+def _exit_marker_dir():
+    """Temp directory shared between xdist controller and workers for intentional-exit markers."""
+    return os.environ.get("_QD_XDIST_EXIT_MARKER_DIR")
+
+
+def pytest_configure(config):
+    """On the xdist controller, create a temp directory for intentional-exit markers.
+
+    Workers inherit the ``_QD_XDIST_EXIT_MARKER_DIR`` env var and use the same directory.
+    """
+    if os.environ.get("PYTEST_XDIST_WORKER"):
+        return
+    if os.environ.get("_QD_XDIST_EXIT_MARKER_DIR"):
+        return
+    d = os.path.join(tempfile.gettempdir(), f"qd_xdist_exits_{os.getpid()}")
+    os.makedirs(d, exist_ok=True)
+    os.environ["_QD_XDIST_EXIT_MARKER_DIR"] = d
+
+
+def pytest_unconfigure(config):
+    """Clean up the marker directory at session end."""
+    if os.environ.get("PYTEST_XDIST_WORKER"):
+        return
+    d = _exit_marker_dir()
+    if d and os.path.isdir(d):
+        import shutil
+
+        shutil.rmtree(d, ignore_errors=True)
+
+
+@pytest.hookimpl(wrapper=True, tryfirst=True)
 def pytest_runtest_logreport(report):
-    """
-    Kill the xdist worker process after a test failure so it restarts with
-    clean GPU state.  The real test report is sent by xdist's own hook
-    (which runs before this trylast hook) before we exit.  The controller's
-    pytest_handlecrashitem hook below suppresses the synthetic "worker
-    crashed" duplicate.
-    """
-    if not os.environ.get("PYTEST_XDIST_WORKER"):
-        return
+    """Handle xdist worker retirement and crash-report suppression.
 
-    if report.outcome not in ("rerun", "error", "failed"):
-        return
+    On the controller: swallow synthetic crash reports that were already marked for suppression by
+    pytest_handlecrashitem.
 
-    os._exit(1)
+    On workers: after a test failure, write an intentional-exit marker and kill the process so it
+    restarts with clean GPU state.  The real test report is sent by inner hooks (including xdist's
+    report-forwarding hook) during ``yield`` before we exit.
+    """
+    if getattr(report, "_qd_suppress", False):
+        return None
+
+    result = yield
+
+    if os.environ.get("PYTEST_XDIST_WORKER") and report.outcome in ("rerun", "error", "failed"):
+        d = _exit_marker_dir()
+        if d:
+            worker_id = os.environ["PYTEST_XDIST_WORKER"]
+            try:
+                with open(os.path.join(d, worker_id), "w") as f:
+                    f.write(report.nodeid)
+            except OSError:
+                pass
+        os._exit(1)
+
+    return result
 
 
 def pytest_handlecrashitem(crashitem, report, sched):
-    """Suppress the synthetic 'worker crashed while running ...' report.
+    """Suppress the synthetic crash report only for intentional ``os._exit(1)`` exits.
 
-    When pytest_runtest_logreport above kills a worker via os._exit(1),
-    stock xdist treats it as a crash and synthesizes a duplicate failure
-    report.  The real report was already sent before the exit, so we
-    mark the synthetic one as passed to keep it out of the failure summary.
-    This hook is firstresult=True in xdist, so returning here prevents
-    the default handler from running.
+    When a worker is killed intentionally (to reset GPU state after a failure), it writes a marker
+    file before exiting.  If the marker exists, we flag the synthetic report for suppression and
+    return a truthy value to stop the firstresult hook chain.  Genuine crashes (segfaults, OOM,
+    etc.) have no marker, so their reports pass through unmodified.
     """
-    report.outcome = "passed"
-    report.when = "teardown"
-    report.longrepr = None
+    d = _exit_marker_dir()
+    if not d:
+        return
+    node = getattr(report, "node", None)
+    if not node:
+        return
+    worker_id = node.gateway.id
+    marker = os.path.join(d, worker_id)
+    if not os.path.exists(marker):
+        return
+    try:
+        os.unlink(marker)
+    except OSError:
+        pass
+    report._qd_suppress = True
+    return True
 
 
 import importlib
