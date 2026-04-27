@@ -1,4 +1,3 @@
-import platform
 import sys
 
 import pytest
@@ -19,7 +18,7 @@ def test_huge_allocation_fail_at_allocate_time():
     # Metal is excluded: its unified memory model means GPU allocations consume system RAM, and the unbounded loop
     # can OOM-kill the CI runner before Metal reports an allocation failure.
     # Vulkan on macOS uses MoltenVK (Metal under the hood) with the same unified-memory OOM risk.
-    if platform.system() == "Darwin" and qd.lang.impl.current_cfg().arch == qd.vulkan:
+    if sys.platform == "darwin" and qd.lang.impl.current_cfg().arch == qd.vulkan:
         pytest.skip("Vulkan on macOS uses MoltenVK with unified memory; same OOM-kill risk as Metal")
     with pytest.raises(RuntimeError):
         allocations = []
