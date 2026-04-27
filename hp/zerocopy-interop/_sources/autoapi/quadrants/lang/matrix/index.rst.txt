@@ -703,7 +703,7 @@ Module Contents
 
 
 
-   .. py:method:: to_numpy(keep_dims=False, dtype=None, *, copy=None)
+   .. py:method:: to_numpy(keep_dims=False, dtype=None, *, copy=None, layout=None)
 
       Converts the field instance to a NumPy array.
 
@@ -718,13 +718,15 @@ Module Contents
                    (requires CPU backend and a supported dtype) or raises ``ValueError``. Note: zero-copy numpy arrays
                    alias the field's underlying C++ runtime memory; callers opting into ``copy=False`` are responsible for
                    the buffer lifetime.
+      :param layout: Optional axis permutation tuple in ``np.transpose`` semantics applied AFTER the keep_dims-resolved
+                     shape. Cached per ``(layout, expected_shape)``.
 
       :returns: The result NumPy array.
       :rtype: numpy.ndarray
 
 
 
-   .. py:method:: to_torch(device=None, keep_dims=False, *, copy=None)
+   .. py:method:: to_torch(device=None, keep_dims=False, *, copy=None, layout=None)
 
       Converts the field instance to a PyTorch tensor.
 
@@ -735,6 +737,8 @@ Module Contents
       :type keep_dims: bool, optional
       :param copy: ``None`` (default) prefers zero-copy, ``True`` forces an independent copy, ``False`` requires
                    zero-copy or raises.
+      :param layout: Optional axis permutation tuple in ``tensor.permute`` semantics applied AFTER the keep_dims-resolved
+                     shape. Cached per ``(layout, expected_shape)`` for hot-loop reuse.
 
       :returns: The result torch tensor.
       :rtype: torch.tensor

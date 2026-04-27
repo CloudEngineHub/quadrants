@@ -1786,7 +1786,7 @@
     <span class="nd">@python_scope</span>
 <div class="viewcode-block" id="MatrixField.to_numpy">
 <a class="viewcode-back" href="../../../autoapi/quadrants/lang/matrix/index.html#quadrants.lang.matrix.MatrixField.to_numpy">[docs]</a>
-    <span class="k">def</span><span class="w"> </span><span class="nf">to_numpy</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">keep_dims</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="o">*</span><span class="p">,</span> <span class="n">copy</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">to_numpy</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">keep_dims</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="o">*</span><span class="p">,</span> <span class="n">copy</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">layout</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
 <span class="w">        </span><span class="sd">&quot;&quot;&quot;Converts the field instance to a NumPy array.</span>
 
 <span class="sd">        Args:</span>
@@ -1799,6 +1799,8 @@
 <span class="sd">                (requires CPU backend and a supported dtype) or raises ``ValueError``. Note: zero-copy numpy arrays</span>
 <span class="sd">                alias the field&#39;s underlying C++ runtime memory; callers opting into ``copy=False`` are responsible for</span>
 <span class="sd">                the buffer lifetime.</span>
+<span class="sd">            layout: Optional axis permutation tuple in ``np.transpose`` semantics applied AFTER the keep_dims-resolved</span>
+<span class="sd">                shape. Cached per ``(layout, expected_shape)``.</span>
 
 <span class="sd">        Returns:</span>
 <span class="sd">            numpy.ndarray: The result NumPy array.</span>
@@ -1809,15 +1811,14 @@
             <span class="n">np_dtype_target</span> <span class="o">=</span> <span class="n">to_numpy_type</span><span class="p">(</span><span class="n">dtype</span><span class="p">)</span> <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">dtype</span><span class="p">,</span> <span class="n">qd_python_core</span><span class="o">.</span><span class="n">DataTypeCxx</span><span class="p">)</span> <span class="k">else</span> <span class="n">dtype</span>
 
         <span class="k">if</span> <span class="n">copy</span> <span class="ow">is</span> <span class="kc">False</span><span class="p">:</span>
-            <span class="n">arr</span> <span class="o">=</span> <span class="n">_interop</span><span class="o">.</span><span class="n">get_zerocopy_numpy</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">copy</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">dtype_target</span><span class="o">=</span><span class="n">np_dtype_target</span><span class="p">)</span>
-            <span class="k">if</span> <span class="n">arr</span><span class="o">.</span><span class="n">shape</span> <span class="o">!=</span> <span class="n">expected</span><span class="p">:</span>
-                <span class="n">arr</span> <span class="o">=</span> <span class="n">arr</span><span class="o">.</span><span class="n">reshape</span><span class="p">(</span><span class="n">expected</span><span class="p">)</span>
-            <span class="k">return</span> <span class="n">arr</span>
+            <span class="k">return</span> <span class="n">_interop</span><span class="o">.</span><span class="n">get_zerocopy_numpy</span><span class="p">(</span>
+                <span class="bp">self</span><span class="p">,</span> <span class="n">copy</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">dtype_target</span><span class="o">=</span><span class="n">np_dtype_target</span><span class="p">,</span> <span class="n">layout</span><span class="o">=</span><span class="n">layout</span><span class="p">,</span> <span class="n">target_shape</span><span class="o">=</span><span class="n">expected</span>
+            <span class="p">)</span>
         <span class="c1"># copy is None or True: try fast zerocopy+clone path, else kernel fallback.</span>
-        <span class="n">arr</span> <span class="o">=</span> <span class="n">_interop</span><span class="o">.</span><span class="n">get_zerocopy_numpy</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">copy</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">dtype_target</span><span class="o">=</span><span class="n">np_dtype_target</span><span class="p">)</span>
+        <span class="n">arr</span> <span class="o">=</span> <span class="n">_interop</span><span class="o">.</span><span class="n">get_zerocopy_numpy</span><span class="p">(</span>
+            <span class="bp">self</span><span class="p">,</span> <span class="n">copy</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">dtype_target</span><span class="o">=</span><span class="n">np_dtype_target</span><span class="p">,</span> <span class="n">layout</span><span class="o">=</span><span class="n">layout</span><span class="p">,</span> <span class="n">target_shape</span><span class="o">=</span><span class="n">expected</span>
+        <span class="p">)</span>
         <span class="k">if</span> <span class="n">arr</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
-            <span class="k">if</span> <span class="n">arr</span><span class="o">.</span><span class="n">shape</span> <span class="o">!=</span> <span class="n">expected</span><span class="p">:</span>
-                <span class="n">arr</span> <span class="o">=</span> <span class="n">arr</span><span class="o">.</span><span class="n">reshape</span><span class="p">(</span><span class="n">expected</span><span class="p">)</span>
             <span class="k">return</span> <span class="n">arr</span>
 
         <span class="k">if</span> <span class="n">dtype</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
@@ -1827,12 +1828,14 @@
 
         <span class="n">matrix_to_ext_arr</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">arr</span><span class="p">,</span> <span class="n">as_vector</span><span class="p">)</span>
         <span class="n">runtime_ops</span><span class="o">.</span><span class="n">sync</span><span class="p">()</span>
+        <span class="k">if</span> <span class="n">layout</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="n">arr</span> <span class="o">=</span> <span class="n">arr</span><span class="o">.</span><span class="n">transpose</span><span class="p">(</span><span class="n">layout</span><span class="p">)</span>
         <span class="k">return</span> <span class="n">arr</span></div>
 
 
 <div class="viewcode-block" id="MatrixField.to_torch">
 <a class="viewcode-back" href="../../../autoapi/quadrants/lang/matrix/index.html#quadrants.lang.matrix.MatrixField.to_torch">[docs]</a>
-    <span class="k">def</span><span class="w"> </span><span class="nf">to_torch</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">device</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">keep_dims</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="o">*</span><span class="p">,</span> <span class="n">copy</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">to_torch</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">device</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">keep_dims</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="o">*</span><span class="p">,</span> <span class="n">copy</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">layout</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
 <span class="w">        </span><span class="sd">&quot;&quot;&quot;Converts the field instance to a PyTorch tensor.</span>
 
 <span class="sd">        Args:</span>
@@ -1841,15 +1844,17 @@
 <span class="sd">                See :meth:`~quadrants.lang.field.MatrixField.to_numpy` for more detailed explanation.</span>
 <span class="sd">            copy: ``None`` (default) prefers zero-copy, ``True`` forces an independent copy, ``False`` requires</span>
 <span class="sd">                zero-copy or raises.</span>
+<span class="sd">            layout: Optional axis permutation tuple in ``tensor.permute`` semantics applied AFTER the keep_dims-resolved</span>
+<span class="sd">                shape. Cached per ``(layout, expected_shape)`` for hot-loop reuse.</span>
 
 <span class="sd">        Returns:</span>
 <span class="sd">            torch.tensor: The result torch tensor.</span>
 <span class="sd">        &quot;&quot;&quot;</span>
         <span class="n">expected</span><span class="p">,</span> <span class="n">as_vector</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_matrix_view_shape</span><span class="p">(</span><span class="n">keep_dims</span><span class="p">)</span>
-        <span class="n">tc</span> <span class="o">=</span> <span class="n">_interop</span><span class="o">.</span><span class="n">get_zerocopy_torch</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">copy</span><span class="o">=</span><span class="n">copy</span><span class="p">,</span> <span class="n">device</span><span class="o">=</span><span class="n">device</span><span class="p">)</span>
+        <span class="n">tc</span> <span class="o">=</span> <span class="n">_interop</span><span class="o">.</span><span class="n">get_zerocopy_torch</span><span class="p">(</span>
+            <span class="bp">self</span><span class="p">,</span> <span class="n">copy</span><span class="o">=</span><span class="n">copy</span><span class="p">,</span> <span class="n">device</span><span class="o">=</span><span class="n">device</span><span class="p">,</span> <span class="n">layout</span><span class="o">=</span><span class="n">layout</span><span class="p">,</span> <span class="n">target_shape</span><span class="o">=</span><span class="n">expected</span>
+        <span class="p">)</span>
         <span class="k">if</span> <span class="n">tc</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
-            <span class="k">if</span> <span class="n">tc</span><span class="o">.</span><span class="n">shape</span> <span class="o">!=</span> <span class="n">expected</span><span class="p">:</span>
-                <span class="n">tc</span> <span class="o">=</span> <span class="n">tc</span><span class="o">.</span><span class="n">reshape</span><span class="p">(</span><span class="n">expected</span><span class="p">)</span>
             <span class="k">return</span> <span class="n">tc</span>
 
         <span class="kn">import</span><span class="w"> </span><span class="nn">torch</span>  <span class="c1"># pylint: disable=C0415</span>
@@ -1860,6 +1865,8 @@
 
         <span class="n">matrix_to_ext_arr</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">arr</span><span class="p">,</span> <span class="n">as_vector</span><span class="p">)</span>
         <span class="n">runtime_ops</span><span class="o">.</span><span class="n">sync</span><span class="p">()</span>
+        <span class="k">if</span> <span class="n">layout</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="n">arr</span> <span class="o">=</span> <span class="n">arr</span><span class="o">.</span><span class="n">permute</span><span class="p">(</span><span class="o">*</span><span class="n">layout</span><span class="p">)</span>
         <span class="k">return</span> <span class="n">arr</span></div>
 
 

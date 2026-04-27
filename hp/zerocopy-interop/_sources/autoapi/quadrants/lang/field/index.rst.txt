@@ -168,7 +168,7 @@ Module Contents
 
 
 
-   .. py:method:: to_numpy(dtype=None, *, copy=None)
+   .. py:method:: to_numpy(dtype=None, *, copy=None, layout=None)
 
       Converts this field to a `numpy.ndarray`.
 
@@ -178,10 +178,13 @@ Module Contents
                    (requires CPU backend and a supported dtype) or raises ``ValueError``. Note: zero-copy numpy arrays
                    alias the field's underlying C++ runtime memory; callers opting into ``copy=False`` are responsible for
                    the buffer lifetime.
+      :param layout: Optional axis permutation tuple in ``np.transpose`` semantics (i-th element is the input axis at
+                     output position i). The returned array is the natural-layout view permuted by ``layout`` and cached
+                     per perm-key. ``None`` (default) returns the natural layout.
 
 
 
-   .. py:method:: to_torch(device=None, *, copy=None)
+   .. py:method:: to_torch(device=None, *, copy=None, layout=None)
 
       Converts this field to a `torch.tensor`.
 
@@ -189,6 +192,9 @@ Module Contents
                      device.
       :param copy: ``None`` (default) prefers zero-copy, ``True`` forces an independent copy, ``False`` requires
                    zero-copy or raises.
+      :param layout: Optional axis permutation tuple in ``tensor.permute`` semantics (i-th element is the input axis at
+                     output position i). The returned tensor is the natural-layout view permuted by ``layout`` and cached
+                     per perm-key for hot-loop reuse. ``None`` (default) returns the natural layout.
 
 
 

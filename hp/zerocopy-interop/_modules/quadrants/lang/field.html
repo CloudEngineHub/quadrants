@@ -661,7 +661,7 @@
     <span class="nd">@python_scope</span>
 <div class="viewcode-block" id="ScalarField.to_numpy">
 <a class="viewcode-back" href="../../../autoapi/quadrants/lang/field/index.html#quadrants.lang.field.ScalarField.to_numpy">[docs]</a>
-    <span class="k">def</span><span class="w"> </span><span class="nf">to_numpy</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="o">*</span><span class="p">,</span> <span class="n">copy</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">to_numpy</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="o">*</span><span class="p">,</span> <span class="n">copy</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">layout</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
 <span class="w">        </span><span class="sd">&quot;&quot;&quot;Converts this field to a `numpy.ndarray`.</span>
 
 <span class="sd">        Args:</span>
@@ -671,6 +671,9 @@
 <span class="sd">                (requires CPU backend and a supported dtype) or raises ``ValueError``. Note: zero-copy numpy arrays</span>
 <span class="sd">                alias the field&#39;s underlying C++ runtime memory; callers opting into ``copy=False`` are responsible for</span>
 <span class="sd">                the buffer lifetime.</span>
+<span class="sd">            layout: Optional axis permutation tuple in ``np.transpose`` semantics (i-th element is the input axis at</span>
+<span class="sd">                output position i). The returned array is the natural-layout view permuted by ``layout`` and cached</span>
+<span class="sd">                per perm-key. ``None`` (default) returns the natural layout.</span>
 <span class="sd">        &quot;&quot;&quot;</span>
         <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">parent</span><span class="p">()</span><span class="o">.</span><span class="n">_snode</span><span class="o">.</span><span class="n">ptr</span><span class="o">.</span><span class="n">type</span> <span class="o">==</span> <span class="n">_qd_core</span><span class="o">.</span><span class="n">SNodeType</span><span class="o">.</span><span class="n">dynamic</span><span class="p">:</span>
             <span class="n">warn</span><span class="p">(</span>
@@ -681,9 +684,9 @@
             <span class="n">np_dtype_target</span> <span class="o">=</span> <span class="n">to_numpy_type</span><span class="p">(</span><span class="n">dtype</span><span class="p">)</span> <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">dtype</span><span class="p">,</span> <span class="n">_qd_core</span><span class="o">.</span><span class="n">DataTypeCxx</span><span class="p">)</span> <span class="k">else</span> <span class="n">dtype</span>
 
         <span class="k">if</span> <span class="n">copy</span> <span class="ow">is</span> <span class="kc">False</span><span class="p">:</span>
-            <span class="k">return</span> <span class="n">_interop</span><span class="o">.</span><span class="n">get_zerocopy_numpy</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">copy</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">dtype_target</span><span class="o">=</span><span class="n">np_dtype_target</span><span class="p">)</span>
+            <span class="k">return</span> <span class="n">_interop</span><span class="o">.</span><span class="n">get_zerocopy_numpy</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">copy</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">dtype_target</span><span class="o">=</span><span class="n">np_dtype_target</span><span class="p">,</span> <span class="n">layout</span><span class="o">=</span><span class="n">layout</span><span class="p">)</span>
         <span class="c1"># copy is None or True: try fast zerocopy+clone path, else kernel fallback.</span>
-        <span class="n">arr</span> <span class="o">=</span> <span class="n">_interop</span><span class="o">.</span><span class="n">get_zerocopy_numpy</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">copy</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">dtype_target</span><span class="o">=</span><span class="n">np_dtype_target</span><span class="p">)</span>
+        <span class="n">arr</span> <span class="o">=</span> <span class="n">_interop</span><span class="o">.</span><span class="n">get_zerocopy_numpy</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">copy</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">dtype_target</span><span class="o">=</span><span class="n">np_dtype_target</span><span class="p">,</span> <span class="n">layout</span><span class="o">=</span><span class="n">layout</span><span class="p">)</span>
         <span class="k">if</span> <span class="n">arr</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
             <span class="k">return</span> <span class="n">arr</span>
 
@@ -697,13 +700,15 @@
         <span class="n">tensor_to_ext_arr</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">arr</span><span class="p">)</span>
         <span class="c1"># TODO: can we remove .runtime_ops here?</span>
         <span class="n">quadrants</span><span class="o">.</span><span class="n">lang</span><span class="o">.</span><span class="n">runtime_ops</span><span class="o">.</span><span class="n">sync</span><span class="p">()</span>  <span class="c1"># type: ignore</span>
+        <span class="k">if</span> <span class="n">layout</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="n">arr</span> <span class="o">=</span> <span class="n">arr</span><span class="o">.</span><span class="n">transpose</span><span class="p">(</span><span class="n">layout</span><span class="p">)</span>
         <span class="k">return</span> <span class="n">arr</span></div>
 
 
     <span class="nd">@python_scope</span>
 <div class="viewcode-block" id="ScalarField.to_torch">
 <a class="viewcode-back" href="../../../autoapi/quadrants/lang/field/index.html#quadrants.lang.field.ScalarField.to_torch">[docs]</a>
-    <span class="k">def</span><span class="w"> </span><span class="nf">to_torch</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">device</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="o">*</span><span class="p">,</span> <span class="n">copy</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">to_torch</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">device</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="o">*</span><span class="p">,</span> <span class="n">copy</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">layout</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
 <span class="w">        </span><span class="sd">&quot;&quot;&quot;Converts this field to a `torch.tensor`.</span>
 
 <span class="sd">        Args:</span>
@@ -711,8 +716,11 @@
 <span class="sd">                device.</span>
 <span class="sd">            copy: ``None`` (default) prefers zero-copy, ``True`` forces an independent copy, ``False`` requires</span>
 <span class="sd">                zero-copy or raises.</span>
+<span class="sd">            layout: Optional axis permutation tuple in ``tensor.permute`` semantics (i-th element is the input axis at</span>
+<span class="sd">                output position i). The returned tensor is the natural-layout view permuted by ``layout`` and cached</span>
+<span class="sd">                per perm-key for hot-loop reuse. ``None`` (default) returns the natural layout.</span>
 <span class="sd">        &quot;&quot;&quot;</span>
-        <span class="n">tc</span> <span class="o">=</span> <span class="n">_interop</span><span class="o">.</span><span class="n">get_zerocopy_torch</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">copy</span><span class="o">=</span><span class="n">copy</span><span class="p">,</span> <span class="n">device</span><span class="o">=</span><span class="n">device</span><span class="p">)</span>
+        <span class="n">tc</span> <span class="o">=</span> <span class="n">_interop</span><span class="o">.</span><span class="n">get_zerocopy_torch</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">copy</span><span class="o">=</span><span class="n">copy</span><span class="p">,</span> <span class="n">device</span><span class="o">=</span><span class="n">device</span><span class="p">,</span> <span class="n">layout</span><span class="o">=</span><span class="n">layout</span><span class="p">)</span>
         <span class="k">if</span> <span class="n">tc</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
             <span class="k">return</span> <span class="n">tc</span>
 
@@ -725,6 +733,8 @@
         <span class="n">tensor_to_ext_arr</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">arr</span><span class="p">)</span>
         <span class="c1"># TODO: can we remove .runtime_ops here?</span>
         <span class="n">quadrants</span><span class="o">.</span><span class="n">lang</span><span class="o">.</span><span class="n">runtime_ops</span><span class="o">.</span><span class="n">sync</span><span class="p">()</span>  <span class="c1"># type: ignore</span>
+        <span class="k">if</span> <span class="n">layout</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="n">arr</span> <span class="o">=</span> <span class="n">arr</span><span class="o">.</span><span class="n">permute</span><span class="p">(</span><span class="o">*</span><span class="n">layout</span><span class="p">)</span>
         <span class="k">return</span> <span class="n">arr</span></div>
 
 

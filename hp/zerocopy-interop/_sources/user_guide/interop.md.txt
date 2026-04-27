@@ -72,6 +72,8 @@ m.from_numpy(arr)
 
 ## Zero-copy interop via DLPack
 
+Quadrants' zero-copy interop has been designed with **PyTorch as the first-class user interface**: support, defaults, and supported-dtype/backend matrices are driven by what PyTorch can consume cleanly via DLPack. NumPy is supported on CPU backends as a free side benefit of the same DLPack capsule. Several of the limitations below (e.g. the Apple Metal `torch >= 2.9.2` requirement, or the 0-dim `ScalarField` carve-out) are inherited from PyTorch's current DLPack importer rather than from Quadrants itself.
+
 `to_torch()` and `to_numpy()` accept a keyword-only `copy` argument that controls whether the returned tensor/array is an independent copy of the data or a zero-copy view that aliases the underlying Quadrants memory.
 
 ```python
@@ -88,11 +90,11 @@ Modifications via the view are visible to subsequent Quadrants kernel reads, and
 
 Zero-copy uses [DLPack](https://github.com/dmlc/dlpack) and requires:
 
-- a backend with DLPack support: `cpu` (`x64`/`arm64`), `cuda`, `amdgpu`, or `metal` (Vulkan is not supported);
+- a backend with DLPack support: `cpu` (`x64`/`arm64`), `cuda`, `amdgpu`, or `metal`. Vulkan is not supported: Vulkan-backed DLPack tensors are not processed by many well-known scientific computing libraries (torch, numpy, etc.);
 - a DLPack-supported dtype: `i32`, `i64`, `f32`, `f64`, `u1` (other dtypes such as `f16`, `u8`, `u16` fall back to the kernel-copy path);
 - on Apple Metal, `torch >= 2.9.2` for fields (required for DLPack `bytes_offset` on MPS; see [pytorch/pytorch#168193](https://github.com/pytorch/pytorch/pull/168193));
 - 0-dim `ScalarField` instances are not zero-copyable on any backend (PyTorch DLPack `bytes_offset` limitation);
-- `StructField` members are not zero-copyable yet (see [Struct fields](#struct-fields) below); `copy=False` raises on `StructField`.
+- members of an AOS `StructField` (the default `Struct.field(..., layout=Layout.AOS)`) are not zero-copyable yet (see [Struct fields](#struct-fields) below); members of an SOA `StructField` (`layout=Layout.SOA`) **are** zero-copyable individually.
 
 Zero-copy `to_numpy()` additionally requires a CPU backend, because numpy arrays cannot reference GPU memory.
 
@@ -153,56 +155,78 @@ v3 = f2.to_torch(copy=False)            # fresh view; v1/v2 must not be used
 
 ### Axis layout with `layout=`
 
-`to_torch()` and `to_numpy()` accept a keyword `layout: str = "natural"` that selects the axis order of the returned view. The view is materialised by a single `movedim` from Quadrants' native layout and **cached per layout** alongside the natural view, so repeated calls in a hot loop reduce to one attribute lookup.
+`to_torch()` and `to_numpy()` accept a keyword `layout: tuple[int, ...] | None = None` that selects the axis order of the returned view. When set, `layout` is interpreted as an axis permutation in the same convention as `torch.movedim(src, dst)` / `numpy.moveaxis(src, dst)`: the i-th element of the tuple says which input axis ends up at output position `i`. The default `layout=None` returns the natural view (Quadrants' native order, batch axis last).
 
-| `layout=` | Result | When to use |
-|---|---|---|
-| `"natural"` (default) | Quadrants' native order (batch axis last). | Direct kernel-storage layout; matches `to_numpy` / `to_torch` historically. |
-| `"batch_first"` | Last axis moved to the front. | Frameworks (Genesis, JAX-style sims, RL libraries) that expect `(batch, ...)`. |
+The permuted view is materialised once via a single `movedim` (or `moveaxis`) from the natural-layout view and **cached per perm-tuple key** alongside the natural view, so repeated calls in a hot loop with the same `layout=` reduce to a tuple-equality check + cached-tensor return.
 
 ```python
 f = qd.field(qd.f32, shape=(7, 4096))   # 7 components, 4096 envs
 
-natural     = f.to_torch(copy=False)                              # shape (7, 4096)
-batch_first = f.to_torch(copy=False, layout="batch_first")        # shape (4096, 7)
+natural     = f.to_torch(copy=False)                            # shape (7, 4096)
+batch_first = f.to_torch(copy=False, layout=(1, 0))             # shape (4096, 7)
 
-assert natural.data_ptr() == batch_first.data_ptr()               # same underlying memory
+assert natural.data_ptr() == batch_first.data_ptr()             # same underlying memory
+```
+
+For an n-d field the "move last axis to front" perm common in batched simulations and RL is `(n - 1, *range(n - 1))`:
+
+```python
+f3d = qd.field(qd.f32, shape=(3, 7, 4096))
+n = len(f3d.shape)
+batch_first = f3d.to_torch(copy=False, layout=(n - 1, *range(n - 1)))   # (4096, 3, 7)
 ```
 
 Caching matters on CPU, where the Python-side `to_torch().movedim(...)` pattern is dispatch-heavy in a per-step loop:
 
 ```python
 # Hot loop -- prefer this:
+PERM = (n - 1, *range(n - 1))
 for _ in range(n_steps):
-    dst = f.to_torch(copy=False, layout="batch_first")       # cached, one attribute lookup
+    dst = f.to_torch(copy=False, layout=PERM)        # cached, one tuple-eq + return on the hit path
     ...
 
 # over the equivalent but slower:
 for _ in range(n_steps):
-    dst = f.to_torch(copy=False).movedim(-1, 0)              # fresh torch dispatch every step
+    dst = f.to_torch(copy=False).movedim(-1, 0)      # fresh torch dispatch every step
     ...
 ```
 
 `layout=` composes with `copy=True` (clones the cached layout view), `device=` (transfers the cached layout view), `keep_dims` (matrix fields only), and the lifetime / synchronisation rules described above.
 
-For 0-D and 1-D fields, every layout collapses to the same tensor.
+For 0-D and 1-D fields, every layout collapses to the same tensor (any 1-element perm is a no-op; for 1-D fields the only legal perm is `(0,)`).
 
-Only the named layouts are cached; the design keeps the cache size bounded and predictable. New named layouts can be added in future Quadrants releases without breaking call sites.
+Cache structure: each field holds a `dict[tuple[int, ...], Tensor]` of permuted views plus a single-slot cache for the most recently requested key. In typical hot loops a callsite always passes the same perm tuple, so the slot hits ~100 % of the time. The dict entries (and the slot) are cleared together with the natural-layout view on `qd.reset()` / `qd.init()`.
 
 ### Apple Metal: synchronisation
 
-On Apple Metal, Quadrants and PyTorch MPS use separate Metal command queues. Quadrants kernel writes are made visible to the MPS-backed view via an automatic `qd.sync()` on every `to_torch()` / `to_numpy()` call. Cloning a view also synchronises MPS so that the clone sees the latest writes:
+On Apple Metal, Quadrants and PyTorch MPS use separate Metal command queues. Quadrants kernel writes are made visible to the MPS-backed view via an automatic `qd.sync()` on every `to_torch()` / `to_numpy()` call. When you ask Quadrants for an independent buffer with `copy=True`, Quadrants additionally calls `torch.mps.synchronize()` after cloning so the returned tensor reflects the latest device writes:
 
 ```python
 qd.init(arch=qd.metal)
 f = qd.field(qd.f32, shape=(64,))
 
-run_kernel(f)            # queues writes on the Quadrants Metal stream
-view = f.to_torch()      # qd.sync() runs internally; view sees the writes
-copy = view.clone()      # torch.mps.synchronize() runs internally; copy is up-to-date
+run_kernel(f)                       # queues writes on the Quadrants Metal stream
+view = f.to_torch()                 # qd.sync() runs internally; view sees the writes
+copy = f.to_torch(copy=True)        # qd.sync() + torch.mps.synchronize() run internally
 ```
 
-You do not need to call `qd.sync()` or `torch.mps.synchronize()` yourself when using `to_torch()` / `to_numpy()`.
+`view.clone()`, called by you on a tensor you already hold, is a plain PyTorch op and does **not** go through Quadrants -- it neither calls `qd.sync()` nor `torch.mps.synchronize()`. If you need that, either go through `f.to_torch(copy=True)` (which does both internally) or call `torch.mps.synchronize()` yourself before / after the clone.
+
+The reverse direction (PyTorch writes to a zero-copy view, then a Quadrants kernel reads from the same field) is **not** automatically synchronised. Because Quadrants and PyTorch MPS submit work to separate Metal command queues, a kernel launched immediately after a torch write may execute before the torch write has actually committed to memory:
+
+```python
+qd.init(arch=qd.metal)
+f = qd.field(qd.f32, shape=(64,))
+
+view = f.to_torch(copy=False)
+view.zero_()                     # queued on the torch MPS stream
+my_kernel(f)                     # may run BEFORE view.zero_() commits!
+
+torch.mps.synchronize()          # required to flush the torch MPS stream first
+my_kernel(f)                     # now safe
+```
+
+This is intentional: forcing a sync on every Quadrants kernel that touches a previously-zerocopied field would be very expensive in workloads that batch many torch ops and many kernels back-to-back. If you mutate fields from torch and then read them from a Quadrants kernel on Metal, call `torch.mps.synchronize()` once between the torch ops and the kernels.
 
 ### Lifetime caveats
 
@@ -218,17 +242,21 @@ If you need a tensor that outlives the runtime, use `copy=True` (or the default 
 
 ### Struct fields
 
-`StructField.to_torch()` and `StructField.to_numpy()` return a dictionary mapping each member name to an **independent copy** of that member's data. Struct fields use AOS (array-of-structures) cell layout: a `Struct.field({"a": i32, "b": f32}, shape=(N,))` stores `[a0, b0, a1, b1, ...]` in memory, with stride `sizeof(cell)` between consecutive `a`'s. Quadrants' C++ DLPack export does not currently emit cell-stride-aware views for individual members (it computes contiguous strides at the member dtype size, which would interleave neighboring members' bytes), so member views are forced to be copies until that is fixed.
+`StructField.to_torch()` and `StructField.to_numpy()` return a dictionary mapping each member name to a tensor / array; the `copy` argument is propagated to each member, so zero-copy availability is decided per member. The relevant axis is the SNode layout chosen at construction:
+
+- **AOS** (default `Struct.field(..., layout=Layout.AOS)`): all members share the struct cell, e.g. `Struct.field({"a": i32, "b": f32}, shape=(N,))` stores `[a0, b0, a1, b1, ...]` in memory, with stride `sizeof(cell)` between consecutive `a`'s. Quadrants' C++ DLPack export does not currently emit cell-stride-aware views for individual members (it computes contiguous strides at the member dtype size, which would interleave neighbouring members' bytes), so AOS members fall back to a kernel copy and `copy=False` raises on each AOS member.
+- **SOA** (`Struct.field(..., layout=Layout.SOA)`): each member sits in its own dense SNode subtree with contiguous storage, so members are zero-copyable individually under the usual backend / dtype rules. `copy=False` succeeds and returns aliasing views.
 
 ```python
-S = qd.types.struct(pos=qd.f32, vel=qd.f32)
-sf = S.field(shape=(16,))
+S_aos = qd.Struct.field({"pos": qd.f32, "vel": qd.f32}, shape=(16,))   # AOS (default)
+d_aos = S_aos.to_torch()                                                # dict of kernel copies
+d_aos["pos"][0] = 1.0                                                   # does NOT write back
 
-dicts = sf.to_torch()           # dict of independent copies (always)
-dicts["pos"][0] = 1.0           # does NOT write through to sf.pos
+S_soa = qd.Struct.field({"pos": qd.f32, "vel": qd.f32}, shape=(16,),
+                        layout=qd.Layout.SOA)
+d_soa = S_soa.to_torch(copy=False)                                      # dict of zero-copy views
+d_soa["pos"][0] = 1.0                                                   # writes through to S_soa.pos
 ```
-
-`copy=False` is rejected with `ValueError`; `copy=None` and `copy=True` are accepted and both produce copies.
 
 ## Direct torch tensor pass-through
 

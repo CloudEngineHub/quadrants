@@ -252,15 +252,19 @@ Module Contents
 
       Converts the Struct field instance to a dictionary of NumPy arrays.
 
-      Struct fields use AOS cell layout, but Quadrants' C++ ``field_to_dlpack`` does not currently emit
-      cell-stride-aware DLPack views for individual members (it computes contiguous strides at the member dtype
-      size, which would interleave neighboring members' bytes). Until the C++ export is taught about AOS strides,
-      ``StructField`` always returns independent copies; the ``copy`` argument is accepted for API symmetry but
-      ``copy=False`` is rejected.
+      Delegates per-member, so zero-copy availability is determined by each member individually:
+
+      * **SOA layout** (``Struct.field(..., layout=Layout.SOA)``): each member has its own dense SNode subtree with
+        contiguous storage, so members are zero-copyable on supported backends/dtypes.
+      * **AOS layout** (default ``Layout.AOS``): all members share a parent cell SNode and elements of the same
+        member are ``sizeof(cell)`` bytes apart. Quadrants' C++ ``field_to_dlpack`` does not currently emit
+        cell-stride-aware DLPack views for AOS members, so the per-member zero-copy is disabled and each member
+        falls back to a kernel copy.
 
       The dictionary may be nested when converting nested structs.
 
-      :param copy: must be ``None`` or ``True``; ``copy=False`` raises ``ValueError``.
+      :param copy: ``None`` (default) prefers zero-copy per member, ``True`` forces an independent buffer per member,
+                   ``False`` requires zero-copy on every member (raises if any member is AOS).
 
       :returns: The result NumPy array.
       :rtype: Dict[str, Union[numpy.ndarray, Dict]]
@@ -271,13 +275,14 @@ Module Contents
 
       Converts the Struct field instance to a dictionary of PyTorch tensors.
 
-      See :meth:`to_numpy` for why members are always returned as independent copies. ``copy=False`` is rejected.
+      Delegates per-member; see :meth:`to_numpy` for the SOA-vs-AOS zero-copy rules.
 
       The dictionary may be nested when converting nested structs.
 
       :param device: The desired device of returned tensors.
       :type device: torch.device, optional
-      :param copy: must be ``None`` or ``True``; ``copy=False`` raises ``ValueError``.
+      :param copy: ``None`` (default) prefers zero-copy per member, ``True`` forces an independent buffer per member,
+                   ``False`` requires zero-copy on every member (raises if any member is AOS).
 
       :returns: The result PyTorch tensor.
       :rtype: Dict[str, Union[torch.Tensor, Dict]]
