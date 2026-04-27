@@ -13,7 +13,7 @@ See [`tensor_types`](tensor_types.md), [`scalar_tensors`](scalar_tensors.md), an
 | Member | Underlying type | When to prefer |
 |---|---|---|
 | `qd.Backend.FIELD` | `qd.field` | Faster at runtime; recompiles when any dimension size changes. |
-| `qd.Backend.NDARRAY` | `qd.ndarray` | Slightly slower at runtime but avoids recompilation when sizes change. |
+| `qd.Backend.NDARRAY` | `qd.ndarray` | Slower at runtime but avoids recompilation when sizes change. |
 
 The choice is per tensor: a single program can freely mix backends.
 
