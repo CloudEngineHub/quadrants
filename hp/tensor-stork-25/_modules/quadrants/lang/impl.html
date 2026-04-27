@@ -901,6 +901,9 @@
     <span class="k">for</span> <span class="n">k</span> <span class="ow">in</span> <span class="n">old_kernels</span><span class="p">:</span>
         <span class="n">k</span><span class="o">.</span><span class="n">reset</span><span class="p">()</span>
     <span class="n">_qd_core</span><span class="o">.</span><span class="n">reset_default_compile_config</span><span class="p">()</span>
+    <span class="kn">from</span><span class="w"> </span><span class="nn">quadrants.lang._func_base</span><span class="w"> </span><span class="kn">import</span> <span class="n">_frozen_dc_plans</span>  <span class="c1"># pylint: disable=C0415</span>
+
+    <span class="n">_frozen_dc_plans</span><span class="o">.</span><span class="n">clear</span><span class="p">()</span>
 
 
 <span class="nd">@quadrants_scope</span>
