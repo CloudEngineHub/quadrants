@@ -355,9 +355,9 @@ class Ndarray:
             other (Ndarray): The source ndarray.
         """
         assert isinstance(other, Ndarray)
-        assert tuple(self.shape) == tuple(other.shape), (
-            f"copy_from shape mismatch: destination {tuple(self.shape)} vs source {tuple(other.shape)}"
-        )
+        assert tuple(self.shape) == tuple(
+            other.shape
+        ), f"copy_from shape mismatch: destination {tuple(self.shape)} vs source {tuple(other.shape)}"
         from quadrants._kernels import ndarray_to_ndarray  # pylint: disable=C0415
 
         ndarray_to_ndarray(self, other)
