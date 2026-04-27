@@ -98,16 +98,19 @@ _is_cpython = sys.implementation.name == "cpython"
 #    never change. Cache the unwrapped (post-``_unwrap()``) value for each field on the instance. Eliminates
 #    ``getattr`` + ``type() in _TENSOR_WRAPPER_TYPES`` + ``_unwrap()`` on every launch.
 
-_frozen_dc_plans: dict[tuple[int, type, str], tuple[tuple[str, str, Any], ...]] = {}
+_frozen_dc_plans: dict[tuple[int, type, str], tuple[set[str], tuple[tuple[str, str, Any], ...]]] = {}
 
 
 def _get_frozen_dc_plan(
     used_params: set[str], struct_cls: type, basename: str, fields_dict: dict
 ) -> tuple[tuple[str, str, Any], ...]:
     key = (id(used_params), struct_cls, basename)
-    plan = _frozen_dc_plans.get(key)
-    if plan is not None:
-        return plan
+    entry = _frozen_dc_plans.get(key)
+    # Guard against id() reuse: after the original set is garbage-collected, a new set can be allocated at the same
+    # address. mimalloc (default in CPython 3.13+) makes this significantly more likely. Validate with an identity
+    # check so a stale plan from a different kernel specialization is never returned.
+    if entry is not None and entry[0] is used_params:
+        return entry[1]
     entries: list[tuple[str, str, Any]] = []
     for field in fields_dict.values():
         if field._field_type is not _FIELD:
@@ -117,7 +120,7 @@ def _get_frozen_dc_plan(
             continue
         entries.append((field.name, full_name, field.type))
     plan = tuple(entries)
-    _frozen_dc_plans[key] = plan
+    _frozen_dc_plans[key] = (used_params, plan)
     return plan
 
 
