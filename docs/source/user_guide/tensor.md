@@ -1,6 +1,6 @@
 # Tensors
 
-Quadrants offers two underlying tensor implementations, `qd.field` and `qd.ndarray`. They have different runtime/compile-time trade-offs, and different physical memory layouts can suit different kernels.
+Quadrants offers two underlying tensor implementations, [`qd.field` and `qd.ndarray`](tensor_types.md). They have different runtime/compile-time trade-offs, and different physical memory layouts can suit different kernels.
 
 The tensor API lets you pick both the **backend** and the **physical memory layout** on a per-tensor basis at allocation time. The rest of the system (kernels, fastcache, autograd) stays out of the way.
 
