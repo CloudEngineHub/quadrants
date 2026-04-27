@@ -721,6 +721,21 @@
 <span class="sd">                output position i). The returned tensor is the natural-layout view permuted by ``layout`` and cached</span>
 <span class="sd">                per perm-key for hot-loop reuse. ``None`` (default) returns the natural layout.</span>
 <span class="sd">        &quot;&quot;&quot;</span>
+        <span class="c1"># Fast path: hit the cached ``_tc`` (natural-layout) or ``_last_layout_tc_view`` (permuted) slot before</span>
+        <span class="c1"># descending into ``_interop.get_zerocopy_torch``. Collapses 3-4 Python frames on slot hit; only kicks</span>
+        <span class="c1"># in on the zero-copy configuration. See ``MatrixField.to_torch`` for the rationale.</span>
+        <span class="k">if</span> <span class="p">(</span><span class="n">copy</span> <span class="ow">is</span> <span class="kc">None</span> <span class="ow">or</span> <span class="n">copy</span> <span class="ow">is</span> <span class="kc">False</span><span class="p">)</span> <span class="ow">and</span> <span class="n">device</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="n">cache</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_zerocopy_cache</span>
+            <span class="k">if</span> <span class="n">cache</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+                <span class="k">if</span> <span class="n">layout</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+                    <span class="n">_tc</span> <span class="o">=</span> <span class="n">cache</span><span class="o">.</span><span class="n">_tc</span>
+                    <span class="k">if</span> <span class="n">_tc</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+                        <span class="k">return</span> <span class="n">_tc</span>
+                <span class="k">else</span><span class="p">:</span>
+                    <span class="n">_view</span> <span class="o">=</span> <span class="n">cache</span><span class="o">.</span><span class="n">_last_layout_tc_view</span>
+                    <span class="k">if</span> <span class="n">_view</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="ow">and</span> <span class="n">cache</span><span class="o">.</span><span class="n">_last_layout_tc_key</span> <span class="o">==</span> <span class="p">(</span><span class="n">layout</span><span class="p">,</span> <span class="kc">None</span><span class="p">):</span>
+                        <span class="k">return</span> <span class="n">_view</span>
+
         <span class="n">tc</span> <span class="o">=</span> <span class="n">_interop</span><span class="o">.</span><span class="n">get_zerocopy_torch</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">copy</span><span class="o">=</span><span class="n">copy</span><span class="p">,</span> <span class="n">device</span><span class="o">=</span><span class="n">device</span><span class="p">,</span> <span class="n">layout</span><span class="o">=</span><span class="n">layout</span><span class="p">)</span>
         <span class="k">if</span> <span class="n">tc</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
             <span class="k">return</span> <span class="n">tc</span>

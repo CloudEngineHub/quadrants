@@ -1852,6 +1852,21 @@
 <span class="sd">            torch.tensor: The result torch tensor.</span>
 <span class="sd">        &quot;&quot;&quot;</span>
         <span class="n">expected</span><span class="p">,</span> <span class="n">as_vector</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_matrix_view_shape</span><span class="p">(</span><span class="n">keep_dims</span><span class="p">)</span>
+
+        <span class="c1"># Fast path: hit the cached ``_last_layout_tc_view`` slot before descending into</span>
+        <span class="c1"># ``_interop.get_zerocopy_torch`` -&gt; ``_ensure_layout_torch``. On slot hit this collapses 4 Python</span>
+        <span class="c1"># frames (``to_torch`` -&gt; ``get_zerocopy_torch`` -&gt; ``_ensure_layout_torch`` plus the inlined</span>
+        <span class="c1"># metal-sync check) down to 1, which materially helps hot-loop callers (franka_accessors-class</span>
+        <span class="c1"># workloads do ~43 ``to_torch`` calls per simulation step). Only kicks in on the zero-copy</span>
+        <span class="c1"># configuration (``copy in {None, False}``, ``device is None``, ``layout is not None``); slot-miss</span>
+        <span class="c1"># and any other configuration falls through to the full path unchanged.</span>
+        <span class="k">if</span> <span class="p">(</span><span class="n">copy</span> <span class="ow">is</span> <span class="kc">None</span> <span class="ow">or</span> <span class="n">copy</span> <span class="ow">is</span> <span class="kc">False</span><span class="p">)</span> <span class="ow">and</span> <span class="n">device</span> <span class="ow">is</span> <span class="kc">None</span> <span class="ow">and</span> <span class="n">layout</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="n">cache</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_zerocopy_cache</span>
+            <span class="k">if</span> <span class="n">cache</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+                <span class="n">_view</span> <span class="o">=</span> <span class="n">cache</span><span class="o">.</span><span class="n">_last_layout_tc_view</span>
+                <span class="k">if</span> <span class="n">_view</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="ow">and</span> <span class="n">cache</span><span class="o">.</span><span class="n">_last_layout_tc_key</span> <span class="o">==</span> <span class="p">(</span><span class="n">layout</span><span class="p">,</span> <span class="n">expected</span><span class="p">):</span>
+                    <span class="k">return</span> <span class="n">_view</span>
+
         <span class="n">tc</span> <span class="o">=</span> <span class="n">_interop</span><span class="o">.</span><span class="n">get_zerocopy_torch</span><span class="p">(</span>
             <span class="bp">self</span><span class="p">,</span> <span class="n">copy</span><span class="o">=</span><span class="n">copy</span><span class="p">,</span> <span class="n">device</span><span class="o">=</span><span class="n">device</span><span class="p">,</span> <span class="n">layout</span><span class="o">=</span><span class="n">layout</span><span class="p">,</span> <span class="n">target_shape</span><span class="o">=</span><span class="n">expected</span>
         <span class="p">)</span>
