@@ -224,7 +224,6 @@ a.copy_from(b)   # raises: cross-backend copy unsupported
 ```
 
 If you genuinely need to move data across backends, route it through Torch: `a.from_torch(b.to_torch())`.
-This performs a single copy (versus two copies with NumPy).
 
 ## Known asymmetry: real-dtype `.grad` stub on the field backend
 
