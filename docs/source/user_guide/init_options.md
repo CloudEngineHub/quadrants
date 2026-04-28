@@ -20,8 +20,8 @@ Number of host threads used when compiling kernels. Default `4`. Raise on machin
 
 ### `debug`
 
-Enables IR verification between every compiler pass and a number of additional runtime checks. Default `False`. Compile time slows substantially (~21s additional on adstack-heavy kernels) because the verifier walks the IR after every transform. Turn this on while iterating on a kernel that is producing incorrect numerics or while developing a new compiler pass; turn it back off once the bug is found.
+Enables IR verification between every compiler pass plus additional runtime checks (integer-overflow guards on arithmetic, linear-index overflow guards on tensor indexing, adstack push-bounds at the runtime helper level). Default `False`. Compile time slows substantially because the verifier walks the IR after every transform and the extra runtime checks expand the emitted code; ~21s additional has been observed on adstack-heavy kernels. Turn this on while iterating on a kernel that is producing incorrect numerics or while developing a new compiler pass; turn it back off once the bug is found.
 
 ### `check_out_of_bound`
 
-Enables runtime bounds-checking for tensor indexing. Default `False`. Costs runtime performance proportional to indexing density; leave off for benchmarks. Not supported on the Metal backend.
+Enables runtime bounds-checking for tensor indexing. Default `False`. Costs runtime performance proportional to indexing density; leave off for benchmarks. Backends that do not expose the `assertion` extension (currently Metal and Vulkan) cannot honor this flag.
