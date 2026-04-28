@@ -396,33 +396,6 @@
 <p><code class="docutils literal notranslate"><span class="pre">qd.init(...)</span></code> accepts every field of the underlying <code class="docutils literal notranslate"><span class="pre">CompileConfig</span></code> struct as a keyword argument; the same fields are also reachable as environment variables of the form <code class="docutils literal notranslate"><span class="pre">QD_&lt;UPPERCASE_NAME&gt;</span></code> (e.g. <code class="docutils literal notranslate"><span class="pre">QD_OFFLINE_CACHE=0</span></code>). This page covers some of the knobs that are commonly tuned in practice. The underlying source of truth is <code class="docutils literal notranslate"><span class="pre">quadrants/program/compile_config.h</span></code>.</p>
 <section id="compile-time-tuning">
 <h2>Compile-time tuning<a class="headerlink" href="#compile-time-tuning" title="Link to this heading">#</a></h2>
-<section id="cuda-jit-opt-level">
-<h3><code class="docutils literal notranslate"><span class="pre">cuda_jit_opt_level</span></code><a class="headerlink" href="#cuda-jit-opt-level" title="Link to this heading">#</a></h3>
-<p>Optimization level forwarded to <code class="docutils literal notranslate"><span class="pre">ptxas</span></code> via <code class="docutils literal notranslate"><span class="pre">CU_JIT_OPTIMIZATION_LEVEL</span></code> when <code class="docutils literal notranslate"><span class="pre">cuModuleLoadDataEx</span></code> JITs PTX to SASS. The knob is intended to trade a small amount of runtime performance for a much shorter compile time, and is mostly relevant when compile time is otherwise prohibitive. Typically, <code class="docutils literal notranslate"><span class="pre">ptxas</span></code> can account for ~80% of total CUDA compile time on adstack-heavy reverse-mode kernels.</p>
-<div class="pst-scrollable-table-container"><table class="table">
-<thead>
-<tr class="row-odd"><th class="head"><p>value</p></th>
-<th class="head"><p>meaning</p></th>
-</tr>
-</thead>
-<tbody>
-<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">-1</span></code> (default)</p></td>
-<td><p>option is not passed; the driver uses its own default (currently 4)</p></td>
-</tr>
-<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">0</span></code></p></td>
-<td><p>fastest ptxas, lowest SASS quality</p></td>
-</tr>
-<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">1</span></code>-<code class="docutils literal notranslate"><span class="pre">3</span></code></p></td>
-<td><p>intermediate trade-offs</p></td>
-</tr>
-<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">4</span></code></p></td>
-<td><p>same as the driver default</p></td>
-</tr>
-</tbody>
-</table>
-</div>
-<p>Any other value (negative or above 4) is rejected at init.</p>
-</section>
 <section id="cfg-optimization">
 <h3><code class="docutils literal notranslate"><span class="pre">cfg_optimization</span></code><a class="headerlink" href="#cfg-optimization" title="Link to this heading">#</a></h3>
 <p>Whether to run the control-flow-graph optimization pass. Default <code class="docutils literal notranslate"><span class="pre">True</span></code>. Setting it to <code class="docutils literal notranslate"><span class="pre">False</span></code> makes compilation up to 6x faster while costing 1-5% of runtime speed; consider disabling it if compile time is the bottleneck and the runtime delta is acceptable.</p>
@@ -440,11 +413,11 @@
 <h2>Debugging<a class="headerlink" href="#debugging" title="Link to this heading">#</a></h2>
 <section id="debug">
 <h3><code class="docutils literal notranslate"><span class="pre">debug</span></code><a class="headerlink" href="#debug" title="Link to this heading">#</a></h3>
-<p>Enables IR verification between every compiler pass and a number of additional runtime checks. Default <code class="docutils literal notranslate"><span class="pre">False</span></code>. Compile time slows substantially (~21s additional on adstack-heavy kernels) because the verifier walks the IR after every transform. Turn this on while iterating on a kernel that is producing incorrect numerics or while developing a new compiler pass; turn it back off once the bug is found.</p>
+<p>Enables IR verification between every compiler pass plus additional runtime checks (integer-overflow guards on arithmetic, linear-index overflow guards on tensor indexing, adstack push-bounds at the runtime helper level). Default <code class="docutils literal notranslate"><span class="pre">False</span></code>. Compile time slows substantially because the verifier walks the IR after every transform and the extra runtime checks expand the emitted code; ~21s additional has been observed on adstack-heavy kernels. Turn this on while iterating on a kernel that is producing incorrect numerics or while developing a new compiler pass; turn it back off once the bug is found.</p>
 </section>
 <section id="check-out-of-bound">
 <h3><code class="docutils literal notranslate"><span class="pre">check_out_of_bound</span></code><a class="headerlink" href="#check-out-of-bound" title="Link to this heading">#</a></h3>
-<p>Enables runtime bounds-checking for tensor indexing. Default <code class="docutils literal notranslate"><span class="pre">False</span></code>. Costs runtime performance proportional to indexing density; leave off for benchmarks. Not supported on the Metal backend.</p>
+<p>Enables runtime bounds-checking for tensor indexing. Default <code class="docutils literal notranslate"><span class="pre">False</span></code>. Costs runtime performance proportional to indexing density; leave off for benchmarks. Backends that do not expose the <code class="docutils literal notranslate"><span class="pre">assertion</span></code> extension (currently Metal and Vulkan) cannot honor this flag.</p>
 </section>
 </section>
 </section>
@@ -497,7 +470,6 @@
   <nav id="pst-page-toc-nav" class="page-toc" aria-labelledby="pst-page-navigation-heading-2">
     <ul class="pst-show_toc_level nav section-nav flex-column">
 <li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#compile-time-tuning">Compile-time tuning</a><ul class="nav section-nav flex-column">
-<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#cuda-jit-opt-level"><code class="docutils literal notranslate"><span class="pre">cuda_jit_opt_level</span></code></a></li>
 <li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#cfg-optimization"><code class="docutils literal notranslate"><span class="pre">cfg_optimization</span></code></a></li>
 <li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#fast-math"><code class="docutils literal notranslate"><span class="pre">fast_math</span></code></a></li>
 <li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#num-compile-threads"><code class="docutils literal notranslate"><span class="pre">num_compile_threads</span></code></a></li>

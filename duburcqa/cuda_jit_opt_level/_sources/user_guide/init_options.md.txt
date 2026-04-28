@@ -4,19 +4,6 @@
 
 ## Compile-time tuning
 
-### `cuda_jit_opt_level`
-
-Optimization level forwarded to `ptxas` via `CU_JIT_OPTIMIZATION_LEVEL` when `cuModuleLoadDataEx` JITs PTX to SASS. The knob is intended to trade a small amount of runtime performance for a much shorter compile time, and is mostly relevant when compile time is otherwise prohibitive. Typically, `ptxas` can account for ~80% of total CUDA compile time on adstack-heavy reverse-mode kernels.
-
-| value | meaning |
-|-------|---------|
-| `-1` (default) | option is not passed; the driver uses its own default (currently 4) |
-| `0` | fastest ptxas, lowest SASS quality |
-| `1`-`3` | intermediate trade-offs |
-| `4` | same as the driver default |
-
-Any other value (negative or above 4) is rejected at init.
-
 ### `cfg_optimization`
 
 Whether to run the control-flow-graph optimization pass. Default `True`. Setting it to `False` makes compilation up to 6x faster while costing 1-5% of runtime speed; consider disabling it if compile time is the bottleneck and the runtime delta is acceptable.
@@ -33,8 +20,8 @@ Number of host threads used when compiling kernels. Default `4`. Raise on machin
 
 ### `debug`
 
-Enables IR verification between every compiler pass and a number of additional runtime checks. Default `False`. Compile time slows substantially (~21s additional on adstack-heavy kernels) because the verifier walks the IR after every transform. Turn this on while iterating on a kernel that is producing incorrect numerics or while developing a new compiler pass; turn it back off once the bug is found.
+Enables IR verification between every compiler pass plus additional runtime checks (integer-overflow guards on arithmetic, linear-index overflow guards on tensor indexing, adstack push-bounds at the runtime helper level). Default `False`. Compile time slows substantially because the verifier walks the IR after every transform and the extra runtime checks expand the emitted code; ~21s additional has been observed on adstack-heavy kernels. Turn this on while iterating on a kernel that is producing incorrect numerics or while developing a new compiler pass; turn it back off once the bug is found.
 
 ### `check_out_of_bound`
 
-Enables runtime bounds-checking for tensor indexing. Default `False`. Costs runtime performance proportional to indexing density; leave off for benchmarks. Not supported on the Metal backend.
+Enables runtime bounds-checking for tensor indexing. Default `False`. Costs runtime performance proportional to indexing density; leave off for benchmarks. Backends that do not expose the `assertion` extension (currently Metal and Vulkan) cannot honor this flag.
