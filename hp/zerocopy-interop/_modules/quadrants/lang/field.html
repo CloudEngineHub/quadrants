@@ -658,7 +658,6 @@
             <span class="n">field_fill_quadrants_scope</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">val</span><span class="p">)</span></div>
 
 
-    <span class="nd">@python_scope</span>
 <div class="viewcode-block" id="ScalarField.to_numpy">
 <a class="viewcode-back" href="../../../autoapi/quadrants/lang/field/index.html#quadrants.lang.field.ScalarField.to_numpy">[docs]</a>
     <span class="k">def</span><span class="w"> </span><span class="nf">to_numpy</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="o">*</span><span class="p">,</span> <span class="n">copy</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">layout</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
@@ -675,6 +674,30 @@
 <span class="sd">                output position i). The returned array is the natural-layout view permuted by ``layout`` and cached</span>
 <span class="sd">                per perm-key. ``None`` (default) returns the natural layout.</span>
 <span class="sd">        &quot;&quot;&quot;</span>
+        <span class="c1"># Slot-hit fast path for explicit zero-copy (``copy=False``) -- placed BEFORE the ``@python_scope``</span>
+        <span class="c1"># assertion (which lives on ``_to_numpy_slow`` below) to drop ~540 ns of decorator overhead per call.</span>
+        <span class="c1"># Only fires for ``copy=False`` because ``copy=None`` is documented to return an independent copy</span>
+        <span class="c1"># (asymmetric with ``to_torch`` semantics; see docstring above).</span>
+        <span class="k">if</span> <span class="n">copy</span> <span class="ow">is</span> <span class="kc">False</span> <span class="ow">and</span> <span class="n">dtype</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="n">cache</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_zerocopy_cache</span>
+            <span class="k">if</span> <span class="n">cache</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+                <span class="k">if</span> <span class="n">layout</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+                    <span class="n">_np</span> <span class="o">=</span> <span class="n">cache</span><span class="o">.</span><span class="n">_np</span>
+                    <span class="k">if</span> <span class="n">_np</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+                        <span class="k">return</span> <span class="n">_np</span>
+                <span class="k">else</span><span class="p">:</span>
+                    <span class="k">if</span> <span class="p">(</span>
+                        <span class="n">cache</span><span class="o">.</span><span class="n">_last_layout_np_view</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span>
+                        <span class="ow">and</span> <span class="p">(</span><span class="n">layout</span> <span class="ow">is</span> <span class="n">cache</span><span class="o">.</span><span class="n">_last_layout_np_layout</span> <span class="ow">or</span> <span class="n">layout</span> <span class="o">==</span> <span class="n">cache</span><span class="o">.</span><span class="n">_last_layout_np_layout</span><span class="p">)</span>
+                        <span class="ow">and</span> <span class="n">cache</span><span class="o">.</span><span class="n">_last_layout_np_target_shape</span> <span class="ow">is</span> <span class="kc">None</span>
+                    <span class="p">):</span>
+                        <span class="k">return</span> <span class="n">cache</span><span class="o">.</span><span class="n">_last_layout_np_view</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_to_numpy_slow</span><span class="p">(</span><span class="n">dtype</span><span class="o">=</span><span class="n">dtype</span><span class="p">,</span> <span class="n">copy</span><span class="o">=</span><span class="n">copy</span><span class="p">,</span> <span class="n">layout</span><span class="o">=</span><span class="n">layout</span><span class="p">)</span></div>
+
+
+    <span class="nd">@python_scope</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">_to_numpy_slow</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="o">*</span><span class="p">,</span> <span class="n">copy</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">layout</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Slow-path body of :meth:`to_numpy`.&quot;&quot;&quot;</span>
         <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">parent</span><span class="p">()</span><span class="o">.</span><span class="n">_snode</span><span class="o">.</span><span class="n">ptr</span><span class="o">.</span><span class="n">type</span> <span class="o">==</span> <span class="n">_qd_core</span><span class="o">.</span><span class="n">SNodeType</span><span class="o">.</span><span class="n">dynamic</span><span class="p">:</span>
             <span class="n">warn</span><span class="p">(</span>
                 <span class="s2">&quot;You are trying to convert a dynamic snode to a numpy array, be aware that inactive items in the snode will be converted to zeros in the resulting array.&quot;</span>
@@ -703,10 +726,8 @@
         <span class="k">if</span> <span class="n">layout</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
             <span class="n">full</span> <span class="o">=</span> <span class="n">layout</span> <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">layout</span><span class="p">)</span> <span class="o">==</span> <span class="n">arr</span><span class="o">.</span><span class="n">ndim</span> <span class="k">else</span> <span class="n">layout</span> <span class="o">+</span> <span class="nb">tuple</span><span class="p">(</span><span class="nb">range</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">layout</span><span class="p">),</span> <span class="n">arr</span><span class="o">.</span><span class="n">ndim</span><span class="p">))</span>
             <span class="n">arr</span> <span class="o">=</span> <span class="n">arr</span><span class="o">.</span><span class="n">transpose</span><span class="p">(</span><span class="n">full</span><span class="p">)</span>
-        <span class="k">return</span> <span class="n">arr</span></div>
+        <span class="k">return</span> <span class="n">arr</span>
 
-
-    <span class="nd">@python_scope</span>
 <div class="viewcode-block" id="ScalarField.to_torch">
 <a class="viewcode-back" href="../../../autoapi/quadrants/lang/field/index.html#quadrants.lang.field.ScalarField.to_torch">[docs]</a>
     <span class="k">def</span><span class="w"> </span><span class="nf">to_torch</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">device</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="o">*</span><span class="p">,</span> <span class="n">copy</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">layout</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
@@ -721,9 +742,12 @@
 <span class="sd">                output position i). The returned tensor is the natural-layout view permuted by ``layout`` and cached</span>
 <span class="sd">                per perm-key for hot-loop reuse. ``None`` (default) returns the natural layout.</span>
 <span class="sd">        &quot;&quot;&quot;</span>
-        <span class="c1"># Fast path: hit the cached ``_tc`` (natural-layout) or ``_last_layout_tc_view`` (permuted) slot before</span>
-        <span class="c1"># descending into ``_interop.get_zerocopy_torch``. Collapses 3-4 Python frames on slot hit; only kicks</span>
-        <span class="c1"># in on the zero-copy configuration. See ``MatrixField.to_torch`` for the rationale.</span>
+        <span class="c1"># Slot-hit fast path -- intentionally placed BEFORE the ``@python_scope`` assertion (which lives on</span>
+        <span class="c1"># ``_to_torch_slow`` below), to drop ~540 ns of decorator overhead per call on the cache-hit path.</span>
+        <span class="c1"># The Quadrants-scope assertion still fires on cache miss / first call. Misuse from inside a</span>
+        <span class="c1"># ``@quadrants.kernel`` body is caught the first time, after which the IR-generation context would be</span>
+        <span class="c1"># signalled by the next op anyway. Rationale: hot-loop callers (franka_accessors-class workloads) hit</span>
+        <span class="c1"># this path 30-50 times per simulation step; the assertion is redundant on every call.</span>
         <span class="k">if</span> <span class="p">(</span><span class="n">copy</span> <span class="ow">is</span> <span class="kc">None</span> <span class="ow">or</span> <span class="n">copy</span> <span class="ow">is</span> <span class="kc">False</span><span class="p">)</span> <span class="ow">and</span> <span class="n">device</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
             <span class="n">cache</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_zerocopy_cache</span>
             <span class="k">if</span> <span class="n">cache</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
@@ -732,10 +756,19 @@
                     <span class="k">if</span> <span class="n">_tc</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
                         <span class="k">return</span> <span class="n">_tc</span>
                 <span class="k">else</span><span class="p">:</span>
-                    <span class="n">_view</span> <span class="o">=</span> <span class="n">cache</span><span class="o">.</span><span class="n">_last_layout_tc_view</span>
-                    <span class="k">if</span> <span class="n">_view</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="ow">and</span> <span class="n">cache</span><span class="o">.</span><span class="n">_last_layout_tc_key</span> <span class="o">==</span> <span class="p">(</span><span class="n">layout</span><span class="p">,</span> <span class="kc">None</span><span class="p">):</span>
-                        <span class="k">return</span> <span class="n">_view</span>
+                    <span class="c1"># Identity comparison on split slot key. See ``_ZerocopyCache._ensure_layout_torch``.</span>
+                    <span class="k">if</span> <span class="p">(</span>
+                        <span class="n">cache</span><span class="o">.</span><span class="n">_last_layout_tc_view</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span>
+                        <span class="ow">and</span> <span class="p">(</span><span class="n">layout</span> <span class="ow">is</span> <span class="n">cache</span><span class="o">.</span><span class="n">_last_layout_tc_layout</span> <span class="ow">or</span> <span class="n">layout</span> <span class="o">==</span> <span class="n">cache</span><span class="o">.</span><span class="n">_last_layout_tc_layout</span><span class="p">)</span>
+                        <span class="ow">and</span> <span class="n">cache</span><span class="o">.</span><span class="n">_last_layout_tc_target_shape</span> <span class="ow">is</span> <span class="kc">None</span>
+                    <span class="p">):</span>
+                        <span class="k">return</span> <span class="n">cache</span><span class="o">.</span><span class="n">_last_layout_tc_view</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_to_torch_slow</span><span class="p">(</span><span class="n">device</span><span class="o">=</span><span class="n">device</span><span class="p">,</span> <span class="n">copy</span><span class="o">=</span><span class="n">copy</span><span class="p">,</span> <span class="n">layout</span><span class="o">=</span><span class="n">layout</span><span class="p">)</span></div>
 
+
+    <span class="nd">@python_scope</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">_to_torch_slow</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">device</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="o">*</span><span class="p">,</span> <span class="n">copy</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">layout</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Slow-path body of :meth:`to_torch` -- runs the python_scope assertion + DLPack chain + kernel fallback.&quot;&quot;&quot;</span>
         <span class="n">tc</span> <span class="o">=</span> <span class="n">_interop</span><span class="o">.</span><span class="n">get_zerocopy_torch</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">copy</span><span class="o">=</span><span class="n">copy</span><span class="p">,</span> <span class="n">device</span><span class="o">=</span><span class="n">device</span><span class="p">,</span> <span class="n">layout</span><span class="o">=</span><span class="n">layout</span><span class="p">)</span>
         <span class="k">if</span> <span class="n">tc</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
             <span class="k">return</span> <span class="n">tc</span>
@@ -752,8 +785,7 @@
         <span class="k">if</span> <span class="n">layout</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
             <span class="n">full</span> <span class="o">=</span> <span class="n">layout</span> <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">layout</span><span class="p">)</span> <span class="o">==</span> <span class="n">arr</span><span class="o">.</span><span class="n">ndim</span> <span class="k">else</span> <span class="n">layout</span> <span class="o">+</span> <span class="nb">tuple</span><span class="p">(</span><span class="nb">range</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">layout</span><span class="p">),</span> <span class="n">arr</span><span class="o">.</span><span class="n">ndim</span><span class="p">))</span>
             <span class="n">arr</span> <span class="o">=</span> <span class="n">arr</span><span class="o">.</span><span class="n">permute</span><span class="p">(</span><span class="o">*</span><span class="n">full</span><span class="p">)</span>
-        <span class="k">return</span> <span class="n">arr</span></div>
-
+        <span class="k">return</span> <span class="n">arr</span>
 
     <span class="nd">@python_scope</span>
     <span class="k">def</span><span class="w"> </span><span class="nf">_from_external_arr</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">arr</span><span class="p">):</span>

@@ -1783,7 +1783,6 @@
             <span class="n">field_fill_quadrants_scope</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">val</span><span class="p">)</span></div>
 
 
-    <span class="nd">@python_scope</span>
 <div class="viewcode-block" id="MatrixField.to_numpy">
 <a class="viewcode-back" href="../../../autoapi/quadrants/lang/matrix/index.html#quadrants.lang.matrix.MatrixField.to_numpy">[docs]</a>
     <span class="k">def</span><span class="w"> </span><span class="nf">to_numpy</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">keep_dims</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="o">*</span><span class="p">,</span> <span class="n">copy</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">layout</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
@@ -1805,6 +1804,28 @@
 <span class="sd">        Returns:</span>
 <span class="sd">            numpy.ndarray: The result NumPy array.</span>
 <span class="sd">        &quot;&quot;&quot;</span>
+        <span class="c1"># Slot-hit fast path for explicit zero-copy. See ``ScalarField.to_numpy`` for the rationale.</span>
+        <span class="k">if</span> <span class="n">copy</span> <span class="ow">is</span> <span class="kc">False</span> <span class="ow">and</span> <span class="n">dtype</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="n">cache</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_zerocopy_cache</span>
+            <span class="k">if</span> <span class="n">cache</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+                <span class="n">expected</span><span class="p">,</span> <span class="n">_</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_matrix_view_shape</span><span class="p">(</span><span class="n">keep_dims</span><span class="p">)</span>
+                <span class="k">if</span> <span class="n">layout</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+                    <span class="n">_np</span> <span class="o">=</span> <span class="n">cache</span><span class="o">.</span><span class="n">_np</span>
+                    <span class="k">if</span> <span class="n">_np</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="ow">and</span> <span class="p">(</span><span class="n">_np</span><span class="o">.</span><span class="n">shape</span> <span class="o">==</span> <span class="n">expected</span> <span class="ow">or</span> <span class="n">expected</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">):</span>
+                        <span class="k">return</span> <span class="n">_np</span>
+                <span class="k">else</span><span class="p">:</span>
+                    <span class="k">if</span> <span class="p">(</span>
+                        <span class="n">cache</span><span class="o">.</span><span class="n">_last_layout_np_view</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span>
+                        <span class="ow">and</span> <span class="p">(</span><span class="n">layout</span> <span class="ow">is</span> <span class="n">cache</span><span class="o">.</span><span class="n">_last_layout_np_layout</span> <span class="ow">or</span> <span class="n">layout</span> <span class="o">==</span> <span class="n">cache</span><span class="o">.</span><span class="n">_last_layout_np_layout</span><span class="p">)</span>
+                        <span class="ow">and</span> <span class="p">(</span><span class="n">expected</span> <span class="ow">is</span> <span class="n">cache</span><span class="o">.</span><span class="n">_last_layout_np_target_shape</span> <span class="ow">or</span> <span class="n">expected</span> <span class="o">==</span> <span class="n">cache</span><span class="o">.</span><span class="n">_last_layout_np_target_shape</span><span class="p">)</span>
+                    <span class="p">):</span>
+                        <span class="k">return</span> <span class="n">cache</span><span class="o">.</span><span class="n">_last_layout_np_view</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_to_numpy_slow</span><span class="p">(</span><span class="n">keep_dims</span><span class="o">=</span><span class="n">keep_dims</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="n">dtype</span><span class="p">,</span> <span class="n">copy</span><span class="o">=</span><span class="n">copy</span><span class="p">,</span> <span class="n">layout</span><span class="o">=</span><span class="n">layout</span><span class="p">)</span></div>
+
+
+    <span class="nd">@python_scope</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">_to_numpy_slow</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">keep_dims</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="o">*</span><span class="p">,</span> <span class="n">copy</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">layout</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Slow-path body of :meth:`to_numpy`.&quot;&quot;&quot;</span>
         <span class="n">expected</span><span class="p">,</span> <span class="n">as_vector</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_matrix_view_shape</span><span class="p">(</span><span class="n">keep_dims</span><span class="p">)</span>
         <span class="n">np_dtype_target</span> <span class="o">=</span> <span class="kc">None</span>
         <span class="k">if</span> <span class="n">dtype</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
@@ -1831,8 +1852,7 @@
         <span class="k">if</span> <span class="n">layout</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
             <span class="n">full</span> <span class="o">=</span> <span class="n">layout</span> <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">layout</span><span class="p">)</span> <span class="o">==</span> <span class="n">arr</span><span class="o">.</span><span class="n">ndim</span> <span class="k">else</span> <span class="n">layout</span> <span class="o">+</span> <span class="nb">tuple</span><span class="p">(</span><span class="nb">range</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">layout</span><span class="p">),</span> <span class="n">arr</span><span class="o">.</span><span class="n">ndim</span><span class="p">))</span>
             <span class="n">arr</span> <span class="o">=</span> <span class="n">arr</span><span class="o">.</span><span class="n">transpose</span><span class="p">(</span><span class="n">full</span><span class="p">)</span>
-        <span class="k">return</span> <span class="n">arr</span></div>
-
+        <span class="k">return</span> <span class="n">arr</span>
 
 <div class="viewcode-block" id="MatrixField.to_torch">
 <a class="viewcode-back" href="../../../autoapi/quadrants/lang/matrix/index.html#quadrants.lang.matrix.MatrixField.to_torch">[docs]</a>
@@ -1851,21 +1871,27 @@
 <span class="sd">        Returns:</span>
 <span class="sd">            torch.tensor: The result torch tensor.</span>
 <span class="sd">        &quot;&quot;&quot;</span>
-        <span class="n">expected</span><span class="p">,</span> <span class="n">as_vector</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_matrix_view_shape</span><span class="p">(</span><span class="n">keep_dims</span><span class="p">)</span>
-
-        <span class="c1"># Fast path: hit the cached ``_last_layout_tc_view`` slot before descending into</span>
-        <span class="c1"># ``_interop.get_zerocopy_torch`` -&gt; ``_ensure_layout_torch``. On slot hit this collapses 4 Python</span>
-        <span class="c1"># frames (``to_torch`` -&gt; ``get_zerocopy_torch`` -&gt; ``_ensure_layout_torch`` plus the inlined</span>
-        <span class="c1"># metal-sync check) down to 1, which materially helps hot-loop callers (franka_accessors-class</span>
-        <span class="c1"># workloads do ~43 ``to_torch`` calls per simulation step). Only kicks in on the zero-copy</span>
-        <span class="c1"># configuration (``copy in {None, False}``, ``device is None``, ``layout is not None``); slot-miss</span>
-        <span class="c1"># and any other configuration falls through to the full path unchanged.</span>
+        <span class="c1"># Slot-hit fast path -- placed BEFORE the ``@python_scope``-decorated slow path (which lives on</span>
+        <span class="c1"># ``_to_torch_slow`` below), to drop ~540 ns of decorator overhead per call. See</span>
+        <span class="c1"># ``ScalarField.to_torch`` for the rationale on assertion-on-fast-path. Identity comparison on the</span>
+        <span class="c1"># split slot key avoids the per-call ``(layout, expected)`` tuple allocation.</span>
         <span class="k">if</span> <span class="p">(</span><span class="n">copy</span> <span class="ow">is</span> <span class="kc">None</span> <span class="ow">or</span> <span class="n">copy</span> <span class="ow">is</span> <span class="kc">False</span><span class="p">)</span> <span class="ow">and</span> <span class="n">device</span> <span class="ow">is</span> <span class="kc">None</span> <span class="ow">and</span> <span class="n">layout</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
             <span class="n">cache</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_zerocopy_cache</span>
             <span class="k">if</span> <span class="n">cache</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
-                <span class="n">_view</span> <span class="o">=</span> <span class="n">cache</span><span class="o">.</span><span class="n">_last_layout_tc_view</span>
-                <span class="k">if</span> <span class="n">_view</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="ow">and</span> <span class="n">cache</span><span class="o">.</span><span class="n">_last_layout_tc_key</span> <span class="o">==</span> <span class="p">(</span><span class="n">layout</span><span class="p">,</span> <span class="n">expected</span><span class="p">):</span>
-                    <span class="k">return</span> <span class="n">_view</span>
+                <span class="n">expected</span><span class="p">,</span> <span class="n">_</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_matrix_view_shape</span><span class="p">(</span><span class="n">keep_dims</span><span class="p">)</span>
+                <span class="k">if</span> <span class="p">(</span>
+                    <span class="n">cache</span><span class="o">.</span><span class="n">_last_layout_tc_view</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span>
+                    <span class="ow">and</span> <span class="p">(</span><span class="n">layout</span> <span class="ow">is</span> <span class="n">cache</span><span class="o">.</span><span class="n">_last_layout_tc_layout</span> <span class="ow">or</span> <span class="n">layout</span> <span class="o">==</span> <span class="n">cache</span><span class="o">.</span><span class="n">_last_layout_tc_layout</span><span class="p">)</span>
+                    <span class="ow">and</span> <span class="p">(</span><span class="n">expected</span> <span class="ow">is</span> <span class="n">cache</span><span class="o">.</span><span class="n">_last_layout_tc_target_shape</span> <span class="ow">or</span> <span class="n">expected</span> <span class="o">==</span> <span class="n">cache</span><span class="o">.</span><span class="n">_last_layout_tc_target_shape</span><span class="p">)</span>
+                <span class="p">):</span>
+                    <span class="k">return</span> <span class="n">cache</span><span class="o">.</span><span class="n">_last_layout_tc_view</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_to_torch_slow</span><span class="p">(</span><span class="n">device</span><span class="o">=</span><span class="n">device</span><span class="p">,</span> <span class="n">keep_dims</span><span class="o">=</span><span class="n">keep_dims</span><span class="p">,</span> <span class="n">copy</span><span class="o">=</span><span class="n">copy</span><span class="p">,</span> <span class="n">layout</span><span class="o">=</span><span class="n">layout</span><span class="p">)</span></div>
+
+
+    <span class="nd">@python_scope</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">_to_torch_slow</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">device</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">keep_dims</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="o">*</span><span class="p">,</span> <span class="n">copy</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">layout</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Slow-path body of :meth:`to_torch`.&quot;&quot;&quot;</span>
+        <span class="n">expected</span><span class="p">,</span> <span class="n">as_vector</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_matrix_view_shape</span><span class="p">(</span><span class="n">keep_dims</span><span class="p">)</span>
 
         <span class="n">tc</span> <span class="o">=</span> <span class="n">_interop</span><span class="o">.</span><span class="n">get_zerocopy_torch</span><span class="p">(</span>
             <span class="bp">self</span><span class="p">,</span> <span class="n">copy</span><span class="o">=</span><span class="n">copy</span><span class="p">,</span> <span class="n">device</span><span class="o">=</span><span class="n">device</span><span class="p">,</span> <span class="n">layout</span><span class="o">=</span><span class="n">layout</span><span class="p">,</span> <span class="n">target_shape</span><span class="o">=</span><span class="n">expected</span>
@@ -1884,8 +1910,7 @@
         <span class="k">if</span> <span class="n">layout</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
             <span class="n">full</span> <span class="o">=</span> <span class="n">layout</span> <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">layout</span><span class="p">)</span> <span class="o">==</span> <span class="n">arr</span><span class="o">.</span><span class="n">ndim</span> <span class="k">else</span> <span class="n">layout</span> <span class="o">+</span> <span class="nb">tuple</span><span class="p">(</span><span class="nb">range</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">layout</span><span class="p">),</span> <span class="n">arr</span><span class="o">.</span><span class="n">ndim</span><span class="p">))</span>
             <span class="n">arr</span> <span class="o">=</span> <span class="n">arr</span><span class="o">.</span><span class="n">permute</span><span class="p">(</span><span class="o">*</span><span class="n">full</span><span class="p">)</span>
-        <span class="k">return</span> <span class="n">arr</span></div>
-
+        <span class="k">return</span> <span class="n">arr</span>
 
     <span class="nd">@python_scope</span>
     <span class="k">def</span><span class="w"> </span><span class="nf">_from_external_arr</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">arr</span><span class="p">):</span>
