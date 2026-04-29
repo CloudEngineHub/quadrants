@@ -877,7 +877,6 @@ Module Contents
       Convert this matrix ndarray to a ``torch.Tensor`` of shape ``self.shape + (n, m)``. Mirrors
       :meth:`MatrixField.to_torch`.
 
-      :param device: Optional torch device for the returned tensor.
       :param copy: ``None`` (default) prefers zero-copy, ``True`` forces a copy, ``False`` requires zero-copy or raises.
 
 
@@ -967,7 +966,6 @@ Module Contents
       Convert this vector ndarray to a ``torch.Tensor`` of shape ``self.shape + (n,)``. Mirrors
       :meth:`MatrixField.to_torch` on the vector code path.
 
-      :param device: Optional torch device for the returned tensor.
       :param copy: ``None`` (default) prefers zero-copy, ``True`` forces a copy, ``False`` requires zero-copy or raises.
 
 

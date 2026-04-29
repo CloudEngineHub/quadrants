@@ -100,7 +100,7 @@ Module Contents
 
 
 
-   .. py:method:: to_torch(device=None, *, copy: bool | None = None)
+   .. py:method:: to_torch(device=None)
       :abstractmethod:
 
 
@@ -108,11 +108,6 @@ Module Contents
 
       :param device: The desired device of returned tensor.
       :type device: torch.device, optional
-      :param copy: Controls copying behaviour:
-
-                   - ``None`` (default) -- zero-copy when possible, copy otherwise.
-                   - ``True`` -- always return an independent copy.
-                   - ``False`` -- require zero-copy; raises if not possible.
 
       :returns: The result torch tensor.
       :rtype: torch.tensor
