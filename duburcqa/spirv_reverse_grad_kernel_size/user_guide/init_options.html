@@ -451,17 +451,12 @@
 <li><p>integer-overflow guards on arithmetic;</p></li>
 <li><p>IR verification after every compiler pass.</p></li>
 </ul>
-<p><strong>Cost.</strong> Significant on both compile time (verifier walks the IR after every transform; extra runtime checks expand the emitted code; ~21s extra observed on adstack-heavy kernels) and runtime. For just bounds + adstack safety in a release build without the rest, use <a class="reference internal" href="#check-out-of-bound"><code class="docutils literal notranslate"><span class="pre">check_out_of_bound</span></code></a> below.</p>
+<p><strong>Cost.</strong> Significant on both compile time (verifier walks the IR after every transform; extra runtime checks expand the emitted code; ~21s extra observed on adstack-heavy kernels) and runtime. For just the field-bounds check in a release build without the rest, use <a class="reference internal" href="#check-out-of-bound"><code class="docutils literal notranslate"><span class="pre">check_out_of_bound</span></code></a> below.</p>
 </section>
 <section id="check-out-of-bound">
 <h3><code class="docutils literal notranslate"><span class="pre">check_out_of_bound</span></code><a class="headerlink" href="#check-out-of-bound" title="Link to this heading">#</a></h3>
-<p>Default <code class="docutils literal notranslate"><span class="pre">False</span></code>. Narrower than <code class="docutils literal notranslate"><span class="pre">debug</span></code>: turns on bounds-related checks only, without the rest.</p>
-<p>Enables:</p>
-<ul class="simple">
-<li><p>field-bounds check on tensor indexing (out-of-range index raises <code class="docutils literal notranslate"><span class="pre">RuntimeError</span></code>);</p></li>
-<li><p>adstack-overflow check on reverse-mode autodiff (a push past the per-stack capacity raises <code class="docutils literal notranslate"><span class="pre">RuntimeError(&quot;[Aa]dstack</span> <span class="pre">overflow&quot;)</span></code> on the next <code class="docutils literal notranslate"><span class="pre">qd.sync()</span></code>).</p></li>
-</ul>
-<p><strong>Cost.</strong> Scales with how often kernels index into tensors and push onto the adstack. Cheaper than <code class="docutils literal notranslate"><span class="pre">debug=True</span></code>. Still leave off for benchmarks.</p>
+<p>Default <code class="docutils literal notranslate"><span class="pre">False</span></code>. Enables the field-bounds check on tensor indexing - an out-of-range index raises <code class="docutils literal notranslate"><span class="pre">RuntimeError</span></code>.</p>
+<p><strong>Cost.</strong> Scales with how often kernels index into tensors. Cheaper than <code class="docutils literal notranslate"><span class="pre">debug=True</span></code>. Still leave off for benchmarks.</p>
 <p>Interaction with <code class="docutils literal notranslate"><span class="pre">debug</span></code>:</p>
 <div class="pst-scrollable-table-container"><table class="table">
 <thead>
@@ -479,7 +474,7 @@
 </tr>
 <tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">check_out_of_bound=True</span></code> only</p></td>
 <td><p>on</p></td>
-<td><p>on</p></td>
+<td><p>off</p></td>
 <td><p>off</p></td>
 </tr>
 <tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">debug=True</span></code></p></td>
@@ -491,8 +486,8 @@
 </table>
 </div>
 <ul class="simple">
-<li><p><code class="docutils literal notranslate"><span class="pre">debug=True</span></code> always implies <code class="docutils literal notranslate"><span class="pre">check_out_of_bound=True</span></code>. They cannot be split: <code class="docutils literal notranslate"><span class="pre">debug=True,</span> <span class="pre">check_out_of_bound=False</span></code> collapses to <code class="docutils literal notranslate"><span class="pre">debug=True</span></code> at init.</p></li>
-<li><p>Use <code class="docutils literal notranslate"><span class="pre">check_out_of_bound=True</span></code> on its own when you want bounds + adstack safety in a release build without paying for everything else <code class="docutils literal notranslate"><span class="pre">debug</span></code> adds.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">debug=True</span></code> always implies <code class="docutils literal notranslate"><span class="pre">check_out_of_bound=True</span></code> (the field-bounds check fires whenever debug mode is on).</p></li>
+<li><p>The adstack-overflow check on reverse-mode autodiff (a push past the per-stack capacity raises <code class="docutils literal notranslate"><span class="pre">RuntimeError(&quot;[Aa]dstack</span> <span class="pre">overflow&quot;)</span></code> on the next <code class="docutils literal notranslate"><span class="pre">qd.sync()</span></code>) is on its own gate, controlled by <code class="docutils literal notranslate"><span class="pre">debug</span></code> - it is not enabled by <code class="docutils literal notranslate"><span class="pre">check_out_of_bound</span></code> alone.</p></li>
 </ul>
 <p>Per-backend support:</p>
 <div class="pst-scrollable-table-container"><table class="table">
@@ -505,28 +500,28 @@
 <tbody>
 <tr class="row-even"><td><p>CPU</p></td>
 <td><p>with <code class="docutils literal notranslate"><span class="pre">check_out_of_bound=True</span></code> or <code class="docutils literal notranslate"><span class="pre">debug=True</span></code></p></td>
-<td><p>with <code class="docutils literal notranslate"><span class="pre">check_out_of_bound=True</span></code> or <code class="docutils literal notranslate"><span class="pre">debug=True</span></code></p></td>
+<td><p>with <code class="docutils literal notranslate"><span class="pre">debug=True</span></code></p></td>
 </tr>
 <tr class="row-odd"><td><p>CUDA</p></td>
 <td><p>with <code class="docutils literal notranslate"><span class="pre">check_out_of_bound=True</span></code> or <code class="docutils literal notranslate"><span class="pre">debug=True</span></code></p></td>
-<td><p>with <code class="docutils literal notranslate"><span class="pre">check_out_of_bound=True</span></code> or <code class="docutils literal notranslate"><span class="pre">debug=True</span></code></p></td>
+<td><p>with <code class="docutils literal notranslate"><span class="pre">debug=True</span></code></p></td>
 </tr>
 <tr class="row-even"><td><p>AMDGPU</p></td>
 <td><p>with <code class="docutils literal notranslate"><span class="pre">check_out_of_bound=True</span></code> or <code class="docutils literal notranslate"><span class="pre">debug=True</span></code></p></td>
-<td><p>with <code class="docutils literal notranslate"><span class="pre">check_out_of_bound=True</span></code> or <code class="docutils literal notranslate"><span class="pre">debug=True</span></code></p></td>
+<td><p>with <code class="docutils literal notranslate"><span class="pre">debug=True</span></code></p></td>
 </tr>
 <tr class="row-odd"><td><p>Metal</p></td>
 <td><p>never (no in-kernel assertion mechanism)</p></td>
-<td><p>with <code class="docutils literal notranslate"><span class="pre">debug=True</span></code> only</p></td>
+<td><p>with <code class="docutils literal notranslate"><span class="pre">debug=True</span></code></p></td>
 </tr>
 <tr class="row-even"><td><p>Vulkan</p></td>
 <td><p>never (no in-kernel assertion mechanism)</p></td>
-<td><p>with <code class="docutils literal notranslate"><span class="pre">debug=True</span></code> only</p></td>
+<td><p>with <code class="docutils literal notranslate"><span class="pre">debug=True</span></code></p></td>
 </tr>
 </tbody>
 </table>
 </div>
-<p>The adstack overflow check is gated independently of the assertion mechanism, so <code class="docutils literal notranslate"><span class="pre">debug=True</span></code> activates it on every backend - including Metal and Vulkan, where the field bounds check stays unavailable. On Metal and Vulkan, <code class="docutils literal notranslate"><span class="pre">check_out_of_bound</span></code> is silently reset to <code class="docutils literal notranslate"><span class="pre">False</span></code> at <code class="docutils literal notranslate"><span class="pre">qd.init</span></code> time (a warning is logged); passing it on its own gives neither check on those backends.</p>
+<p>Metal and Vulkan lack the assertion extension that the field-bounds check relies on; <code class="docutils literal notranslate"><span class="pre">check_out_of_bound=True</span></code> is silently reset to <code class="docutils literal notranslate"><span class="pre">False</span></code> on those backends at <code class="docutils literal notranslate"><span class="pre">qd.init</span></code> time and a warning is logged. The adstack-overflow check is gated independently of the assertion extension, so <code class="docutils literal notranslate"><span class="pre">debug=True</span></code> activates it on every backend including Metal and Vulkan.</p>
 </section>
 </section>
 </section>
