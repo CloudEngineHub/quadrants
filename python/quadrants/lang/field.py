@@ -66,9 +66,27 @@ class _DLManagedTensor(ctypes.Structure):
     ]
 
 
+class _DLPackVersion(ctypes.Structure):
+    _fields_ = [("major", ctypes.c_uint32), ("minor", ctypes.c_uint32)]
+
+
+class _DLManagedTensorVersioned(ctypes.Structure):
+    """Matches the C ``DLManagedTensorVersioned`` layout: version, manager_ctx, deleter, flags, then dl_tensor."""
+
+    _fields_ = [
+        ("version", _DLPackVersion),
+        ("manager_ctx", ctypes.c_void_p),
+        ("deleter", ctypes.c_void_p),
+        ("flags", ctypes.c_uint64),
+        ("dl_tensor", _DLTensor),
+    ]
+
+
 def _patch_field_dlpack_canonical(capsule, layout):
     """Mutate the DLManagedTensor inside *capsule* so its shape/strides expose a canonical view of the
     permuted-physical field buffer.
+
+    Supports both v0 (``"dltensor"``) and v1 (``"dltensor_versioned"``) capsules.
 
     Invariants (input):
       * ``shape[i]`` = physical shape along axis ``i`` of the SNode (which is the *permuted* shape the field was
@@ -87,14 +105,22 @@ def _patch_field_dlpack_canonical(capsule, layout):
         return
     if tuple(layout) == tuple(range(ndim)):
         return  # identity layout — nothing to do
+    _PyCapsule_IsValid = ctypes.pythonapi.PyCapsule_IsValid
+    _PyCapsule_IsValid.restype = ctypes.c_int
+    _PyCapsule_IsValid.argtypes = [ctypes.py_object, ctypes.c_char_p]
     _PyCapsule_GetPointer = ctypes.pythonapi.PyCapsule_GetPointer
     _PyCapsule_GetPointer.restype = ctypes.c_void_p
     _PyCapsule_GetPointer.argtypes = [ctypes.py_object, ctypes.c_char_p]
-    raw = _PyCapsule_GetPointer(capsule, b"dltensor")
-    if not raw:
-        raise RuntimeError("field_to_dlpack returned a capsule without the expected 'dltensor' name")
-    mt = ctypes.cast(raw, ctypes.POINTER(_DLManagedTensor)).contents
-    t = mt.dl_tensor
+
+    if _PyCapsule_IsValid(capsule, b"dltensor"):
+        raw = _PyCapsule_GetPointer(capsule, b"dltensor")
+        t = ctypes.cast(raw, ctypes.POINTER(_DLManagedTensor)).contents.dl_tensor
+    elif _PyCapsule_IsValid(capsule, b"dltensor_versioned"):
+        raw = _PyCapsule_GetPointer(capsule, b"dltensor_versioned")
+        t = ctypes.cast(raw, ctypes.POINTER(_DLManagedTensorVersioned)).contents.dl_tensor
+    else:
+        raise RuntimeError("field_to_dlpack returned a capsule with an unrecognised name")
+
     if t.ndim < ndim:
         raise RuntimeError(f"field_to_dlpack returned ndim={t.ndim} but layout has rank {ndim}; cannot patch")
     # Only the first ``ndim`` axes carry the canonical permutation; any trailing axes (element dims for VectorField /
@@ -224,13 +250,11 @@ def _mps_sync_if_metal():
 
 
 class _DLPackV1Adapter:
-    """Wraps a DLPack v0 PyCapsule into a v1-compatible object for ``np.from_dlpack``.
+    """Wraps a DLPack PyCapsule into a v1-compatible object for ``np.from_dlpack``.
 
-    Quadrants' C++ ``to_dlpack`` returns raw PyCapsules (v0 protocol). NumPy >= 1.23 requires the v1 protocol -- an
-    object exposing ``__dlpack__`` and ``__dlpack_device__``.
-
-    FIXME: NumPy >= 2.0 marks arrays from v0 capsules as read-only. Upgrade the C++ to emit DLManagedTensorVersioned
-    (v1, capsule name "dltensor_versioned") with flags=0 so numpy views are writable. See PR #450 discussion.
+    NumPy >= 1.23 requires the v1 protocol -- an object exposing ``__dlpack__`` and ``__dlpack_device__``. The capsule
+    itself can be either v0 (``"dltensor"``) or v1 (``"dltensor_versioned"``); this adapter just satisfies the protocol
+    so ``np.from_dlpack`` can call ``__dlpack__()`` to retrieve it.
     """
 
     __slots__ = ("_capsule",)
@@ -262,8 +286,10 @@ def _try_zerocopy_numpy(field: "Field", *, copy, is_scalar: bool = False, is_nda
 
     import numpy as np  # pylint: disable=C0415
 
+    _np_ver = tuple(int(x) for x in np.__version__.split(".")[:2])
+    use_versioned = _np_ver >= (2, 1)
     try:
-        arr = np.from_dlpack(_DLPackV1Adapter(field.to_dlpack()))
+        arr = np.from_dlpack(_DLPackV1Adapter(field.to_dlpack(versioned=use_versioned)))
     except ModuleNotFoundError:
         if copy is False:
             raise ValueError(
@@ -510,7 +536,7 @@ class Field:
     def _host_access(self, key):
         return [SNodeHostAccess(e, key) for e in self.host_accessors]  # type: ignore
 
-    def to_dlpack(self):
+    def to_dlpack(self, versioned=False):
         raise NotImplementedError
 
     def __iter__(self):
@@ -527,13 +553,20 @@ class ScalarField(Field):
     def __init__(self, var):
         super().__init__([var])
 
-    def to_dlpack(self):
-        """
-        Note: caller is responsible for calling qd.sync() between modifying the field, and reading it.
+    def to_dlpack(self, versioned=False):
+        """Export this field as a DLPack capsule.
+
+        Args:
+            versioned: If True, emit a DLPack v1 ``DLManagedTensorVersioned`` capsule (``"dltensor_versioned"``,
+                ``flags=0``). NumPy >= 2.1 can consume v1 capsules and returns writable arrays; NumPy 2.0 marks v0
+                capsules read-only; NumPy < 2.1 cannot consume v1 capsules at all. If False (default), emit a v0
+                ``DLManagedTensor`` (``"dltensor"``), required by ``torch.utils.dlpack.from_dlpack``.
+
+        Note: caller is responsible for calling qd.sync() between modifying the field and reading it.
         """
         impl.get_runtime().materialize()
         try:
-            capsule = impl.get_runtime().prog.field_to_dlpack(self._snode.ptr, 0, 0, 0)
+            capsule = impl.get_runtime().prog.field_to_dlpack(self._snode.ptr, 0, 0, 0, versioned=versioned)
         except ModuleNotFoundError:
             # The C++ ``field_to_dlpack`` calls ``torch_supports_byte_offset`` which unconditionally does ``import
             # torch``. Guard here so callers that don't need torch (e.g. raw DLPack consumers) get a clear error
