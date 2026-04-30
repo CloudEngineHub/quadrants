@@ -461,16 +461,17 @@
 
 <span class="sd">    SNode.place flattens vec/mat field components directly under the struct cell (no intermediate matrix SNode), so</span>
 <span class="sd">    both ScalarField and MatrixField members sit as direct children of the struct cell dense SNode. For a ScalarField,</span>
-<span class="sd">    num_ch &gt; 1 means siblings exist (i.e. it&#39;s a struct member). For a MatrixField with n*m components, the field&#39;s</span>
-<span class="sd">    own components contribute n*m children, so num_ch &gt; n*m means extra siblings exist (i.e. it&#39;s a struct member).</span>
+<span class="sd">    num_ch != 1 means it&#39;s not a standalone field. For a MatrixField with n*m components, num_ch != n*m means either</span>
+<span class="sd">    SOA layout (num_ch == 1, each component in its own subtree -- DLPack strides are wrong) or AOS struct member</span>
+<span class="sd">    (num_ch &gt; n*m, interleaved with other struct members). Only num_ch == n*m (standalone AOS) is safe for zero-copy.</span>
 <span class="sd">    &quot;&quot;&quot;</span>
     <span class="k">try</span><span class="p">:</span>
         <span class="kn">from</span><span class="w"> </span><span class="nn">quadrants.lang.matrix</span><span class="w"> </span><span class="kn">import</span> <span class="n">MatrixField</span>  <span class="c1"># pylint: disable=C0415</span>
 
         <span class="n">parent_snode</span> <span class="o">=</span> <span class="n">field</span><span class="o">.</span><span class="n">parent</span><span class="p">()</span><span class="o">.</span><span class="n">_snode</span><span class="o">.</span><span class="n">ptr</span>
         <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">field</span><span class="p">,</span> <span class="n">MatrixField</span><span class="p">):</span>
-            <span class="k">return</span> <span class="n">parent_snode</span><span class="o">.</span><span class="n">get_num_ch</span><span class="p">()</span> <span class="o">&gt;</span> <span class="n">field</span><span class="o">.</span><span class="n">n</span> <span class="o">*</span> <span class="n">field</span><span class="o">.</span><span class="n">m</span>
-        <span class="k">return</span> <span class="n">parent_snode</span><span class="o">.</span><span class="n">get_num_ch</span><span class="p">()</span> <span class="o">&gt;</span> <span class="mi">1</span>
+            <span class="k">return</span> <span class="n">parent_snode</span><span class="o">.</span><span class="n">get_num_ch</span><span class="p">()</span> <span class="o">!=</span> <span class="n">field</span><span class="o">.</span><span class="n">n</span> <span class="o">*</span> <span class="n">field</span><span class="o">.</span><span class="n">m</span>
+        <span class="k">return</span> <span class="n">parent_snode</span><span class="o">.</span><span class="n">get_num_ch</span><span class="p">()</span> <span class="o">!=</span> <span class="mi">1</span>
     <span class="k">except</span> <span class="ne">Exception</span><span class="p">:</span>
         <span class="k">return</span> <span class="kc">False</span>
 
@@ -854,6 +855,12 @@
 
     <span class="k">def</span><span class="w"> </span><span class="nf">_host_access</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">key</span><span class="p">):</span>
         <span class="k">return</span> <span class="p">[</span><span class="n">SNodeHostAccess</span><span class="p">(</span><span class="n">e</span><span class="p">,</span> <span class="n">key</span><span class="p">)</span> <span class="k">for</span> <span class="n">e</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">host_accessors</span><span class="p">]</span>  <span class="c1"># type: ignore</span>
+
+<div class="viewcode-block" id="Field.to_dlpack">
+<a class="viewcode-back" href="../../../autoapi/quadrants/lang/field/index.html#quadrants.lang.field.Field.to_dlpack">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">to_dlpack</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="k">raise</span> <span class="ne">NotImplementedError</span></div>
+
 
     <span class="k">def</span><span class="w"> </span><span class="fm">__iter__</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
         <span class="k">raise</span> <span class="ne">NotImplementedError</span><span class="p">(</span><span class="s2">&quot;Struct for is only available in Quadrants scope.&quot;</span><span class="p">)</span></div>
