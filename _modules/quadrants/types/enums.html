@@ -335,7 +335,10 @@
 <a class="viewcode-back" href="../../../autoapi/quadrants/types/enums/index.html#quadrants.types.enums.Format">[docs]</a>
 <span class="n">Format</span> <span class="o">=</span> <span class="n">_qd_core</span><span class="o">.</span><span class="n">Format</span></div>
 
-<span class="n">BoundaryMode</span> <span class="o">=</span> <span class="n">_qd_core</span><span class="o">.</span><span class="n">BoundaryMode</span>
+<div class="viewcode-block" id="BoundaryMode">
+<a class="viewcode-back" href="../../../autoapi/quadrants/types/enums/index.html#quadrants.types.enums.BoundaryMode">[docs]</a>
+<span class="n">BoundaryMode</span> <span class="o">=</span> <span class="n">_qd_core</span><span class="o">.</span><span class="n">BoundaryMode</span></div>
+
 
 
 <span class="k">def</span><span class="w"> </span><span class="nf">to_boundary_enum</span><span class="p">(</span><span class="n">boundary</span><span class="p">):</span>
@@ -343,7 +346,7 @@
         <span class="k">return</span> <span class="n">BoundaryMode</span><span class="o">.</span><span class="n">CLAMP</span>
     <span class="k">if</span> <span class="n">boundary</span> <span class="o">==</span> <span class="s2">&quot;unsafe&quot;</span><span class="p">:</span>
         <span class="k">return</span> <span class="n">BoundaryMode</span><span class="o">.</span><span class="n">UNSAFE</span>
-    <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Invalid boundary argument: </span><span class="si">{</span><span class="n">boundary</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+    <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Invalid boundary argument: </span><span class="si">{</span><span class="n">boundary</span><span class="si">}</span><span class="s2">. Valid options: &#39;unsafe&#39;, &#39;clamp&#39;&quot;</span><span class="p">)</span>
 
 
 <div class="viewcode-block" id="DeviceCapability">
@@ -456,7 +459,7 @@
 
 
 
-<span class="n">__all__</span> <span class="o">=</span> <span class="p">[</span><span class="s2">&quot;Layout&quot;</span><span class="p">,</span> <span class="s2">&quot;AutodiffMode&quot;</span><span class="p">,</span> <span class="s2">&quot;SNodeGradType&quot;</span><span class="p">,</span> <span class="s2">&quot;Format&quot;</span><span class="p">,</span> <span class="s2">&quot;DeviceCapability&quot;</span><span class="p">]</span>
+<span class="n">__all__</span> <span class="o">=</span> <span class="p">[</span><span class="s2">&quot;Layout&quot;</span><span class="p">,</span> <span class="s2">&quot;AutodiffMode&quot;</span><span class="p">,</span> <span class="s2">&quot;SNodeGradType&quot;</span><span class="p">,</span> <span class="s2">&quot;Format&quot;</span><span class="p">,</span> <span class="s2">&quot;BoundaryMode&quot;</span><span class="p">,</span> <span class="s2">&quot;DeviceCapability&quot;</span><span class="p">]</span>
 </pre></div>
 
                 </article>
