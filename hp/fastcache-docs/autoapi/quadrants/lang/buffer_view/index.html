@@ -8,7 +8,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="viewport" content="width=device-width, initial-scale=1" />
 
-    <title>quadrants.types.compound_types &#8212; Quadrants 0.7.4 documentation</title>
+    <title>quadrants.lang.buffer_view &#8212; Quadrants 0.7.4 documentation</title>
   
   
   
@@ -55,12 +55,12 @@
     <script>var togglebuttonSelector = '.toggle, .admonition.dropdown';</script>
     <script src="../../../../_static/design-tabs.js?v=f930bc37"></script>
     <script>var togglebuttonSelector = '.toggle, .admonition.dropdown';</script>
-    <script>DOCUMENTATION_OPTIONS.pagename = 'autoapi/quadrants/types/compound_types/index';</script>
+    <script>DOCUMENTATION_OPTIONS.pagename = 'autoapi/quadrants/lang/buffer_view/index';</script>
     <script>DOCUMENTATION_OPTIONS.search_as_you_type = false;</script>
     <link rel="index" title="Index" href="../../../../genindex.html" />
     <link rel="search" title="Search" href="../../../../search.html" />
-    <link rel="next" title="quadrants.types.enums" href="../enums/index.html" />
-    <link rel="prev" title="quadrants.types.buffer_view_type" href="../buffer_view_type/index.html" />
+    <link rel="next" title="quadrants.lang.common_ops" href="../common_ops/index.html" />
+    <link rel="prev" title="quadrants.lang.ast.transform" href="../ast/transform/index.html" />
   <meta name="viewport" content="width=device-width, initial-scale=1"/>
   <meta name="docsearch:language" content="en"/>
   <meta name="docsearch:version" content="0.7.4" />
@@ -327,9 +327,9 @@
     <li class="breadcrumb-item"><a href="../../index.html" class="nav-link">quadrants</a></li>
     
     
-    <li class="breadcrumb-item"><a href="../index.html" class="nav-link">quadrants.types</a></li>
+    <li class="breadcrumb-item"><a href="../index.html" class="nav-link">quadrants.lang</a></li>
     
-    <li class="breadcrumb-item active" aria-current="page"><span class="ellipsis">quadrants.types.compound_types</span></li>
+    <li class="breadcrumb-item active" aria-current="page"><span class="ellipsis">quadrants.lang.buffer_view</span></li>
   </ul>
 </nav>
 </div>
@@ -346,20 +346,14 @@
 <div id="searchbox"></div>
                 <article class="bd-article">
                   
-  <section id="module-quadrants.types.compound_types">
-<span id="quadrants-types-compound-types"></span><h1>quadrants.types.compound_types<a class="headerlink" href="#module-quadrants.types.compound_types" title="Link to this heading">#</a></h1>
-<section id="functions">
-<h2>Functions<a class="headerlink" href="#functions" title="Link to this heading">#</a></h2>
+  <section id="module-quadrants.lang.buffer_view">
+<span id="quadrants-lang-buffer-view"></span><h1>quadrants.lang.buffer_view<a class="headerlink" href="#module-quadrants.lang.buffer_view" title="Link to this heading">#</a></h1>
+<section id="classes">
+<h2>Classes<a class="headerlink" href="#classes" title="Link to this heading">#</a></h2>
 <div class="pst-scrollable-table-container"><table class="autosummary longtable table autosummary">
 <tbody>
-<tr class="row-odd"><td><p><a class="reference internal" href="#quadrants.types.compound_types.matrix" title="quadrants.types.compound_types.matrix"><code class="xref py py-obj docutils literal notranslate"><span class="pre">matrix</span></code></a>([n, m, dtype])</p></td>
-<td><p>Creates a matrix type with given shape and data type.</p></td>
-</tr>
-<tr class="row-even"><td><p><a class="reference internal" href="#quadrants.types.compound_types.vector" title="quadrants.types.compound_types.vector"><code class="xref py py-obj docutils literal notranslate"><span class="pre">vector</span></code></a>([n, dtype])</p></td>
-<td><p>Creates a vector type with given shape and data type.</p></td>
-</tr>
-<tr class="row-odd"><td><p><a class="reference internal" href="#quadrants.types.compound_types.struct" title="quadrants.types.compound_types.struct"><code class="xref py py-obj docutils literal notranslate"><span class="pre">struct</span></code></a>(**kwargs)</p></td>
-<td><p>Creates a struct type with given members.</p></td>
+<tr class="row-odd"><td><p><a class="reference internal" href="#quadrants.lang.buffer_view.BufferView" title="quadrants.lang.buffer_view.BufferView"><code class="xref py py-obj docutils literal notranslate"><span class="pre">BufferView</span></code></a></p></td>
+<td><p>A view into a sub-range [offset, offset+size) of an ndarray.</p></td>
 </tr>
 </tbody>
 </table>
@@ -367,70 +361,73 @@
 </section>
 <section id="module-contents">
 <h2>Module Contents<a class="headerlink" href="#module-contents" title="Link to this heading">#</a></h2>
-<dl class="py function">
-<dt class="sig sig-object py" id="quadrants.types.compound_types.matrix">
-<span class="sig-prename descclassname"><span class="pre">quadrants.types.compound_types.</span></span><span class="sig-name descname"><span class="pre">matrix</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">n</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">m</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">dtype</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../../../../_modules/quadrants/types/compound_types.html#matrix"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#quadrants.types.compound_types.matrix" title="Link to this definition">#</a></dt>
-<dd><p>Creates a matrix type with given shape and data type.</p>
-<dl class="field-list simple">
-<dt class="field-odd">Parameters<span class="colon">:</span></dt>
-<dd class="field-odd"><ul class="simple">
-<li><p><strong>n</strong> (<em>int</em>) – number of rows of the matrix.</p></li>
-<li><p><strong>m</strong> (<em>int</em>) – number of columns of the matrix.</p></li>
-<li><p><strong>dtype</strong> (<a class="reference internal" href="../primitive_types/index.html#module-quadrants.types.primitive_types" title="quadrants.types.primitive_types"><code class="xref py py-mod docutils literal notranslate"><span class="pre">primitive_types</span></code></a>) – matrix data type.</p></li>
-</ul>
-</dd>
-<dt class="field-even">Returns<span class="colon">:</span></dt>
-<dd class="field-even"><p>A matrix type.</p>
-</dd>
-</dl>
-<p>Example:</p>
-<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="n">mat2x2</span> <span class="o">=</span> <span class="n">qd</span><span class="o">.</span><span class="n">types</span><span class="o">.</span><span class="n">matrix</span><span class="p">(</span><span class="mi">2</span><span class="p">,</span> <span class="mi">2</span><span class="p">,</span> <span class="n">qd</span><span class="o">.</span><span class="n">f32</span><span class="p">)</span>  <span class="c1"># 2x2 matrix type</span>
-<span class="gp">&gt;&gt;&gt; </span><span class="n">M</span> <span class="o">=</span> <span class="n">mat2x2</span><span class="p">([[</span><span class="mf">1.</span><span class="p">,</span> <span class="mf">2.</span><span class="p">],</span> <span class="p">[</span><span class="mf">3.</span><span class="p">,</span> <span class="mf">4.</span><span class="p">]])</span>  <span class="c1"># an instance of this type</span>
+<dl class="py class">
+<dt class="sig sig-object py" id="quadrants.lang.buffer_view.BufferView">
+<em class="property"><span class="pre">class</span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">quadrants.lang.buffer_view.</span></span><span class="sig-name descname"><span class="pre">BufferView</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">arr</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">offset</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">size</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../../../../_modules/quadrants/lang/buffer_view.html#BufferView"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#quadrants.lang.buffer_view.BufferView" title="Link to this definition">#</a></dt>
+<dd><p>A view into a sub-range [offset, offset+size) of an ndarray.</p>
+<p>Create via slice syntax:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">view</span> <span class="o">=</span> <span class="n">data</span><span class="p">[:</span><span class="mi">16</span><span class="p">]</span>           <span class="c1"># offset=0, size=16</span>
+<span class="n">view</span> <span class="o">=</span> <span class="n">data</span><span class="p">[</span><span class="mi">8</span><span class="p">:</span><span class="mi">24</span><span class="p">]</span>          <span class="c1"># offset=8, size=16</span>
+</pre></div>
+</div>
+<p>Or construct directly:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">view</span> <span class="o">=</span> <span class="n">qd</span><span class="o">.</span><span class="n">BufferView</span><span class="p">(</span><span class="n">data</span><span class="p">,</span> <span class="n">offset</span><span class="o">=</span><span class="mi">16</span><span class="p">,</span> <span class="n">size</span><span class="o">=</span><span class="mi">32</span><span class="p">)</span>
+</pre></div>
+</div>
+<p>Subviews can be created from an existing view:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">sub</span> <span class="o">=</span> <span class="n">view</span><span class="o">.</span><span class="n">subview</span><span class="p">(</span><span class="n">offset</span><span class="o">=</span><span class="mi">4</span><span class="p">,</span> <span class="n">size</span><span class="o">=</span><span class="mi">8</span><span class="p">)</span>
+</pre></div>
+</div>
+<p>Annotate kernel/func parameters with <code class="docutils literal notranslate"><span class="pre">BufferView[dtype]</span></code> or plain <code class="docutils literal notranslate"><span class="pre">BufferView</span></code>:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="nd">@qd</span><span class="o">.</span><span class="n">kernel</span>
+<span class="k">def</span><span class="w"> </span><span class="nf">k</span><span class="p">(</span><span class="n">v</span><span class="p">:</span> <span class="n">BufferView</span><span class="p">[</span><span class="n">qd</span><span class="o">.</span><span class="n">f32</span><span class="p">]):</span>
+    <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">v</span><span class="o">.</span><span class="n">size</span><span class="p">):</span>
+        <span class="n">v</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="o">*=</span> <span class="mf">2.0</span>
+</pre></div>
+</div>
+<dl class="py attribute">
+<dt class="sig sig-object py" id="quadrants.lang.buffer_view.BufferView.arr">
+<span class="sig-name descname"><span class="pre">arr</span></span><a class="reference internal" href="../../../../_modules/quadrants/lang/buffer_view.html#BufferView.arr"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#quadrants.lang.buffer_view.BufferView.arr" title="Link to this definition">#</a></dt>
+<dd></dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="quadrants.lang.buffer_view.BufferView.offset">
+<span class="sig-name descname"><span class="pre">offset</span></span><a class="reference internal" href="../../../../_modules/quadrants/lang/buffer_view.html#BufferView.offset"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#quadrants.lang.buffer_view.BufferView.offset" title="Link to this definition">#</a></dt>
+<dd></dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="quadrants.lang.buffer_view.BufferView.size">
+<span class="sig-name descname"><span class="pre">size</span></span><a class="reference internal" href="../../../../_modules/quadrants/lang/buffer_view.html#BufferView.size"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#quadrants.lang.buffer_view.BufferView.size" title="Link to this definition">#</a></dt>
+<dd></dd></dl>
+
+<dl class="py property">
+<dt class="sig sig-object py" id="quadrants.lang.buffer_view.BufferView.shape">
+<em class="property"><span class="pre">property</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">shape</span></span><a class="reference internal" href="../../../../_modules/quadrants/lang/buffer_view.html#BufferView.shape"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#quadrants.lang.buffer_view.BufferView.shape" title="Link to this definition">#</a></dt>
+<dd><p>Returns the shape of this view as a tuple, e.g. <code class="docutils literal notranslate"><span class="pre">(16,)</span></code>.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="quadrants.lang.buffer_view.BufferView.subview">
+<span class="sig-name descname"><span class="pre">subview</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">offset</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">size</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../../../../_modules/quadrants/lang/buffer_view.html#BufferView.subview"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#quadrants.lang.buffer_view.BufferView.subview" title="Link to this definition">#</a></dt>
+<dd><p>Create a sub-range view within this view, with bounds checking.</p>
+<p>Offsets are relative to this view’s start, not the ndarray’s:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">a</span> <span class="o">=</span> <span class="n">data</span><span class="p">[</span><span class="mi">8</span><span class="p">:</span><span class="mi">24</span><span class="p">]</span>          <span class="c1"># offset=8, size=16 into data</span>
+<span class="n">b</span> <span class="o">=</span> <span class="n">a</span><span class="o">.</span><span class="n">subview</span><span class="p">(</span><span class="mi">4</span><span class="p">,</span> <span class="mi">8</span><span class="p">)</span>     <span class="c1"># offset=12, size=8 into data</span>
 </pre></div>
 </div>
 </dd></dl>
 
-<dl class="py function">
-<dt class="sig sig-object py" id="quadrants.types.compound_types.vector">
-<span class="sig-prename descclassname"><span class="pre">quadrants.types.compound_types.</span></span><span class="sig-name descname"><span class="pre">vector</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">n</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">dtype</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../../../../_modules/quadrants/types/compound_types.html#vector"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#quadrants.types.compound_types.vector" title="Link to this definition">#</a></dt>
-<dd><p>Creates a vector type with given shape and data type.</p>
-<dl class="field-list simple">
-<dt class="field-odd">Parameters<span class="colon">:</span></dt>
-<dd class="field-odd"><ul class="simple">
-<li><p><strong>n</strong> (<em>int</em>) – dimension of the vector.</p></li>
-<li><p><strong>dtype</strong> (<a class="reference internal" href="../primitive_types/index.html#module-quadrants.types.primitive_types" title="quadrants.types.primitive_types"><code class="xref py py-mod docutils literal notranslate"><span class="pre">primitive_types</span></code></a>) – vector data type.</p></li>
-</ul>
-</dd>
-<dt class="field-even">Returns<span class="colon">:</span></dt>
-<dd class="field-even"><p>A vector type.</p>
-</dd>
-</dl>
-<p>Example:</p>
-<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="n">vec3</span> <span class="o">=</span> <span class="n">qd</span><span class="o">.</span><span class="n">types</span><span class="o">.</span><span class="n">vector</span><span class="p">(</span><span class="mi">3</span><span class="p">,</span> <span class="n">qd</span><span class="o">.</span><span class="n">f32</span><span class="p">)</span>  <span class="c1"># 3d vector type</span>
-<span class="gp">&gt;&gt;&gt; </span><span class="n">v</span> <span class="o">=</span> <span class="n">vec3</span><span class="p">([</span><span class="mf">1.</span><span class="p">,</span> <span class="mf">2.</span><span class="p">,</span> <span class="mf">3.</span><span class="p">])</span>  <span class="c1"># an instance of this type</span>
-</pre></div>
-</div>
+<dl class="py method">
+<dt class="sig sig-object py" id="quadrants.lang.buffer_view.BufferView.subscript">
+<span class="sig-name descname"><span class="pre">subscript</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="o"><span class="pre">*</span></span><span class="n"><span class="pre">indices</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../../../../_modules/quadrants/lang/buffer_view.html#BufferView.subscript"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#quadrants.lang.buffer_view.BufferView.subscript" title="Link to this definition">#</a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="quadrants.lang.buffer_view.BufferView.get_ndarray">
+<span class="sig-name descname"><span class="pre">get_ndarray</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="../../../../_modules/quadrants/lang/buffer_view.html#BufferView.get_ndarray"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#quadrants.lang.buffer_view.BufferView.get_ndarray" title="Link to this definition">#</a></dt>
+<dd><p>Returns the underlying ndarray (host-side only).</p>
 </dd></dl>
 
-<dl class="py function">
-<dt class="sig sig-object py" id="quadrants.types.compound_types.struct">
-<span class="sig-prename descclassname"><span class="pre">quadrants.types.compound_types.</span></span><span class="sig-name descname"><span class="pre">struct</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">kwargs</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../../../../_modules/quadrants/types/compound_types.html#struct"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#quadrants.types.compound_types.struct" title="Link to this definition">#</a></dt>
-<dd><p>Creates a struct type with given members.</p>
-<dl class="field-list simple">
-<dt class="field-odd">Parameters<span class="colon">:</span></dt>
-<dd class="field-odd"><p><strong>kwargs</strong> (<em>dict</em>) – a dictionary contains the names and types of the
-struct members.</p>
-</dd>
-<dt class="field-even">Returns<span class="colon">:</span></dt>
-<dd class="field-even"><p>A struct type.</p>
-</dd>
-</dl>
-<p>Example:</p>
-<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="n">vec3</span> <span class="o">=</span> <span class="n">qd</span><span class="o">.</span><span class="n">types</span><span class="o">.</span><span class="n">vector</span><span class="p">(</span><span class="mi">3</span><span class="p">,</span> <span class="n">qd</span><span class="o">.</span><span class="n">f32</span><span class="p">)</span>
-<span class="gp">&gt;&gt;&gt; </span><span class="n">sphere</span> <span class="o">=</span> <span class="n">qd</span><span class="o">.</span><span class="n">types</span><span class="o">.</span><span class="n">struct</span><span class="p">(</span><span class="n">center</span><span class="o">=</span><span class="n">vec3</span><span class="p">,</span> <span class="n">radius</span><span class="o">=</span><span class="nb">float</span><span class="p">)</span>
-<span class="gp">&gt;&gt;&gt; </span><span class="n">s</span> <span class="o">=</span> <span class="n">sphere</span><span class="p">(</span><span class="n">center</span><span class="o">=</span><span class="n">vec3</span><span class="p">([</span><span class="mf">0.</span><span class="p">,</span> <span class="mf">0.</span><span class="p">,</span> <span class="mf">0.</span><span class="p">]),</span> <span class="n">radius</span><span class="o">=</span><span class="mf">1.0</span><span class="p">)</span>
-</pre></div>
-</div>
 </dd></dl>
 
 </section>
@@ -447,20 +444,20 @@ struct members.</p>
                   
 <div class="prev-next-area">
     <a class="left-prev"
-       href="../buffer_view_type/index.html"
+       href="../ast/transform/index.html"
        title="previous page">
       <i class="fa-solid fa-angle-left"></i>
       <div class="prev-next-info">
         <p class="prev-next-subtitle">previous</p>
-        <p class="prev-next-title">quadrants.types.buffer_view_type</p>
+        <p class="prev-next-title">quadrants.lang.ast.transform</p>
       </div>
     </a>
     <a class="right-next"
-       href="../enums/index.html"
+       href="../common_ops/index.html"
        title="next page">
       <div class="prev-next-info">
         <p class="prev-next-subtitle">next</p>
-        <p class="prev-next-title">quadrants.types.enums</p>
+        <p class="prev-next-title">quadrants.lang.common_ops</p>
       </div>
       <i class="fa-solid fa-angle-right"></i>
     </a>
@@ -483,11 +480,18 @@ struct members.</p>
   </div>
   <nav id="pst-page-toc-nav" class="page-toc" aria-labelledby="pst-page-navigation-heading-2">
     <ul class="pst-show_toc_level nav section-nav flex-column">
-<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#functions">Functions</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#classes">Classes</a></li>
 <li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#module-contents">Module Contents</a><ul class="nav section-nav flex-column">
-<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#quadrants.types.compound_types.matrix"><code class="docutils literal notranslate"><span class="pre">matrix()</span></code></a></li>
-<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#quadrants.types.compound_types.vector"><code class="docutils literal notranslate"><span class="pre">vector()</span></code></a></li>
-<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#quadrants.types.compound_types.struct"><code class="docutils literal notranslate"><span class="pre">struct()</span></code></a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#quadrants.lang.buffer_view.BufferView"><code class="docutils literal notranslate"><span class="pre">BufferView</span></code></a><ul class="nav section-nav flex-column">
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#quadrants.lang.buffer_view.BufferView.arr"><code class="docutils literal notranslate"><span class="pre">BufferView.arr</span></code></a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#quadrants.lang.buffer_view.BufferView.offset"><code class="docutils literal notranslate"><span class="pre">BufferView.offset</span></code></a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#quadrants.lang.buffer_view.BufferView.size"><code class="docutils literal notranslate"><span class="pre">BufferView.size</span></code></a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#quadrants.lang.buffer_view.BufferView.shape"><code class="docutils literal notranslate"><span class="pre">BufferView.shape</span></code></a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#quadrants.lang.buffer_view.BufferView.subview"><code class="docutils literal notranslate"><span class="pre">BufferView.subview()</span></code></a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#quadrants.lang.buffer_view.BufferView.subscript"><code class="docutils literal notranslate"><span class="pre">BufferView.subscript()</span></code></a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#quadrants.lang.buffer_view.BufferView.get_ndarray"><code class="docutils literal notranslate"><span class="pre">BufferView.get_ndarray()</span></code></a></li>
+</ul>
+</li>
 </ul>
 </li>
 </ul>
@@ -496,7 +500,7 @@ struct members.</p>
   <div class="sidebar-secondary-item">
 
   <div class="tocsection sourcelink">
-    <a href="../../../../_sources/autoapi/quadrants/types/compound_types/index.rst.txt">
+    <a href="../../../../_sources/autoapi/quadrants/lang/buffer_view/index.rst.txt">
       <i class="fa-solid fa-file-lines"></i> Show Source
     </a>
   </div>

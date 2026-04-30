@@ -290,6 +290,7 @@
 <li class="toctree-l1"><a class="reference internal" href="matrix_vector.html">Matrix and Vector</a></li>
 <li class="toctree-l1"><a class="reference internal" href="tensor.html">Tensors</a></li>
 <li class="toctree-l1"><a class="reference internal" href="compound_types.html">Compound types</a></li>
+<li class="toctree-l1"><a class="reference internal" href="buffer_view.html">BufferView</a></li>
 <li class="toctree-l1"><a class="reference internal" href="static.html">qd.static</a></li>
 <li class="toctree-l1"><a class="reference internal" href="sub_functions.html">Sub-functions</a></li>
 <li class="toctree-l1"><a class="reference internal" href="parallelization.html">Parallelization</a></li>
@@ -510,6 +511,27 @@
 </pre></div>
 </div>
 <p>Sub-functions called by the kernel are also checked — they must not capture external state either.</p>
+<p><strong>Exemptions:</strong> The following may be accessed from the enclosing scope without violating purity:</p>
+<div class="pst-scrollable-table-container"><table class="table">
+<thead>
+<tr class="row-odd"><th class="head"><p>Allowed capture</p></th>
+<th class="head"><p>Why</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">enum.Enum</span></code> values (e.g. <code class="docutils literal notranslate"><span class="pre">MyEnum.VALUE</span></code>)</p></td>
+<td><p>Named constants that are assumed not to vary between process runs.</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">math</span></code> / <code class="docutils literal notranslate"><span class="pre">numpy</span></code> constants (e.g. <code class="docutils literal notranslate"><span class="pre">math.pi</span></code>)</p></td>
+<td><p>Assumed stable across process runs.</p></td>
+</tr>
+<tr class="row-even"><td><p>Quadrants module attributes (e.g. <code class="docutils literal notranslate"><span class="pre">qd.simt.Tile16x16.SIZE</span></code>)</p></td>
+<td><p>Part of the compiler’s own API; assumed consistent with the Quadrants version hash.</p></td>
+</tr>
+</tbody>
+</table>
+</div>
+<p>Other named constants (non-enum, non-module) captured from scope will raise a <code class="docutils literal notranslate"><span class="pre">QuadrantsCompilationError</span></code>, except for <code class="docutils literal notranslate"><span class="pre">UPPERCASE</span></code> names which emit a warning instead.</p>
 </section>
 <section id="supported-parameter-types">
 <h3>2. Supported parameter types<a class="headerlink" href="#supported-parameter-types" title="Link to this heading">#</a></h3>
@@ -546,7 +568,7 @@
 <td><p>Yes</p></td>
 <td><p>type and value (baked into kernel)</p></td>
 </tr>
-<tr class="row-even"><td><p>Non-template primitives (int, float)</p></td>
+<tr class="row-even"><td><p>Non-template primitives (int, float, bool)</p></td>
 <td><p>Yes</p></td>
 <td><p>type only</p></td>
 </tr>
@@ -568,9 +590,9 @@
 <p>Fastcache hashes the source code of the kernel and all sub-functions it calls. If the source file cannot be read at runtime (e.g. the kernel is defined in a frozen/compiled module, or the file has been deleted), fastcache cannot validate the cache and will fall back to normal compilation.</p>
 </section>
 </section>
-<section id="cache-invalidation">
-<h2>Cache invalidation<a class="headerlink" href="#cache-invalidation" title="Link to this heading">#</a></h2>
-<p>The cache is automatically invalidated when any of the following change:</p>
+<section id="cache-keying">
+<h2>Cache keying<a class="headerlink" href="#cache-keying" title="Link to this heading">#</a></h2>
+<p>Each compiled artifact is stored under a key derived from all of the following:</p>
 <ul class="simple">
 <li><p>The <strong>Quadrants version</strong> (<code class="docutils literal notranslate"><span class="pre">quadrants.__version__</span></code>).</p></li>
 <li><p>The <strong>source code</strong> of the kernel function or any <code class="docutils literal notranslate"><span class="pre">&#64;qd.func</span></code> it calls.</p></li>
@@ -578,7 +600,7 @@
 <li><p>The <strong>compiler configuration</strong> (e.g. <code class="docutils literal notranslate"><span class="pre">arch</span></code>, <code class="docutils literal notranslate"><span class="pre">debug</span></code>, <code class="docutils literal notranslate"><span class="pre">opt_level</span></code>, <code class="docutils literal notranslate"><span class="pre">fast_math</span></code>).</p></li>
 <li><p><strong>Template parameter values</strong> (since they are baked into the compiled kernel).</p></li>
 </ul>
-<p>You do not need to manually clear the cache when making code changes — the hash mismatch causes a transparent recompilation.</p>
+<p>When any of these change, the resulting key is different, so a new compilation occurs and a new entry is stored. Previous entries remain on disk — multiple cached versions coexist. You do not need to manually clear the cache when making code changes — the hash mismatch causes a transparent recompilation.</p>
 </section>
 <section id="advanced">
 <h2>Advanced<a class="headerlink" href="#advanced" title="Link to this heading">#</a></h2>
@@ -664,7 +686,7 @@
 <li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#source-code-must-be-available">3. Source code must be available</a></li>
 </ul>
 </li>
-<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#cache-invalidation">Cache invalidation</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#cache-keying">Cache keying</a></li>
 <li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#advanced">Advanced</a><ul class="nav section-nav flex-column">
 <li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#diagnostics">Diagnostics</a></li>
 </ul>
