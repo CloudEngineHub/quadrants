@@ -48,6 +48,8 @@ Module Contents
 
       Explicitly destroy the stream. Safe to call multiple times.
 
+      No-op for streams wrapping external handles (created via Stream(ptr) without a prog_ref).
+
 
 
 .. py:class:: Event(handle: int, prog_ref: weakref.ref | None = None)
@@ -84,6 +86,8 @@ Module Contents
    .. py:method:: destroy()
 
       Explicitly destroy the event. Safe to call multiple times.
+
+      No-op for events wrapping external handles (created via Event(ptr) without a prog_ref).
 
 
 
