@@ -518,10 +518,10 @@
 </section>
 <section id="tracing-adstack-heap-allocations">
 <h3>Tracing adstack heap allocations<a class="headerlink" href="#tracing-adstack-heap-allocations" title="Link to this heading">#</a></h3>
-<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span><span class="nv">QD_DEBUG_ADSTACK</span><span class="o">=</span><span class="m">1</span><span class="w"> </span><span class="nv">QD_OFFLINE_CACHE</span><span class="o">=</span><span class="m">0</span><span class="w"> </span>python<span class="w"> </span>my_script.py
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span><span class="nv">QD_DEBUG_ADSTACK</span><span class="o">=</span><span class="m">1</span><span class="w"> </span>python<span class="w"> </span>my_script.py
 </pre></div>
 </div>
-<p>Prints one line per task per kernel launch describing each adstack heap binding: task name, heap kind (float or int), sizing source (per-task reducer count, last-observed snapshot, or dispatched-threads worst case), per-thread stride, and resulting allocation in bytes. Useful for pinning which task drives the peak when an adstack-bearing kernel hits an OOM and the remedies in <a class="reference internal" href="autodiff.html#avoiding-oom-on-gpu"><span class="std std-ref">Avoiding OOM on GPU</span></a> do not point at an obvious culprit.</p>
+<p>Prints one line per task per kernel launch describing each adstack heap binding: task name, heap kind (float or int), sizing source (per-task reducer count or dispatched-threads worst case), per-thread stride, and resulting allocation in bytes. Useful for pinning which task drives the peak when an adstack-bearing kernel hits an OOM and the remedies in <a class="reference internal" href="autodiff.html#avoiding-oom-on-gpu"><span class="std std-ref">Avoiding OOM on GPU</span></a> do not point at an obvious culprit.</p>
 </section>
 </section>
 </section>
