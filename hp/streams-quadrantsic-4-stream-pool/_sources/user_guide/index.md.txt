@@ -17,7 +17,9 @@ supported_systems
 tensor_types
 scalar_tensors
 matrix_vector
+tensor
 compound_types
+buffer_view
 static
 sub_functions
 parallelization
@@ -32,10 +34,19 @@ interop
 ```
 
 ```{toctree}
+:caption: Autodiff
+:maxdepth: 1
+:titlesonly:
+
+autodiff
+```
+
+```{toctree}
 :caption: SIMT primitives
 :maxdepth: 1
 :titlesonly:
 
+subgroup
 tile16
 ```
 
@@ -44,8 +55,19 @@ tile16
 :maxdepth: 1
 :titlesonly:
 
+fastcache
 graph
+streams
 perf_dispatch
+init_options
+```
+
+```{toctree}
+:caption: Testing
+:maxdepth: 1
+:titlesonly:
+
+kernel_coverage
 ```
 
 ```{toctree}
@@ -58,6 +80,14 @@ python_backend
 debug
 quirks
 troubleshooting
+```
+
+```{toctree}
+:caption: Contributing
+:maxdepth: 1
+:titlesonly:
+
+contributing
 ```
 
 ```{toctree}
