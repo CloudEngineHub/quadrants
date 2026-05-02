@@ -54,8 +54,8 @@ Module Contents
 
       Resolve an AST Name/Attribute node to a Python object.
 
-      Same traversal as resolve_to but returns the resolved object (or None)
-      instead of comparing against a wanted value.
+      Same traversal as resolve_to but returns the resolved object (or None) instead of comparing against a wanted
+      value.
 
 
 
