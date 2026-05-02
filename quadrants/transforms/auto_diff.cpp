@@ -52,6 +52,128 @@ class NonLinearOps {
                                                                 BinaryOpType::min,   BinaryOpType::max};
 };
 
+// Returns true iff `stmt`'s transitive operand DAG terminates at recomputable leaves via side-effect-free
+// interior ops only. Used by `EliminateRecomputableAdStackPushes` and `BackupSSA::generic_visit` to decide
+// whether a forward SSA value can be reconstructed in the reverse-pass scope from already-stack-backed allocas
+// + kernel-args + constants + loop indices, instead of being spilled to a per-iteration adstack or to
+// `BackupSSA::load`'s last-iteration plain alloca.
+//
+// Recomputable leaves: AdStackLoadTopStmt (re-readable via cloned load), AdStackAllocaStmt (the stack itself,
+// shared not cloned), ArgLoadStmt (kernel-arg, immutable within the launch), ConstStmt, LoopIndexStmt (clonable
+// to read the reverse-direction loop's index, which matches the forward iteration the reverse is currently
+// processing). Side-effect-free interior ops: UnaryOp, BinaryOp, TernaryOp, MatrixPtr, GlobalPtr, ExternalPtr.
+//
+// `GlobalLoadStmt` and `ExternalPtrAccessStmt`-style reads are intentionally not recomputable: the underlying
+// global memory may be mutated mid-kernel by a sibling task, so reading at a different IR position can yield a
+// different value. `LocalLoadStmt` similarly aliases mutable allocas; the reverse pass must read its forward
+// value through the dedicated spill machinery.
+//
+// Caller passes a `cache` to share memoization across multiple queries on the same DAG (diamond shapes).
+class RecomputableChainAnalyzer {
+ public:
+  static bool is_recomputable(Stmt *stmt, std::unordered_map<Stmt *, bool> &cache) {
+    auto it = cache.find(stmt);
+    if (it != cache.end())
+      return it->second;
+    // Tentatively false to break cycles in pathological IR (real SSA DAGs are acyclic, but the cache also
+    // serves as a visited set during recursion).
+    cache[stmt] = false;
+    bool result = check(stmt, cache);
+    cache[stmt] = result;
+    return result;
+  }
+
+ private:
+  static bool check(Stmt *stmt, std::unordered_map<Stmt *, bool> &cache) {
+    // Conservative leaf set: only ConstStmt and ArgLoadStmt count as recomputable. Two intentional
+    // exclusions:
+    //
+    //   - LoopIndexStmt: the cloned IR-level reference would still point at the original RangeForStmt
+    //     (the forward replay's for), but the cloned consumer ends up inside the reverse for-stmt.
+    //     Reading a forward for's loop index from inside the reverse for double-accumulates gradients
+    //     (`test_adstack_sum_linear` pins this).
+    //
+    //   - AdStackLoadTopStmt: the cloned read happens at the consumer's IR position in the reverse
+    //     scope. For loop-carried stacks (multi-body-push), `MakeAdjoint::visit(AdStackPushStmt)` emits
+    //     a pop somewhere within the reverse iteration, and the cloned read can land before or after
+    //     that pop depending on where the consumer lives - reading pre-pop returns iteration k's
+    //     OUTPUT, post-pop returns iteration k's INPUT, and the choice depends on `MakeAdjoint`'s
+    //     ordering of adjoint emission. Even for single-body-push stacks, downstream consumer
+    //     placement under nested control flow can produce stale reads (`test_ad_fibonacci_index` and
+    //     `test_adstack_many_non_f32_stacks_heap_backed` pinned this in two different shapes - off-by-
+    //     one-iteration recurrence and pre-pop cond evaluation respectively). Until BackupSSA grows
+    //     a dedicated mechanism to position cloned chains after pops on dependent loop-carried
+    //     stacks (or until MakeAdjoint emits a snap-stack-like fixup for the cross-block-use case),
+    //     load_top reads stay non-recomputable.
+    //
+    // The remaining recomputable shape is "values whose forward computation depends only on kernel-
+    // arg / kernel-constant inputs" - effectively LICM-hoist of operand spills for loop-invariant
+    // expressions. The chain cloning machinery in `BackupSSA::generic_visit` produces correct reverse
+    // IR for these because every leaf is iteration-invariant (constants and args don't change across
+    // forward iters), so the cloned read at any consumer position returns the same value.
+    if (stmt->is<AdStackAllocaStmt>() || stmt->is<ArgLoadStmt>() || stmt->is<ConstStmt>()) {
+      return true;
+    }
+    bool is_interior = stmt->is<UnaryOpStmt>() || stmt->is<BinaryOpStmt>() || stmt->is<TernaryOpStmt>() ||
+                       stmt->is<MatrixPtrStmt>() || stmt->is<GlobalPtrStmt>() || stmt->is<ExternalPtrStmt>();
+    if (!is_interior)
+      return false;
+    auto operands = stmt->get_operands();
+    for (auto *op : operands) {
+      if (op == nullptr)
+        continue;
+      if (!is_recomputable(op, cache))
+        return false;
+    }
+    return true;
+  }
+};
+
+// Clones the SSA chain rooted at `src` into the IR, inserting cloned stmts before `insert_point`. Returns the
+// cloned root. Per-stmt cache shared across one resolution materializes each SSA value at most once: diamond
+// DAGs see two consumers but get one shared clone. `AdStackAllocaStmt` is treated as a leaf and shared (not
+// cloned) - the stack itself is a unique storage handle that must not be duplicated.
+//
+// Pop-ordering safety: cloned `AdStackLoadTopStmt`s read the live top at the cloned position. `MakeAdjoint`
+// emits `AdStackPopStmt` for each surviving `AdStackPushStmt`, and the existing reverse-pass scheme places
+// the pop AFTER all uses of that stack within the reverse iteration (uses include both the original
+// `AdStackLoadTopStmt`s emitted by `ReplaceLocalVarWithStacks` and the consumers' clones). For loop-carried
+// allocas the pop fires early to expose the iteration's INPUT primal as the new top, which is exactly the
+// value the recomputed chain needs - the existing per-consumer clone path at `BackupSSA::generic_visit` line
+// ~2697 relies on this same property and has been correct in production.
+class RecomputableChainCloner {
+ public:
+  static Stmt *clone_at(Stmt *src, Stmt *insert_point, std::unordered_map<Stmt *, Stmt *> &cache) {
+    auto it = cache.find(src);
+    if (it != cache.end())
+      return it->second;
+    Stmt *cloned = nullptr;
+    if (src->is<AdStackAllocaStmt>()) {
+      // The alloca is shared, not cloned: every load reads the same physical stack.
+      cloned = src;
+    } else if (src->is<AdStackLoadTopStmt>() || src->is<ArgLoadStmt>() || src->is<ConstStmt>()) {
+      auto cloned_unique = src->clone();
+      cloned = insert_point->insert_before_me(std::move(cloned_unique));
+      // For AdStackLoadTopStmt clones, the cloned stmt's `stack` operand still points at the original
+      // AdStackAllocaStmt - that's the desired sharing.
+    } else {
+      // Compound op: clone first, then walk operands and rewire each to a recursive clone.
+      auto cloned_unique = src->clone();
+      cloned = insert_point->insert_before_me(std::move(cloned_unique));
+      int n = src->num_operands();
+      for (int i = 0; i < n; i++) {
+        auto *op = src->operand(i);
+        if (op != nullptr) {
+          Stmt *new_op = clone_at(op, cloned, cache);
+          cloned->set_operand(i, new_op);
+        }
+      }
+    }
+    cache[src] = cloned;
+    return cloned;
+  }
+};
+
 class IndependentBlocksJudger : public BasicStmtVisitor {
  public:
   using BasicStmtVisitor::visit;
@@ -1089,6 +1211,358 @@ class ReplaceLocalVarWithStacks : public BasicStmtVisitor {
       new_matrix_ptr_stmt->ret_type = stmt->ret_type;
       stmt->replace_with(std::move(new_matrix_ptr_stmt));
     }
+  }
+};
+
+// Eliminate AdStackAllocaStmts whose pushed value is recomputable from already-stack-backed allocas, kernel
+// args, constants, and loop indices. Runs between `ReplaceLocalVarWithStacks` and `MakeAdjoint`, so the reverse
+// pass is generated against the cleaned IR (no spurious AdStackPushStmt / AdStackLoadTopStmt scaffolding for
+// values the reverse can reconstruct on the fly via cloned forward DAGs).
+//
+// Eligibility per AdStackAllocaStmt S in an independent block:
+//   1. S is written by exactly one AdStackPushStmt (single-push pattern). Multi-push allocas hold loop-carried
+//      state where each iteration's push depends on the previous - the reverse pass cannot reconstruct
+//      iteration k's value from iteration (k-1)'s value, so the stack is genuinely needed.
+//   2. The pushed value's transitive operand DAG is recomputable per RecomputableChainAnalyzer (leaves at
+//      AdStackLoadTop / AdStackAlloca / ArgLoad / Const / LoopIndex; interior side-effect-free ops only).
+//   3. S has no AdStackLoadTopStmt with `return_ptr=true` consumers (those return a pointer aliasing the slot
+//      and a follow-up store would not be modeled by an SSA replacement).
+//
+// Action on eligibility: replace every `AdStackLoadTopStmt(S)` with the original pushed SSA value (the
+// `AdStackPushStmt::v`), then erase the push and the alloca. The pushed SSA value's chain stays in the forward
+// IR; downstream consumers in the forward pass now reference it directly as SSA, and `MakeAdjoint` plus
+// `BackupSSA` reconstruct the chain on demand in the reverse pass via the same DAG-clone path that
+// `BackupSSA::generic_visit` exercises for cross-block SSA references.
+//
+// Iterates to fixed point: eliminating one stack can newly expose another stack's chain as recomputable
+// (S2's pushed value chained through `AdStackLoadTopStmt(S1)`; once S1 is gone, the chain may collapse into
+// pure SSA chained through S1's pushed-value chain instead). Each pass eliminates at least one stack or
+// terminates.
+//
+// Cost model: this pass trades forward-pass adstack pushes (memory write + top-pointer bump per push) for
+// extra arithmetic in the reverse pass (the cloned DAG re-executes the forward chain). For pure-arithmetic
+// chains rooted at a single loop-carried alloca - the dominant shape on Genesis-style rigid-step kernels -
+// the win is typically 5-10x: each push is a memory op crossing the L1 boundary on every iteration, while
+// the recomputed arithmetic stays in registers and reuses warmed-up sin/cos/exp pipeline state.
+class EliminateRecomputableAdStackPushes {
+ public:
+  static void run(Block *ib) {
+    // Iterate to fixed point. Each pass either eliminates at least one stack or terminates.
+    while (run_one_pass(ib)) {
+    }
+  }
+
+ private:
+  // True iff `s` is a literal-zero ConstStmt or a MatrixInitStmt whose every element is a literal-zero
+  // ConstStmt. Matches the init-zero push pattern that ReplaceLocalVarWithStacks emits right after each
+  // AdStackAllocaStmt: scalar allocas get a ConstStmt(0), tensor-typed allocas get a MatrixInitStmt of
+  // ConstStmt(0)s. Both are erased along with the alloca during elimination - they only matter if a load
+  // could observe them before the body push fires, which the standard PromoteSSA2LocalVar +
+  // ReplaceLocalVarWithStacks codegen never produces (loads always follow the body push within the loop
+  // iter that emits them).
+  static bool is_zero_init_value(Stmt *s) {
+    if (auto *c = s->cast<ConstStmt>()) {
+      return c->val.equal_value(0);
+    }
+    if (auto *mi = s->cast<MatrixInitStmt>()) {
+      for (auto *elem : mi->values) {
+        auto *c = elem->cast<ConstStmt>();
+        if (c == nullptr || !c->val.equal_value(0))
+          return false;
+      }
+      return true;
+    }
+    return false;
+  }
+
+  // Returns true if any stack was eliminated this pass.
+  static bool run_one_pass(Block *ib) {
+    // Collect every AdStackAllocaStmt anywhere within the IB. The IB is the root of a contiguous AD scope, so
+    // a single walk is sufficient.
+    std::vector<AdStackAllocaStmt *> stacks;
+    auto collected = irpass::analysis::gather_statements(ib, [&](Stmt *s) { return s->is<AdStackAllocaStmt>(); });
+    for (auto *s : collected) {
+      stacks.push_back(s->as<AdStackAllocaStmt>());
+    }
+
+    bool modified = false;
+    std::unordered_map<Stmt *, bool> recomputable_cache;
+
+    for (auto *stack : stacks) {
+      // Re-classify users of `stack` each iteration: a previous elimination on a downstream stack may have
+      // removed users that previously disqualified `stack`.
+      std::vector<AdStackPushStmt *> pushes;
+      std::vector<AdStackLoadTopStmt *> load_tops;
+      bool disqualified = false;
+
+      auto users = irpass::analysis::gather_statements(ib, [&](Stmt *s) {
+        if (auto *p = s->cast<AdStackPushStmt>())
+          return p->stack == stack;
+        if (auto *lt = s->cast<AdStackLoadTopStmt>())
+          return lt->stack == stack;
+        if (auto *po = s->cast<AdStackPopStmt>())
+          return po->stack == stack;
+        if (auto *aa = s->cast<AdStackAccAdjointStmt>())
+          return aa->stack == stack;
+        if (auto *la = s->cast<AdStackLoadTopAdjStmt>())
+          return la->stack == stack;
+        return false;
+      });
+      for (auto *user : users) {
+        if (auto *p = user->cast<AdStackPushStmt>()) {
+          pushes.push_back(p);
+        } else if (auto *lt = user->cast<AdStackLoadTopStmt>()) {
+          if (lt->return_ptr) {
+            // return_ptr=true returns a pointer into the slot; replacing with an SSA value loses the
+            // pointer-identity contract. Keep the stack.
+            disqualified = true;
+            break;
+          }
+          load_tops.push_back(lt);
+        } else if (user->is<AdStackPopStmt>() || user->is<AdStackAccAdjointStmt>() ||
+                   user->is<AdStackLoadTopAdjStmt>()) {
+          // Pre-MakeAdjoint, pop / adj-acc / load-top-adj should not appear yet for this stack. If they do,
+          // some upstream pass has already touched it - keep as-is to avoid double-rewrites.
+          disqualified = true;
+          break;
+        }
+      }
+      if (disqualified || pushes.empty()) {
+        continue;
+      }
+
+      // ReplaceLocalVarWithStacks emits a const-zero "init" AdStackPushStmt immediately after the
+      // AdStackAllocaStmt as the stack's initial value (auto_diff.cpp:867-872 in pre-fix tree). Real
+      // user-level allocas in a loop body have at most ONE additional "body" push per iteration. Treat
+      // const-zero pushes whose value is a `ConstStmt` with all-zero `TypedConstant` as inits and require at
+      // most one non-init "body" push for elimination eligibility. Multi-body-push allocas hold loop-carried
+      // state (each iteration's push depends on the previous), so the reverse pass cannot reconstruct
+      // iteration k from iteration k-1 and the stack must stay.
+      AdStackPushStmt *body_push = nullptr;
+      std::vector<AdStackPushStmt *> init_pushes;
+      for (auto *p : pushes) {
+        if (is_zero_init_value(p->v)) {
+          init_pushes.push_back(p);
+        } else {
+          if (body_push != nullptr) {
+            disqualified = true;
+            break;
+          }
+          body_push = p;
+        }
+      }
+      if (disqualified || body_push == nullptr) {
+        continue;
+      }
+
+      Stmt *pushed_val = body_push->v;
+      if (!RecomputableChainAnalyzer::is_recomputable(pushed_val, recomputable_cache)) {
+        continue;
+      }
+      // Loop-carried self-reference: when the pushed value's transitive operand DAG includes an
+      // AdStackLoadTopStmt of the SAME stack we are about to eliminate, the value is `read prev iter from
+      // stack -> compute -> push next iter`. Rewriting load_top($S) -> pushed_value_SSA leaves a self-cycle
+      // in the SSA graph (`acc_new = acc_new + sin(a)`) which both corrupts the IR and loses the iteration
+      // recurrence the stack was carrying. The recomputable-chain analyzer happily accepts such chains
+      // because AdStackLoadTopStmt is a recomputable leaf in general; the additional check below specifically
+      // disqualifies self-loaded stacks.
+      //
+      // The classic shape this protects: `acc = 0.0; for j in range(N): acc += sin(...)`. After
+      // PromoteSSA2LocalVar + ReplaceLocalVarWithStacks the IR has `$acc = stack_alloc; init push;
+      // for j: $tmp = stack_load_top $acc; $new = $tmp + sin(...); push $acc, val=$new`. The chain `$tmp +
+      // sin(...)` is recomputable per the leaf rules (LoadTop is a leaf), but rewriting load_top($acc) to
+      // ($tmp + sin(...)) makes the SSA graph self-reference $new and the reverse pass loses every
+      // iteration's accumulator state.
+      // Read-before-write protection: substituting `AdStackLoadTopStmt(S)` with the body push's value SSA
+      // chain only preserves semantics when the body push DOMINATES every load_top in the forward IR -
+      // that is, every load_top reads what the body push just wrote in the same iteration. The
+      // PromoteSSA2LocalVar + ReplaceLocalVarWithStacks pipeline emits exactly this shape for required-def
+      // spills: `alloca; push val=def; load_top` in document order, with the push immediately following
+      // the def and loads occurring later in the same iteration.
+      //
+      // Loop-carried recurrences violate the dominance rule. Take the canonical Fibonacci shape
+      // `p, q = q, p + q` lowered to IR:
+      //
+      //     $tmp_p = load_top($p)         # reads PREVIOUS iter's push into $p
+      //     $tmp_q = load_top($p) + load_top($q)
+      //     push $p, val=$tmp_p           # writes NEXT iter's value into $p
+      //     push $q, val=$tmp_q
+      //
+      // Here load_top($p) reads BEFORE the body push of $p within the same iter, so it observes iter
+      // (k-1)'s value, not iter k's. Substituting `load_top($p) -> $tmp_p`'s SSA chain (which reads
+      // load_top($q) at iter k) gives iter k's q-value instead of iter (k-1)'s p-value, off by one
+      // iteration and producing zero gradients on the Fibonacci-style regression test pinned by
+      // `test_ad_fibonacci_index`.
+      //
+      // The check below asserts that for every load_top in `load_tops`, the body push is its predecessor
+      // within the same containing block (or, equivalently, load_top comes AFTER the body push in
+      // document order at the body push's block level). Loads that live inside nested control flow
+      // (`IfStmt`, `RangeForStmt`) under the body push's block are also fine because the body push
+      // dominates them. We approximate dominance with the lexical "push's block contains load_top's
+      // ancestor block AND push position < load_top's ancestor's position in that block" check.
+      auto block_position = [](Stmt *s) -> int {
+        Block *b = s->parent;
+        if (b == nullptr)
+          return -1;
+        for (size_t i = 0; i < b->statements.size(); i++) {
+          if (b->statements[i].get() == s)
+            return static_cast<int>(i);
+        }
+        return -1;
+      };
+      Block *push_block = body_push->parent;
+      int push_pos = block_position(body_push);
+      bool dominates_all_loads = true;
+      for (auto *lt : load_tops) {
+        Stmt *cursor = lt;
+        Block *cursor_block = cursor->parent;
+        while (cursor_block != nullptr && cursor_block != push_block) {
+          cursor = cursor_block->parent_stmt();
+          if (cursor == nullptr)
+            break;
+          cursor_block = cursor->parent;
+        }
+        if (cursor_block != push_block) {
+          // load_top is outside the push's block scope: cannot establish dominance.
+          dominates_all_loads = false;
+          break;
+        }
+        int cursor_pos = block_position(cursor);
+        if (cursor_pos <= push_pos) {
+          // load_top precedes the body push (or its enclosing container does): it reads the previous
+          // iteration's value, not iter k's. Substitution would shift iterations by one.
+          dominates_all_loads = false;
+          break;
+        }
+      }
+      if (!dominates_all_loads) {
+        continue;
+      }
+
+      bool is_self_loaded = false;
+      std::unordered_set<Stmt *> visited;
+      std::function<void(Stmt *)> walk = [&](Stmt *s) {
+        if (is_self_loaded || visited.count(s))
+          return;
+        visited.insert(s);
+        if (auto *lt = s->cast<AdStackLoadTopStmt>()) {
+          if (lt->stack == stack) {
+            is_self_loaded = true;
+            return;
+          }
+          // load_top of a different stack: the operand chain stops here at this leaf for the self-check.
+          return;
+        }
+        if (s->is<AdStackAllocaStmt>() || s->is<ArgLoadStmt>() || s->is<ConstStmt>()) {
+          return;  // leaf, not a self-load
+        }
+        for (auto *op : s->get_operands()) {
+          if (op != nullptr)
+            walk(op);
+        }
+      };
+      walk(pushed_val);
+      if (is_self_loaded) {
+        continue;
+      }
+
+      // Control-flow-cond consumers: `MakeAdjoint::visit(IfStmt)` (auto_diff.cpp:2131-) detects bare
+      // `AdStackLoadTopStmt` conds and emits a dedicated 1-push-per-execution snap-stack so the reverse
+      // IfStmt's cond reads the forward-time cond value rather than re-reading the stack at the consumer
+      // position (which sits BEFORE the per-iter pops in the reverse scope and would see a stale top).
+      // Compound conds rely on `BackupSSA`'s `load(op)` spill, which inserts a `LocalStore` immediately
+      // after the forward cond - per-iter, single alloca, last-write-wins.
+      //
+      // If we eliminate a stack whose load_top is the bare cond of an IfStmt (or feeds the begin/end of an
+      // inner RangeForStmt, by the same argument applied to MakeAdjoint::visit(RangeForStmt)), the rewrite
+      // turns the cond / loop-bound into an inlined recomputed SSA chain. The snap-stack guard at line
+      // 2157 stops firing (the cond is no longer a bare AdStackLoadTopStmt), and `BackupSSA`'s
+      // recomputable-clone fallback positions a fresh `AdStackLoadTopStmt` of an enclosing loop-carried
+      // stack at the consumer's IR location - which sits BEFORE the per-iter pops, returning the post-
+      // iteration value of the loop-carried stack instead of the iteration-k value the cond was originally
+      // computed against. Net effect: silent gradient corruption in any if/loop nested inside a dynamic
+      // for-loop with a loop-carried alloca.
+      //
+      // Keep stacks whose load_tops have such consumers. Note that this is structurally narrower than
+      // "don't eliminate stacks with cross-IR control-flow uses": `cmp_lt(load_top, threshold) -> IfStmt`
+      // is fine when the cond is THIS stack's pushed value (the stack itself is the cond stack), because
+      // that's the snap-stack-eligible shape. The consumer check below trips only on a load_top of THIS
+      // stack feeding directly into a control-flow-shaping operand of another stmt.
+      // `irpass::analysis::gather_statements` walks via `BasicStmtVisitor`, whose visit overrides for
+      // IfStmt / RangeForStmt / StructForStmt do not invoke the per-stmt test predicate on the container
+      // itself - only on stmts inside their bodies. Walk container stmts manually here.
+      bool has_control_flow_consumer = false;
+      std::function<void(Block *)> walk_block = [&](Block *b) {
+        if (has_control_flow_consumer)
+          return;
+        for (auto &owned : b->statements) {
+          Stmt *s = owned.get();
+          if (auto *if_s = s->cast<IfStmt>()) {
+            for (auto *lt : load_tops) {
+              if (if_s->cond == lt) {
+                has_control_flow_consumer = true;
+                return;
+              }
+            }
+            if (if_s->true_statements)
+              walk_block(if_s->true_statements.get());
+            if (has_control_flow_consumer)
+              return;
+            if (if_s->false_statements)
+              walk_block(if_s->false_statements.get());
+          } else if (auto *rf = s->cast<RangeForStmt>()) {
+            for (auto *lt : load_tops) {
+              if (rf->begin == lt || rf->end == lt) {
+                has_control_flow_consumer = true;
+                return;
+              }
+            }
+            if (rf->body)
+              walk_block(rf->body.get());
+          } else if (auto *sf = s->cast<StructForStmt>()) {
+            if (sf->body)
+              walk_block(sf->body.get());
+          } else if (auto *off = s->cast<OffloadedStmt>()) {
+            if (off->body)
+              walk_block(off->body.get());
+            if (off->tls_prologue)
+              walk_block(off->tls_prologue.get());
+            if (off->bls_prologue)
+              walk_block(off->bls_prologue.get());
+            if (off->bls_epilogue)
+              walk_block(off->bls_epilogue.get());
+            if (off->tls_epilogue)
+              walk_block(off->tls_epilogue.get());
+          }
+        }
+      };
+      walk_block(ib);
+      if (has_control_flow_consumer) {
+        continue;
+      }
+
+      // Eligible: rewrite each load_top to use the pushed value directly. The pushed value lives in the
+      // forward IR and dominates each load_top by SSA construction (the load_top reads what the push wrote;
+      // both are inside the same loop body in the dynamic-loop case, with the push preceding the load_top).
+      for (auto *lt : load_tops) {
+        irpass::replace_all_usages_with(ib, lt, pushed_val);
+        lt->parent->erase(lt);
+      }
+      // Erase init-zero pushes (they only matter if a load could observe them, but the rewriting above just
+      // routed every load to the body-pushed SSA value), the body push, and the alloca itself.
+      for (auto *p : init_pushes) {
+        p->parent->erase(p);
+      }
+      body_push->parent->erase(body_push);
+      stack->parent->erase(stack);
+
+      // Invalidate the cache: the eliminated stack might have been referenced by other recomputable chains
+      // we evaluated earlier in this pass, but those evaluations only matter for stacks we eliminate THIS
+      // pass; re-running from scratch on the next iteration recomputes them.
+      recomputable_cache.clear();
+      modified = true;
+    }
+    return modified;
   }
 };
 
@@ -2715,12 +3189,35 @@ class BackupSSA : public BasicStmtVisitor {
         } else if (op->is<ArgLoadStmt>()) {
           stmt->set_operand(i, stmt->insert_before_me(op->clone()));
         } else {
-          auto alloca = load(op);
-          stmt->set_operand(i, stmt->insert_before_me(Stmt::make<LocalLoadStmt>(alloca)));
+          // Recomputable-chain fallback before the last-iter `load(op)` spill: when the cross-block SSA op
+          // is rooted in a DAG of side-effect-free arithmetic over already-stack-backed allocas, kernel-args,
+          // constants, and loop indices, clone the chain into the reverse scope at the consumer site. The
+          // cloned chain reads stack tops live (matching `MakeAdjoint`'s pop ordering, which fires pops
+          // AFTER all uses of a stack within one reverse iter) and reads kernel-args / constants / loop
+          // indices via direct clones - exactly the path that was already correct for AdStackLoadTopStmt and
+          // ArgLoadStmt operands.
+          //
+          // The pre-existing `load(op)` fallback below remains correct for genuinely non-recomputable
+          // cross-block ops (a forward `GlobalLoadStmt` of a needs_grad SNode whose value the reverse must
+          // read at last-write rather than recompute, for instance) and for shapes outside one of our
+          // independent blocks. Adding the recomputable path above the fallback strictly subsets the
+          // previous behaviour: a chain that fails the predicate falls through to the old `load(op)` line.
+          if (RecomputableChainAnalyzer::is_recomputable(op, recomputable_cache_)) {
+            std::unordered_map<Stmt *, Stmt *> clone_cache;
+            Stmt *cloned = RecomputableChainCloner::clone_at(op, stmt, clone_cache);
+            stmt->set_operand(i, cloned);
+          } else {
+            auto alloca = load(op);
+            stmt->set_operand(i, stmt->insert_before_me(Stmt::make<LocalLoadStmt>(alloca)));
+          }
         }
       }
     }
   }
+
+  // Memoization cache for `RecomputableChainAnalyzer::is_recomputable` queries within one BackupSSA run.
+  // Re-used across all generic_visit calls; invariant during the visit because forward IR is read-only here.
+  std::unordered_map<Stmt *, bool> recomputable_cache_;
 
   void visit(Stmt *stmt) override {
     generic_visit(stmt);
@@ -3108,6 +3605,16 @@ void auto_diff(IRNode *root, const CompileConfig &config, AutodiffMode autodiff_
         PromoteSSA2LocalVar::run(ib);
         ReplaceLocalVarWithStacks replace(config.ad_stack_size);
         ib->accept(&replace);
+        type_check(root, config);
+
+        // Drop AdStackAllocas whose pushed value is recomputable from already-stack-backed allocas + args +
+        // const + loop-index. Trades forward-pass adstack memory traffic (one push + one load per iter per
+        // intermediate spill) for cloned arithmetic in the reverse scope, which `BackupSSA::generic_visit`
+        // generates on demand via the same RecomputableChainCloner path. Must run after
+        // `ReplaceLocalVarWithStacks` (so the analyzer sees the AdStackAlloca shape, not the alloca-with-store
+        // shape PromoteSSA2LocalVar emits) and before `MakeAdjoint` (so the reverse pass is generated against
+        // the cleaned forward IR with no spurious push/load scaffolding).
+        EliminateRecomputableAdStackPushes::run(ib);
         type_check(root, config);
 
         MakeAdjoint::run(ib);
