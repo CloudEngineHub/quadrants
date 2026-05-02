@@ -626,7 +626,23 @@ class AdStackAllocaJudger : public BasicStmtVisitor {
   void visit(LocalStoreStmt *stmt) override {
     if (stmt->dest == target_alloca_backup_) {
       load_only_ = false;
-      if (local_loaded_) {
+      // Gate the load+store-implies-stack-needed rule on actually being inside a dynamic RangeForStmt at the
+      // point this evidence accumulates. The rule's purpose is to preserve cross-iteration RAW dependencies
+      // (`for j: p, q = q, p + q` Fibonacci-style) that BackupSSA's single overwrite-each-iteration alloca
+      // cannot back. With no enclosing dynamic for-loop the IB body executes once: there is no cross-
+      // iteration RAW to preserve, and the "load+store" pattern is just an in-block accumulator that the
+      // reverse pass handles via plain SSA cloning. Promoting such allocas under a static-unrolled loop body
+      // wastes one AdStack per accumulator (one push per unrolled-iter store + one load_top per unrolled-
+      // iter load) without any reverse-pass consumer needing per-iter replay - that is the unrolled-overhead
+      // bug Plan B targets.
+      //
+      // `dynamic_for_depth_` is incremented in `visit(RangeForStmt)` and decremented on exit. The judger
+      // walks the IB tree from the alloca's enclosing block, so depth here reflects exactly the nesting of
+      // *dynamic* for-loops between the alloca and the current load/store. StructFor / WhileStmt do not
+      // increment because their bodies still execute per-iter and need the same RAW protection (StructFor
+      // is the kernel-level offload-loop in some cases, but its body is a per-thread independent block;
+      // load+store there is the same shape as for a top-level alloca).
+      if (local_loaded_ && dynamic_for_depth_ > 0) {
         is_stack_needed_ = true;
       }
     }
@@ -763,13 +779,16 @@ class AdStackAllocaJudger : public BasicStmtVisitor {
       return;
     }
 
+    dynamic_for_depth_++;
     stmt->body->accept(this);
+    dynamic_for_depth_--;
   }
 
   static bool run(AllocaStmt *target_alloca) {
     AdStackAllocaJudger judger;
     judger.target_alloca_ = target_alloca;
     judger.target_alloca_backup_ = target_alloca;
+    judger.dynamic_for_depth_ = 0;
     target_alloca->parent->accept(&judger);
     return (!judger.load_only_) && judger.is_stack_needed_;
   }
@@ -802,6 +821,11 @@ class AdStackAllocaJudger : public BasicStmtVisitor {
   bool is_stack_needed_ = false;
   bool local_loaded_ = false;
   bool load_only_ = true;
+  // Nesting depth of dynamic `RangeForStmt` containers between the alloca's enclosing block and the current
+  // visit cursor. Static-unrolled `qd.static(range(...))` loops are removed by the AST transformer before the
+  // judger sees the IR, so they do not contribute to depth. The load+store-implies-stack-needed rule fires
+  // only when this depth is positive; see the rationale in `visit(LocalStoreStmt)`.
+  int dynamic_for_depth_ = 0;
 };
 
 class RegulateTensorTypedStatements : public BasicStmtVisitor {
