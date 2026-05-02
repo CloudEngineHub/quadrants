@@ -1,0 +1,49 @@
+name: Launch Overhead Benchmarks
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: benchmarks-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  launch-overhead:
+    name: launch-overhead-cpu
+    runs-on: ubuntu-22.04
+    env:
+      WANDB_API_KEY: ${{ secrets.WANDB_API_KEY }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.10'
+      - name: Install dependencies
+        run: |
+          pip install torch --index-url https://download.pytorch.org/whl/cpu
+          pip install wandb
+          bash .github/workflows/scripts_new/linux/1_prerequisites.sh
+          bash .github/workflows/scripts_new/linux/2_build.sh
+          bash .github/workflows/scripts_new/linux/3_install.sh
+      - name: Run launch-overhead benchmarks
+        run: |
+          WANDB_ARGS=""
+          if [ -n "${WANDB_API_KEY}" ]; then
+            WANDB_ARGS="--wandb-project quadrants-benchmarks --wandb-run-prefix launch"
+          fi
+          python benchmarks/launch_overhead/bench_launch_overhead.py \
+            --arch cpu \
+            --output benchmarks_results.json \
+            ${WANDB_ARGS}
+      - name: Display results
+        run: cat benchmarks_results.json
+      - name: Upload results as artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: launch-overhead-results
+          path: benchmarks_results.json
