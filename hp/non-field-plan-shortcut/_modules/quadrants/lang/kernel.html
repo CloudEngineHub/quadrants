@@ -911,6 +911,11 @@
                     <span class="n">template_num</span> <span class="o">+=</span> <span class="mi">1</span>
                     <span class="n">i_out</span> <span class="o">+=</span> <span class="mi">1</span>
                     <span class="k">continue</span>
+                <span class="c1"># FIXME: This shortcut skips _recursive_set_args() solely when val._qd_all_field is true and the annotation is</span>
+                <span class="c1"># a dataclass, but _recursive_set_args() is where the strict provided_arg_type-is-needed_arg_type check lives.</span>
+                <span class="c1"># As a result, once an instance has _qd_all_field=True, passing it to a kernel parameter annotated with a</span>
+                <span class="c1"># different all-Field dataclass type can be silently accepted instead of raising the previous runtime type error,</span>
+                <span class="c1"># which weakens API/type safety and can route the wrong struct type through launch.</span>
                 <span class="k">if</span> <span class="nb">getattr</span><span class="p">(</span><span class="n">val</span><span class="p">,</span> <span class="s2">&quot;_qd_all_field&quot;</span><span class="p">,</span> <span class="kc">False</span><span class="p">)</span> <span class="ow">and</span> <span class="nb">getattr</span><span class="p">(</span><span class="n">needed_</span><span class="p">,</span> <span class="n">_FIELDS</span><span class="p">,</span> <span class="kc">None</span><span class="p">)</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
                     <span class="k">continue</span>
                 <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">graph_do_while_arg</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="ow">and</span> <span class="bp">self</span><span class="o">.</span><span class="n">arg_metas</span><span class="p">[</span><span class="n">i_in</span><span class="p">]</span><span class="o">.</span><span class="n">name</span> <span class="o">==</span> <span class="bp">self</span><span class="o">.</span><span class="n">graph_do_while_arg</span><span class="p">:</span>
