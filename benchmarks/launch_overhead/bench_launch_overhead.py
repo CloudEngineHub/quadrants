@@ -10,12 +10,14 @@ Scenarios modeled after Genesis rigid-body simulation patterns:
 - Many frozen-dataclass struct parameters (mimics forward_kinematics, constraint_solver)
 - Mix of cacheable (struct) and uncacheable (torch.Tensor) args (mimics set_dofs_position)
 - Template annotations vs struct annotations (before/after always-fastcache migration)
+
+Run with: pytest benchmarks/launch_overhead/bench_launch_overhead.py -v
+Filter:   pytest benchmarks/launch_overhead/bench_launch_overhead.py -k "cache_miss"
 """
-import argparse
 import dataclasses
-import json
 import time
 
+import pytest
 import torch
 
 import quadrants as qd
@@ -23,6 +25,8 @@ import quadrants as qd
 N_WARMUP = 50
 N_STEPS = 2000
 N_TRIALS = 5
+
+pytestmark = [pytest.mark.benchmarks]
 
 
 # ---------------------------------------------------------------------------
@@ -44,179 +48,122 @@ StructE = _make_struct_class("StructE", 6)
 
 
 # ---------------------------------------------------------------------------
-# Kernel definitions (created lazily after qd.init)
+# Fixtures
 # ---------------------------------------------------------------------------
 
-_kernels_initialized = False
-out_field = None
-kernel_many_structs = None
-kernel_structs_plus_tensor = None
-kernel_template_annotations = None
-kernel_template_plus_tensor = None
+
+@pytest.fixture(scope="module")
+def qd_init():
+    qd.init(arch=qd.cpu)
 
 
-def init_kernels():
-    global _kernels_initialized, out_field
-    global kernel_many_structs, kernel_structs_plus_tensor
-    global kernel_template_annotations, kernel_template_plus_tensor
+@pytest.fixture(scope="module")
+def structs(qd_init):
+    def _make(cls):
+        fields = dataclasses.fields(cls)
+        return cls(**{f.name: qd.field(qd.f32, shape=(4,)) for f in fields})
 
-    if _kernels_initialized:
-        return
-    _kernels_initialized = True
+    return _make(StructA), _make(StructB), _make(StructC), _make(StructD), _make(StructE)
 
-    out_field = qd.field(qd.i32, shape=())
 
+@pytest.fixture(scope="module")
+def out_field(qd_init):
+    return qd.field(qd.i32, shape=())
+
+
+@pytest.fixture(scope="module")
+def kernel_many_structs(out_field):
     @qd.kernel
-    def _kernel_many_structs(s1: StructA, s2: StructB, s3: StructC, s4: StructD, s5: StructE):
+    def _k(s1: StructA, s2: StructB, s3: StructC, s4: StructD, s5: StructE):
         out_field[None] = 1
+    return _k
 
+
+@pytest.fixture(scope="module")
+def kernel_structs_plus_tensor(out_field):
     @qd.kernel
-    def _kernel_structs_plus_tensor(
-        s1: StructA, s2: StructB, s3: StructC, s4: StructD, s5: StructE, t: qd.types.ndarray()
-    ):
+    def _k(s1: StructA, s2: StructB, s3: StructC, s4: StructD, s5: StructE, t: qd.types.ndarray()):
         out_field[None] = 1
+    return _k
 
+
+@pytest.fixture(scope="module")
+def kernel_template_annotations(out_field):
     @qd.kernel
-    def _kernel_template_annotations(
-        s1: qd.template(), s2: qd.template(), s3: qd.template(), s4: qd.template(), s5: qd.template()
-    ):
+    def _k(s1: qd.template(), s2: qd.template(), s3: qd.template(), s4: qd.template(), s5: qd.template()):
         out_field[None] = 1
+    return _k
 
+
+@pytest.fixture(scope="module")
+def kernel_template_plus_tensor(out_field):
     @qd.kernel
-    def _kernel_template_plus_tensor(
+    def _k(
         s1: qd.template(), s2: qd.template(), s3: qd.template(), s4: qd.template(), s5: qd.template(),
         t: qd.types.ndarray(),
     ):
         out_field[None] = 1
-
-    kernel_many_structs = _kernel_many_structs
-    kernel_structs_plus_tensor = _kernel_structs_plus_tensor
-    kernel_template_annotations = _kernel_template_annotations
-    kernel_template_plus_tensor = _kernel_template_plus_tensor
+    return _k
 
 
 # ---------------------------------------------------------------------------
-# Benchmark runner
+# Benchmark helpers
 # ---------------------------------------------------------------------------
 
 
-def make_field_struct(cls):
-    """Create a frozen dataclass instance where all fields are qd.field (zero-slot)."""
-    fields = dataclasses.fields(cls)
-    kwargs = {f.name: qd.field(qd.f32, shape=(4,)) for f in fields}
-    return cls(**kwargs)
-
-
-def run_benchmark(name, step_fn, n_warmup=N_WARMUP, n_steps=N_STEPS, n_trials=N_TRIALS):
-    """Run a benchmark, return median launches/sec."""
+def _measure(step_fn, n_warmup=N_WARMUP, n_steps=N_STEPS, n_trials=N_TRIALS):
     for _ in range(n_warmup):
         step_fn()
 
     results = []
-    for trial in range(n_trials):
+    for _ in range(n_trials):
         t0 = time.perf_counter()
         for _ in range(n_steps):
             step_fn()
         elapsed = time.perf_counter() - t0
-        launches_per_sec = n_steps / elapsed
-        results.append(launches_per_sec)
+        results.append(n_steps / elapsed)
 
-    median = sorted(results)[len(results) // 2]
-    return {"name": name, "median_launches_per_sec": median, "all_results": results}
+    return sorted(results)[len(results) // 2]
 
 
-def run_all():
-    """Run all benchmarks, return list of result dicts."""
-    init_kernels()
-    sa = make_field_struct(StructA)
-    sb = make_field_struct(StructB)
-    sc = make_field_struct(StructC)
-    sd = make_field_struct(StructD)
-    se = make_field_struct(StructE)
+# ---------------------------------------------------------------------------
+# Tests
+# ---------------------------------------------------------------------------
 
-    tensor_arg = qd.ndarray(qd.f32, shape=(4,))
 
-    results = []
+def test_many_structs_cached(structs, kernel_many_structs):
+    """5 all-Field struct args, cache hits after warmup (best case)."""
+    sa, sb, sc, sd, se = structs
+    fps = _measure(lambda: kernel_many_structs(sa, sb, sc, sd, se))
+    print(f"\nmany_structs_cached: {fps:,.0f} launches/s")
 
-    # Benchmark 1: Many structs, all-field, no cache-busting arg (cache hits after warmup)
-    results.append(run_benchmark(
-        "many_structs_cached",
-        lambda: kernel_many_structs(sa, sb, sc, sd, se),
-    ))
 
-    # Benchmark 2: Many structs + torch.Tensor (cache miss every call due to changing tensor)
-    def step_structs_tensor():
+def test_many_structs_cache_miss(structs, kernel_structs_plus_tensor):
+    """5 all-Field struct args + torch.Tensor that changes id each call (cache miss)."""
+    sa, sb, sc, sd, se = structs
+
+    def step():
         t = torch.zeros(4, dtype=torch.float32)
         kernel_structs_plus_tensor(sa, sb, sc, sd, se, t)
 
-    results.append(run_benchmark("many_structs_cache_miss", step_structs_tensor))
+    fps = _measure(step)
+    print(f"\nmany_structs_cache_miss: {fps:,.0f} launches/s")
 
-    # Benchmark 3: Template annotations (baseline — no struct traversal at all)
-    results.append(run_benchmark(
-        "template_cached",
-        lambda: kernel_template_annotations(sa, sb, sc, sd, se),
-    ))
 
-    # Benchmark 4: Template + tensor (baseline with cache-busting)
-    def step_template_tensor():
+def test_template_cached(structs, kernel_template_annotations):
+    """5 template args, cache hits (baseline — no struct traversal)."""
+    sa, sb, sc, sd, se = structs
+    fps = _measure(lambda: kernel_template_annotations(sa, sb, sc, sd, se))
+    print(f"\ntemplate_cached: {fps:,.0f} launches/s")
+
+
+def test_template_cache_miss(structs, kernel_template_plus_tensor):
+    """5 template args + torch.Tensor (baseline with cache miss)."""
+    sa, sb, sc, sd, se = structs
+
+    def step():
         t = torch.zeros(4, dtype=torch.float32)
         kernel_template_plus_tensor(sa, sb, sc, sd, se, t)
 
-    results.append(run_benchmark("template_cache_miss", step_template_tensor))
-
-    return results
-
-
-def main():
-    parser = argparse.ArgumentParser(description="Quadrants kernel launch overhead benchmarks")
-    parser.add_argument("--arch", default="cpu", choices=["cpu", "gpu"], help="Quadrants arch")
-    parser.add_argument("--output", default=None, help="Output JSON file path")
-    parser.add_argument("--wandb-project", default=None, help="W&B project to log results")
-    parser.add_argument("--wandb-run-prefix", default="launch", help="W&B run name prefix")
-    args = parser.parse_args()
-
-    arch = qd.cpu if args.arch == "cpu" else qd.gpu
-    qd.init(arch=arch)
-
-    print(f"Running launch-overhead benchmarks on {args.arch}...")
-    print(f"  N_WARMUP={N_WARMUP}, N_STEPS={N_STEPS}, N_TRIALS={N_TRIALS}")
-    print()
-
-    results = run_all()
-
-    print("\n" + "=" * 70)
-    print(f"{'Benchmark':<30} {'Median launches/s':>20}")
-    print("-" * 70)
-    for r in results:
-        print(f"{r['name']:<30} {r['median_launches_per_sec']:>20,.0f}")
-    print("=" * 70)
-
-    if args.output:
-        with open(args.output, "w") as f:
-            json.dump(results, f, indent=2)
-        print(f"\nResults written to {args.output}")
-
-    if args.wandb_project:
-        import wandb
-
-        revision = qd.__version__
-        run_name = f"{args.wandb_run_prefix}-{revision}"
-        run = wandb.init(
-            project=args.wandb_project,
-            name=run_name,
-            config={"arch": args.arch, "version": revision, "n_steps": N_STEPS, "n_trials": N_TRIALS},
-            settings=wandb.Settings(x_disable_stats=True, console="off"),
-        )
-        for r in results:
-            run.log({f"{r['name']}/launches_per_sec": r["median_launches_per_sec"]})
-        # Also log as a summary table
-        table = wandb.Table(columns=["benchmark", "launches_per_sec"])
-        for r in results:
-            table.add_data(r["name"], r["median_launches_per_sec"])
-        run.log({"launch_overhead_results": table})
-        run.finish()
-        print(f"\nResults uploaded to W&B project '{args.wandb_project}'")
-
-
-if __name__ == "__main__":
-    main()
+    fps = _measure(step)
+    print(f"\ntemplate_cache_miss: {fps:,.0f} launches/s")

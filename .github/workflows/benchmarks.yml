@@ -25,22 +25,12 @@ jobs:
       - name: Install dependencies
         run: |
           pip install torch --index-url https://download.pytorch.org/whl/cpu
-          pip install wandb
+          pip install wandb pytest
           bash .github/workflows/scripts_new/linux/1_prerequisites.sh
           bash .github/workflows/scripts_new/linux/2_build.sh
           bash .github/workflows/scripts_new/linux/3_install.sh
       - name: Run launch-overhead benchmarks
-        run: |
-          WANDB_ARGS=""
-          if [ -n "${WANDB_API_KEY}" ]; then
-            WANDB_ARGS="--wandb-project quadrants-benchmarks --wandb-run-prefix launch"
-          fi
-          python benchmarks/launch_overhead/bench_launch_overhead.py \
-            --arch cpu \
-            --output benchmarks_results.json \
-            ${WANDB_ARGS}
-      - name: Display results
-        run: cat benchmarks_results.json
+        run: pytest benchmarks/launch_overhead/bench_launch_overhead.py -v -s
       - name: Upload results as artifact
         if: always()
         uses: actions/upload-artifact@v4
