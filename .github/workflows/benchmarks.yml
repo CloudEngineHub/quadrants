@@ -2,6 +2,7 @@ name: Launch Overhead Benchmarks
 on:
   push:
     branches: [main]
+  pull_request:
   workflow_dispatch:
 permissions:
   contents: read
@@ -25,15 +26,29 @@ jobs:
       - name: Install dependencies
         run: |
           pip install torch --index-url https://download.pytorch.org/whl/cpu
-          pip install wandb pytest
+          pip install 'wandb<0.25' pytest
           bash .github/workflows/scripts_new/linux/1_prerequisites.sh
           bash .github/workflows/scripts_new/linux/2_build.sh
           bash .github/workflows/scripts_new/linux/3_install.sh
       - name: Run launch-overhead benchmarks
-        run: pytest tests/python/test_launch_overhead.py -m benchmarks -v -s
+        run: |
+          mkdir -p /tmp/artifacts
+          pytest tests/python/test_launch_overhead.py \
+            -m benchmarks -v -s \
+            --speed-test-filepath /tmp/artifacts/speed_test_launch.txt
+      - name: Display results
+        if: always()
+        run: cat /tmp/artifacts/speed_test_launch.txt || true
+      - name: Upload to W&B (main only)
+        if: github.ref == 'refs/heads/main' && env.WANDB_API_KEY != ''
+        run: |
+          python .github/workflows/scripts/upload_launch_benchmarks_to_wandb.py \
+            --in-file /tmp/artifacts/speed_test_launch.txt \
+            --project quadrants-benchmarks \
+            --run-prefix launch
       - name: Upload results as artifact
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: launch-overhead-results
-          path: benchmarks_results.json
+          name: speed-test-launch
+          path: /tmp/artifacts/speed_test_launch.txt
