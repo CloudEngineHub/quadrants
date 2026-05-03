@@ -22,6 +22,20 @@ class LaunchContextBuilder;
 // expression is empty (no symbolic bound captured), signalling to the caller to use the compile-time fallback.
 int64_t evaluate_adstack_size_expr(const SerializedSizeExpr &expr, Program *prog, LaunchContextBuilder *ctx);
 
+// RAII guard opening a thread-local read-cache scope. Every nested `evaluate_adstack_size_expr` running inside the
+// scope shares one cache, so repeated `(snode_id, indices)` reads share a single reader-kernel dispatch. Place around
+// any block that calls `evaluate_adstack_size_expr` more than once back-to-back.
+class SizeExprLaunchScope {
+ public:
+  SizeExprLaunchScope();
+  ~SizeExprLaunchScope();
+  SizeExprLaunchScope(const SizeExprLaunchScope &) = delete;
+  SizeExprLaunchScope &operator=(const SizeExprLaunchScope &) = delete;
+
+ private:
+  bool owns_;
+};
+
 // Flattens every alloca's `SerializedSizeExpr` tree into the device-readable bytecode defined in
 // `quadrants/ir/adstack_size_expr_device.h` and returns the raw bytes ready to upload to a device scratch buffer.
 // Two transforms happen at encoding time:

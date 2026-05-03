@@ -809,24 +809,26 @@ bool Program::try_size_expr_cache_hit(const SerializedSizeExpr *expr_key,
   return true;
 }
 
+SizeExprLaunchScope::SizeExprLaunchScope() : owns_(t_launch_read_cache == nullptr) {
+  if (owns_) {
+    t_launch_read_cache = new LaunchScopedReadCache();
+  }
+}
+SizeExprLaunchScope::~SizeExprLaunchScope() {
+  if (owns_) {
+    delete t_launch_read_cache;
+    t_launch_read_cache = nullptr;
+  }
+}
+
 int64_t evaluate_adstack_size_expr(const SerializedSizeExpr &expr, Program *prog, LaunchContextBuilder *ctx) {
   if (expr.nodes.empty()) {
     return -1;
   }
-  // Open a thread-local read cache scoped to this top-level eval if no enclosing scope already did.
-  bool owns_cache = (t_launch_read_cache == nullptr);
-  LaunchScopedReadCache local_cache;
-  if (owns_cache) {
-    t_launch_read_cache = &local_cache;
-  }
-  struct CacheGuard {
-    bool owned;
-    ~CacheGuard() {
-      if (owned) {
-        t_launch_read_cache = nullptr;
-      }
-    }
-  } guard{owns_cache};
+  // Open a `SizeExprLaunchScope` if no enclosing one is active, so repeated reads within this eval share
+  // the launch read cache. Callers that issue several `evaluate_adstack_size_expr` calls back-to-back
+  // should open their own scope to span all of them.
+  SizeExprLaunchScope local_scope;
 
   // Cache fast path: replay the recorded reads against the live state and reuse the cached result if
   // every input still matches. The full walk runs only on cache miss.

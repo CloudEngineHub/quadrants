@@ -809,6 +809,8 @@ std::size_t LlvmRuntimeExecutor::publish_adstack_metadata(const AdStackSizingInf
     // Guard `program_impl_->program` lookups against the C++-only-tests setup where `program_impl_` itself is null;
     // the on-device branch below already does this and falls back to `max_size_compile_time`.
     Program *prog = (program_impl_ != nullptr) ? program_impl_->program : nullptr;
+    // Span the per-stack `evaluate_adstack_size_expr` calls below with one shared read cache.
+    SizeExprLaunchScope launch_scope;
     std::vector<uint64_t> host_max_sizes(n_stacks);
     for (std::size_t i = 0; i < n_stacks; ++i) {
       const SerializedSizeExpr *expr = (i < ad_stack.size_exprs.size()) ? &ad_stack.size_exprs[i] : nullptr;
