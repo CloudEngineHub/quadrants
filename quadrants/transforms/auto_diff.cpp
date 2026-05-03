@@ -121,6 +121,53 @@ class RecomputableChainAnalyzer {
         stmt->is<ConstStmt>()) {
       return true;
     }
+    // LocalLoadStmt of a regular AllocaStmt is recomputable iff the alloca's value is stable across the
+    // forward-to-reverse boundary. Stability holds when the alloca has all its writes at the IB top level
+    // (no LocalStore inside any container stmt - if/for/while). Then writes happen exactly once per kernel
+    // execution, in document order; any read returns the same value at any later position. The cloned read
+    // in the reverse scope returns that same final value.
+    //
+    // Cross-block aliasing through `MatrixPtrStmt` (slot loads from matrix-typed allocas) is intentionally
+    // NOT covered here - that path goes through the `MatrixPtrStmt` interior op below, whose operands are
+    // recursively checked. The LocalLoadStmt branch only handles direct loads of the alloca itself.
+    if (auto *ll = stmt->cast<LocalLoadStmt>()) {
+      auto *alloca = ll->src->cast<AllocaStmt>();
+      if (alloca == nullptr)
+        return false;
+      Block *ib_root = alloca->parent;
+      if (ib_root == nullptr)
+        return false;
+      bool all_stores_at_ib_top = true;
+      std::function<void(Block *, bool)> walk = [&](Block *b, bool is_top) {
+        if (!all_stores_at_ib_top)
+          return;
+        for (auto &owned : b->statements) {
+          Stmt *s = owned.get();
+          if (auto *st = s->cast<LocalStoreStmt>()) {
+            if (st->dest == alloca && !is_top) {
+              all_stores_at_ib_top = false;
+              return;
+            }
+          }
+          if (auto *if_s = s->cast<IfStmt>()) {
+            if (if_s->true_statements)
+              walk(if_s->true_statements.get(), false);
+            if (if_s->false_statements)
+              walk(if_s->false_statements.get(), false);
+          } else if (auto *rf = s->cast<RangeForStmt>()) {
+            if (rf->body)
+              walk(rf->body.get(), false);
+          } else if (auto *sf = s->cast<StructForStmt>()) {
+            if (sf->body)
+              walk(sf->body.get(), false);
+          }
+          if (!all_stores_at_ib_top)
+            return;
+        }
+      };
+      walk(ib_root, true);
+      return all_stores_at_ib_top;
+    }
     // GlobalLoadStmt as recomputable: the load reads a SNode value via GlobalPtrStmt. The cloned chain in
     // the reverse pass re-issues the same load - safe iff the global is not mutated between the forward
     // chain evaluation and the cloned re-read. Within a single kernel execution, forward writes complete
@@ -171,11 +218,12 @@ class RecomputableChainCloner {
     if (src->is<AdStackAllocaStmt>()) {
       // The alloca is shared, not cloned: every load reads the same physical stack.
       cloned = src;
-    } else if (src->is<AdStackLoadTopStmt>() || src->is<ArgLoadStmt>() || src->is<ConstStmt>()) {
+    } else if (src->is<AdStackLoadTopStmt>() || src->is<ArgLoadStmt>() || src->is<ConstStmt>() ||
+               src->is<LocalLoadStmt>()) {
       auto cloned_unique = src->clone();
       cloned = insert_point->insert_before_me(std::move(cloned_unique));
-      // For AdStackLoadTopStmt clones, the cloned stmt's `stack` operand still points at the original
-      // AdStackAllocaStmt - that's the desired sharing.
+      // For AdStackLoadTopStmt and LocalLoadStmt clones, the cloned stmt's source operand still points at
+      // the original AdStackAllocaStmt or AllocaStmt at IB top - that's the desired sharing.
     } else {
       // Compound op: clone first, then walk operands and rewire each to a recursive clone.
       auto cloned_unique = src->clone();
