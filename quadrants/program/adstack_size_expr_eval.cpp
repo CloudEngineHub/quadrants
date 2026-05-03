@@ -25,15 +25,19 @@ namespace quadrants::lang {
 
 namespace {
 
+using ReadSink = std::vector<Program::SizeExprReadObservation>;
+
 int64_t evaluate_node(const SerializedSizeExpr &expr,
                       int32_t node_idx,
                       std::unordered_map<int32_t, int64_t> &bound_vars,
                       Program *prog,
-                      LaunchContextBuilder *ctx);
+                      LaunchContextBuilder *ctx,
+                      ReadSink *reads);
 
 int64_t evaluate_field_load(const SerializedSizeExprNode &node,
                             std::unordered_map<int32_t, int64_t> &bound_vars,
-                            Program *prog) {
+                            Program *prog,
+                            ReadSink *reads) {
   QD_ASSERT_INFO(node.snode_id >= 0, "SerializedSizeExpr FieldLoad with no snode_id");
   SNode *snode = prog->get_snode_by_id(node.snode_id);
   QD_ASSERT_INFO(snode != nullptr,
@@ -55,12 +59,24 @@ int64_t evaluate_field_load(const SerializedSizeExprNode &node,
     }
   }
   auto accessors = prog->get_snode_rw_accessors_bank().get(snode);
-  return accessors.read_int(indices);
+  int64_t v = accessors.read_int(indices);
+  if (reads != nullptr) {
+    Program::SizeExprReadObservation obs;
+    obs.kind = Program::SizeExprReadObservation::FieldLoadObs;
+    obs.snode_id = node.snode_id;
+    obs.indices = std::move(indices);
+    obs.arg_shape_axis = 0;
+    obs.prim_dt = 0;
+    obs.observed_value = v;
+    reads->push_back(std::move(obs));
+  }
+  return v;
 }
 
 int64_t evaluate_external_tensor_read(const SerializedSizeExprNode &node,
                                       std::unordered_map<int32_t, int64_t> &bound_vars,
-                                      LaunchContextBuilder *ctx) {
+                                      LaunchContextBuilder *ctx,
+                                      ReadSink *reads) {
   QD_ASSERT_INFO(ctx != nullptr,
                  "SerializedSizeExpr ExternalTensorRead evaluated with no LaunchContextBuilder; the launcher "
                  "must pass the current launch's context in");
@@ -104,30 +120,53 @@ int64_t evaluate_external_tensor_read(const SerializedSizeExprNode &node,
     }
   }
   auto prim_dt = static_cast<PrimitiveTypeID>(node.const_value);
+  int64_t v;
   switch (prim_dt) {
     case PrimitiveTypeID::i32:
-      return static_cast<int64_t>(static_cast<int32_t *>(data_ptr)[linear]);
+      v = static_cast<int64_t>(static_cast<int32_t *>(data_ptr)[linear]);
+      break;
     case PrimitiveTypeID::i64:
-      return static_cast<int64_t *>(data_ptr)[linear];
+      v = static_cast<int64_t *>(data_ptr)[linear];
+      break;
     case PrimitiveTypeID::u32:
-      return static_cast<int64_t>(static_cast<uint32_t *>(data_ptr)[linear]);
+      v = static_cast<int64_t>(static_cast<uint32_t *>(data_ptr)[linear]);
+      break;
     case PrimitiveTypeID::u64:
-      return static_cast<int64_t>(static_cast<uint64_t *>(data_ptr)[linear]);
+      v = static_cast<int64_t>(static_cast<uint64_t *>(data_ptr)[linear]);
+      break;
     case PrimitiveTypeID::i16:
-      return static_cast<int64_t>(static_cast<int16_t *>(data_ptr)[linear]);
+      v = static_cast<int64_t>(static_cast<int16_t *>(data_ptr)[linear]);
+      break;
     case PrimitiveTypeID::u16:
-      return static_cast<int64_t>(static_cast<uint16_t *>(data_ptr)[linear]);
+      v = static_cast<int64_t>(static_cast<uint16_t *>(data_ptr)[linear]);
+      break;
     case PrimitiveTypeID::i8:
-      return static_cast<int64_t>(static_cast<int8_t *>(data_ptr)[linear]);
+      v = static_cast<int64_t>(static_cast<int8_t *>(data_ptr)[linear]);
+      break;
     case PrimitiveTypeID::u8:
-      return static_cast<int64_t>(static_cast<uint8_t *>(data_ptr)[linear]);
+      v = static_cast<int64_t>(static_cast<uint8_t *>(data_ptr)[linear]);
+      break;
     default:
       QD_ERROR("SerializedSizeExpr ExternalTensorRead: unsupported element type {}", node.const_value);
+      v = 0;
   }
-  return 0;
+  if (reads != nullptr) {
+    Program::SizeExprReadObservation obs;
+    obs.kind = Program::SizeExprReadObservation::ExternalReadObs;
+    obs.snode_id = 0;
+    obs.indices.reserve(resolved.size());
+    for (auto r : resolved)
+      obs.indices.push_back(static_cast<int>(r));
+    obs.arg_id_path = node.arg_id_path;
+    obs.arg_shape_axis = 0;
+    obs.prim_dt = static_cast<int>(prim_dt);
+    obs.observed_value = v;
+    reads->push_back(std::move(obs));
+  }
+  return v;
 }
 
-int64_t evaluate_external_tensor_shape(const SerializedSizeExprNode &node, LaunchContextBuilder *ctx) {
+int64_t evaluate_external_tensor_shape(const SerializedSizeExprNode &node, LaunchContextBuilder *ctx, ReadSink *reads) {
   QD_ASSERT_INFO(ctx != nullptr,
                  "SerializedSizeExpr ExternalTensorShape evaluated with no LaunchContextBuilder; the launcher "
                  "must pass the current launch's context into the evaluator to resolve ndarray shapes");
@@ -141,14 +180,26 @@ int64_t evaluate_external_tensor_shape(const SerializedSizeExprNode &node, Launc
   // garbage - often zero when the adjacent field is zero-initialised - and the containing tree collapses to
   // zero. The adstack max_size is clamped to 1 on a zero tree result, which under-bounds real push counts and
   // trips an overflow assertion at the next `qd.sync()`.
-  return static_cast<int64_t>(ctx->get_struct_arg_host<int32_t>(arg_indices));
+  int64_t v = static_cast<int64_t>(ctx->get_struct_arg_host<int32_t>(arg_indices));
+  if (reads != nullptr) {
+    Program::SizeExprReadObservation obs;
+    obs.kind = Program::SizeExprReadObservation::ExternalShapeObs;
+    obs.snode_id = 0;
+    obs.arg_id_path = node.arg_id_path;
+    obs.arg_shape_axis = node.arg_shape_axis;
+    obs.prim_dt = 0;
+    obs.observed_value = v;
+    reads->push_back(std::move(obs));
+  }
+  return v;
 }
 
 int64_t evaluate_node(const SerializedSizeExpr &expr,
                       int32_t node_idx,
                       std::unordered_map<int32_t, int64_t> &bound_vars,
                       Program *prog,
-                      LaunchContextBuilder *ctx) {
+                      LaunchContextBuilder *ctx,
+                      ReadSink *reads) {
   QD_ASSERT_INFO(node_idx >= 0 && static_cast<std::size_t>(node_idx) < expr.nodes.size(),
                  "SerializedSizeExpr node_idx {} out of bounds (size={})", node_idx, expr.nodes.size());
   const auto &node = expr.nodes[node_idx];
@@ -156,23 +207,23 @@ int64_t evaluate_node(const SerializedSizeExpr &expr,
     case SizeExpr::Kind::Const:
       return node.const_value;
     case SizeExpr::Kind::FieldLoad:
-      return evaluate_field_load(node, bound_vars, prog);
+      return evaluate_field_load(node, bound_vars, prog, reads);
     case SizeExpr::Kind::Add:
-      return evaluate_node(expr, node.operand_a, bound_vars, prog, ctx) +
-             evaluate_node(expr, node.operand_b, bound_vars, prog, ctx);
+      return evaluate_node(expr, node.operand_a, bound_vars, prog, ctx, reads) +
+             evaluate_node(expr, node.operand_b, bound_vars, prog, ctx, reads);
     case SizeExpr::Kind::Sub:
-      return std::max<int64_t>(evaluate_node(expr, node.operand_a, bound_vars, prog, ctx) -
-                                   evaluate_node(expr, node.operand_b, bound_vars, prog, ctx),
+      return std::max<int64_t>(evaluate_node(expr, node.operand_a, bound_vars, prog, ctx, reads) -
+                                   evaluate_node(expr, node.operand_b, bound_vars, prog, ctx, reads),
                                0);
     case SizeExpr::Kind::Mul:
-      return evaluate_node(expr, node.operand_a, bound_vars, prog, ctx) *
-             evaluate_node(expr, node.operand_b, bound_vars, prog, ctx);
+      return evaluate_node(expr, node.operand_a, bound_vars, prog, ctx, reads) *
+             evaluate_node(expr, node.operand_b, bound_vars, prog, ctx, reads);
     case SizeExpr::Kind::Max:
-      return std::max(evaluate_node(expr, node.operand_a, bound_vars, prog, ctx),
-                      evaluate_node(expr, node.operand_b, bound_vars, prog, ctx));
+      return std::max(evaluate_node(expr, node.operand_a, bound_vars, prog, ctx, reads),
+                      evaluate_node(expr, node.operand_b, bound_vars, prog, ctx, reads));
     case SizeExpr::Kind::MaxOverRange: {
-      int64_t begin = evaluate_node(expr, node.operand_a, bound_vars, prog, ctx);
-      int64_t end = evaluate_node(expr, node.operand_b, bound_vars, prog, ctx);
+      int64_t begin = evaluate_node(expr, node.operand_a, bound_vars, prog, ctx, reads);
+      int64_t end = evaluate_node(expr, node.operand_b, bound_vars, prog, ctx, reads);
       // Guard against pathological trip counts. The evaluator walks `[begin, end)` linearly and re-evaluates the
       // body at every i; a range of several million would stall the launch hot path for seconds. Real reverse-mode
       // trip counts sit well below this cap (a few hundred to a few thousand in practice); anything above is
@@ -191,7 +242,7 @@ int64_t evaluate_node(const SerializedSizeExpr &expr,
       int64_t prev_val = had_prev ? prev_it->second : 0;
       for (int64_t i = begin; i < end; ++i) {
         bound_vars[node.var_id] = i;
-        int64_t v = evaluate_node(expr, node.body_node_idx, bound_vars, prog, ctx);
+        int64_t v = evaluate_node(expr, node.body_node_idx, bound_vars, prog, ctx, reads);
         if (v > result) {
           result = v;
         }
@@ -211,9 +262,9 @@ int64_t evaluate_node(const SerializedSizeExpr &expr,
       return it->second;
     }
     case SizeExpr::Kind::ExternalTensorShape:
-      return evaluate_external_tensor_shape(node, ctx);
+      return evaluate_external_tensor_shape(node, ctx, reads);
     case SizeExpr::Kind::ExternalTensorRead:
-      return evaluate_external_tensor_read(node, bound_vars, ctx);
+      return evaluate_external_tensor_read(node, bound_vars, ctx, reads);
   }
   QD_ERROR("unreachable SerializedSizeExpr kind {}", node.kind);
   return 0;
@@ -436,7 +487,7 @@ int32_t encode_subtree(const SerializedSizeExpr &src,
     // `FieldLoad` / `ExternalTensorShape` leaves - the device interpreter does not know how to walk SNodes or
     // index into `args_type`.
     std::unordered_map<int32_t, int64_t> empty_bound;
-    int64_t val = evaluate_node(src, src_idx, empty_bound, prog, ctx);
+    int64_t val = evaluate_node(src, src_idx, empty_bound, prog, ctx, /*reads=*/nullptr);
     AdStackSizeExprDeviceNode dn = make_empty_device_node(static_cast<int32_t>(AdStackSizeExprDeviceKind::kConst));
     dn.const_value = val;
     out_nodes.push_back(dn);
@@ -620,12 +671,117 @@ int32_t encode_subtree(const SerializedSizeExpr &src,
 
 }  // namespace
 
+namespace {
+// Read the input that `obs` describes against the live state and `ctx`. Caller compares the result to
+// `obs.observed_value` to decide whether the cached `SizeExprCacheEntry` is still valid. Each `obs.kind`
+// mirrors the corresponding leaf in `evaluate_field_load` / `evaluate_external_tensor_shape` /
+// `evaluate_external_tensor_read`.
+int64_t replay_one_observation(const Program::SizeExprReadObservation &obs, Program *prog, LaunchContextBuilder *ctx) {
+  using Obs = Program::SizeExprReadObservation;
+  switch (obs.kind) {
+    case Obs::FieldLoadObs: {
+      SNode *snode = prog->get_snode_by_id(obs.snode_id);
+      if (snode == nullptr) {
+        return obs.observed_value + 1;  // force a mismatch if SNode disappeared
+      }
+      return prog->get_snode_rw_accessors_bank().get(snode).read_int(obs.indices);
+    }
+    case Obs::ExternalShapeObs: {
+      if (ctx == nullptr) {
+        return obs.observed_value + 1;
+      }
+      std::vector<int> arg_indices(obs.arg_id_path.begin(), obs.arg_id_path.end());
+      arg_indices.push_back(TypeFactory::SHAPE_POS_IN_NDARRAY);
+      arg_indices.push_back(obs.arg_shape_axis);
+      return static_cast<int64_t>(ctx->get_struct_arg_host<int32_t>(arg_indices));
+    }
+    case Obs::ExternalReadObs: {
+      if (ctx == nullptr || obs.arg_id_path.empty()) {
+        return obs.observed_value + 1;
+      }
+      int arg_id = obs.arg_id_path[0];
+      ArgArrayPtrKey key{arg_id, TypeFactory::DATA_PTR_POS_IN_NDARRAY};
+      auto it = ctx->array_ptrs.find(key);
+      if (it == ctx->array_ptrs.end()) {
+        return obs.observed_value + 1;
+      }
+      void *data_ptr = it->second;
+      int64_t linear = 0;
+      int64_t stride = 1;
+      for (std::size_t i = obs.indices.size(); i > 0; --i) {
+        linear += static_cast<int64_t>(obs.indices[i - 1]) * stride;
+        if (i - 1 > 0) {
+          std::vector<int> sh_idx(obs.arg_id_path.begin(), obs.arg_id_path.end());
+          sh_idx.push_back(TypeFactory::SHAPE_POS_IN_NDARRAY);
+          sh_idx.push_back(static_cast<int>(i - 1));
+          stride *= static_cast<int64_t>(ctx->get_struct_arg_host<int32_t>(sh_idx));
+        }
+      }
+      switch (static_cast<PrimitiveTypeID>(obs.prim_dt)) {
+        case PrimitiveTypeID::i32:
+          return static_cast<int64_t>(static_cast<int32_t *>(data_ptr)[linear]);
+        case PrimitiveTypeID::i64:
+          return static_cast<int64_t *>(data_ptr)[linear];
+        case PrimitiveTypeID::u32:
+          return static_cast<int64_t>(static_cast<uint32_t *>(data_ptr)[linear]);
+        case PrimitiveTypeID::u64:
+          return static_cast<int64_t>(static_cast<uint64_t *>(data_ptr)[linear]);
+        case PrimitiveTypeID::i16:
+          return static_cast<int64_t>(static_cast<int16_t *>(data_ptr)[linear]);
+        case PrimitiveTypeID::u16:
+          return static_cast<int64_t>(static_cast<uint16_t *>(data_ptr)[linear]);
+        case PrimitiveTypeID::i8:
+          return static_cast<int64_t>(static_cast<int8_t *>(data_ptr)[linear]);
+        case PrimitiveTypeID::u8:
+          return static_cast<int64_t>(static_cast<uint8_t *>(data_ptr)[linear]);
+        default:
+          return obs.observed_value + 1;
+      }
+    }
+  }
+  return obs.observed_value + 1;
+}
+}  // namespace
+
+bool Program::try_size_expr_cache_hit(const SerializedSizeExpr *expr_key,
+                                      LaunchContextBuilder *ctx,
+                                      int64_t &out_result) {
+  auto it = size_expr_cache_.find(expr_key);
+  if (it == size_expr_cache_.end()) {
+    return false;
+  }
+  const auto &entry = it->second;
+  for (const auto &obs : entry.reads) {
+    int64_t now = replay_one_observation(obs, this, ctx);
+    if (now != obs.observed_value) {
+      size_expr_cache_.erase(it);
+      return false;
+    }
+  }
+  out_result = entry.result;
+  return true;
+}
+
 int64_t evaluate_adstack_size_expr(const SerializedSizeExpr &expr, Program *prog, LaunchContextBuilder *ctx) {
   if (expr.nodes.empty()) {
     return -1;
   }
+  // Cache fast path: replay the recorded reads against the live state and reuse the cached result if
+  // every input still matches. The full walk runs only on cache miss.
+  if (prog != nullptr) {
+    int64_t cached;
+    if (prog->try_size_expr_cache_hit(&expr, ctx, cached)) {
+      return cached;
+    }
+  }
   std::unordered_map<int32_t, int64_t> empty_bound_vars;
-  return evaluate_node(expr, static_cast<int32_t>(expr.nodes.size() - 1), empty_bound_vars, prog, ctx);
+  std::vector<Program::SizeExprReadObservation> reads;
+  int64_t result =
+      evaluate_node(expr, static_cast<int32_t>(expr.nodes.size() - 1), empty_bound_vars, prog, ctx, &reads);
+  if (prog != nullptr) {
+    prog->record_size_expr_eval(&expr, result, std::move(reads));
+  }
+  return result;
 }
 
 void clip_effective_rows_by_loop_trip_count(std::size_t &effective_rows,

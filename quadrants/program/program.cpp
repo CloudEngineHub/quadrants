@@ -235,6 +235,12 @@ void Program::synchronize_and_assert() {
   program_impl_->synchronize_and_assert();
 }
 
+void Program::record_size_expr_eval(const SerializedSizeExpr *expr_key,
+                                    int64_t result,
+                                    std::vector<SizeExprReadObservation> reads) {
+  size_expr_cache_[expr_key] = SizeExprCacheEntry{result, std::move(reads)};
+}
+
 StreamSemaphore Program::flush() {
   return program_impl_->flush();
 }
