@@ -1,6 +1,7 @@
 #pragma once
 
 #include <cstddef>
+#include <cstdio>
 #include <memory>
 
 #include "quadrants/runtime/llvm/llvm_offline_cache.h"
@@ -164,6 +165,8 @@ class LlvmProgramImpl : public ProgramImpl {
     if (!finalizing_) {
       runtime_exec_->check_adstack_overflow();
     }
+    // Flush JIT-generated `qd.print()` output at every user-visible sync.
+    fflush(stdout);
   }
 
   LLVMRuntime *get_llvm_runtime() {
