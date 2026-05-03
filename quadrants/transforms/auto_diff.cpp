@@ -1370,9 +1370,51 @@ class EliminateRecomputableAdStackPushes {
     // the actual iteration bound is the number of stacks at entry. 1024 is well above any realistic kernel.
     for (int i = 0; i < 1024; i++) {
       if (!run_one_pass(ib))
-        return;
+        break;
+    }
+    if (diag_enabled()) {
+      static int kernel_idx = 0;
+      std::fprintf(stderr,
+                   "[QD_ELIM_DIAG kernel#%d] eliminate=%d skip_multi_body=%d skip_not_recomp=%d "
+                   "skip_dom=%d skip_rev_pos=%d skip_self_load=%d skip_cf_consumer=%d skip_no_body=%d\n",
+                   kernel_idx, diag_count_eliminate, diag_count_skip_multi_body, diag_count_skip_not_recomp,
+                   diag_count_skip_dom, diag_count_skip_rev_pos, diag_count_skip_self_load, diag_count_skip_cf_consumer,
+                   diag_count_skip_no_body);
+      for (auto &kv : diag_not_recomp_type_hist) {
+        std::fprintf(stderr, "  not-recomp type=%s count=%d\n", kv.first.c_str(), kv.second);
+      }
+      kernel_idx++;
+      diag_count_eliminate = 0;
+      diag_count_skip_multi_body = 0;
+      diag_count_skip_not_recomp = 0;
+      diag_count_skip_dom = 0;
+      diag_count_skip_rev_pos = 0;
+      diag_count_skip_self_load = 0;
+      diag_count_skip_cf_consumer = 0;
+      diag_count_skip_no_body = 0;
+      diag_not_recomp_type_hist.clear();
     }
   }
+
+  // Diagnostic counters - env-gated by `QD_ELIM_DIAG=1`. Static (file-local) because the pass instances
+  // are throwaway. Reset at end of each `run` invocation per kernel.
+  static bool diag_enabled() {
+    static int cached = -1;
+    if (cached < 0) {
+      const char *e = std::getenv("QD_ELIM_DIAG");
+      cached = (e != nullptr && std::string(e) == "1") ? 1 : 0;
+    }
+    return cached != 0;
+  }
+  inline static int diag_count_eliminate = 0;
+  inline static int diag_count_skip_multi_body = 0;
+  inline static int diag_count_skip_not_recomp = 0;
+  inline static int diag_count_skip_dom = 0;
+  inline static int diag_count_skip_rev_pos = 0;
+  inline static int diag_count_skip_self_load = 0;
+  inline static int diag_count_skip_cf_consumer = 0;
+  inline static int diag_count_skip_no_body = 0;
+  inline static std::unordered_map<std::string, int> diag_not_recomp_type_hist;
 
  private:
   // True iff `s` is a literal-zero ConstStmt or a MatrixInitStmt whose every element is a literal-zero
@@ -1450,6 +1492,8 @@ class EliminateRecomputableAdStackPushes {
         }
       }
       if (disqualified || pushes.empty()) {
+        if (diag_enabled())
+          diag_count_skip_no_body++;
         continue;
       }
 
@@ -1474,11 +1518,48 @@ class EliminateRecomputableAdStackPushes {
         }
       }
       if (disqualified || body_push == nullptr) {
+        if (diag_enabled())
+          diag_count_skip_multi_body++;
         continue;
       }
 
       Stmt *pushed_val = body_push->v;
       if (!RecomputableChainAnalyzer::is_recomputable(pushed_val, recomputable_cache)) {
+        if (diag_enabled()) {
+          diag_count_skip_not_recomp++;
+          // Walk pushed_val chain to find the leaf type that fails the recomputable predicate, log it.
+          std::function<void(Stmt *, std::unordered_set<Stmt *> &)> walk_for_bad =
+              [&](Stmt *s, std::unordered_set<Stmt *> &visited) {
+                if (visited.count(s))
+                  return;
+                visited.insert(s);
+                if (s->is<AdStackLoadTopStmt>() || s->is<AdStackAllocaStmt>() || s->is<ArgLoadStmt>() ||
+                    s->is<ConstStmt>())
+                  return;
+                bool is_interior = s->is<UnaryOpStmt>() || s->is<BinaryOpStmt>() || s->is<TernaryOpStmt>() ||
+                                   s->is<MatrixPtrStmt>() || s->is<GlobalPtrStmt>() || s->is<ExternalPtrStmt>() ||
+                                   s->is<GlobalLoadStmt>();
+                if (!is_interior) {
+                  diag_not_recomp_type_hist[typeid(*s).name()]++;
+                  return;
+                }
+                if (auto *ll = s->cast<LocalLoadStmt>()) {
+                  // ll is special-cased in the predicate. If it failed, log accordingly.
+                  diag_not_recomp_type_hist["LocalLoadStmt-non-IB-top"]++;
+                  return;
+                }
+                if (auto *li = s->cast<LoopIndexStmt>()) {
+                  diag_not_recomp_type_hist["LoopIndexStmt-no-mapping"]++;
+                  return;
+                }
+                for (auto *op : s->get_operands()) {
+                  if (op != nullptr)
+                    walk_for_bad(op, visited);
+                }
+              };
+          std::unordered_set<Stmt *> visited;
+          walk_for_bad(pushed_val, visited);
+        }
         continue;
       }
       // Loop-carried self-reference: when the pushed value's transitive operand DAG includes an
@@ -1558,6 +1639,8 @@ class EliminateRecomputableAdStackPushes {
         }
       }
       if (!dominates_all_loads) {
+        if (diag_enabled())
+          diag_count_skip_dom++;
         continue;
       }
 
@@ -1667,6 +1750,8 @@ class EliminateRecomputableAdStackPushes {
           break;
       }
       if (!reverse_safe) {
+        if (diag_enabled())
+          diag_count_skip_rev_pos++;
         continue;
       }
 
@@ -1694,6 +1779,8 @@ class EliminateRecomputableAdStackPushes {
       };
       walk(pushed_val);
       if (is_self_loaded) {
+        if (diag_enabled())
+          diag_count_skip_self_load++;
         continue;
       }
 
@@ -1769,8 +1856,12 @@ class EliminateRecomputableAdStackPushes {
       };
       walk_block(ib);
       if (has_control_flow_consumer) {
+        if (diag_enabled())
+          diag_count_skip_cf_consumer++;
         continue;
       }
+      if (diag_enabled())
+        diag_count_eliminate++;
 
       // Eligible: rewrite each load_top to use the pushed value directly. The pushed value lives in the
       // forward IR and dominates each load_top by SSA construction (the load_top reads what the push wrote;
