@@ -174,3 +174,34 @@ pytest tests/python/test_interop_benchmarks.py -v -s -m benchmarks --bench-out r
 Uses an AI agent to flag feature-specific code being piled into heavily-tracked core files when it could live in its own feature-specific file instead. The concern is not that the new code is in the "wrong" place semantically — it is usually topically related to the host file — but that the host file is already a hot, central, frequently-edited file, and adding more self-contained feature code to it makes review, merge conflicts, and future churn worse. The fix is almost always to extract the feature-specific block (top-level function, class, large block, or even a cluster of new methods on an existing class) into its own module, with the host file delegating to it via a narrow interface.
 
 The agent reports up to 5 violations, each annotated with the host file's hotness numbers (commits / authors / size). This check is delayed by 30 minutes, to avoid running repeatedly if multiple commits pushed with a short delay between each.
+
+### Launch overhead benchmarks (`benchmarks.yml` / `alarm.yml`)
+
+Measures Python-side kernel launch overhead — the cost of argument processing, struct traversal, and cache lookups — independent of actual kernel computation. These benchmarks catch regressions in the hot launch path that affect downstream users like Genesis.
+
+**Location:** `tests/python/test_launch_overhead.py`
+
+**Scenarios:**
+
+| Test | What it measures |
+|------|-----------------|
+| `test_many_structs_cached` | 5 frozen-dataclass struct args (all `qd.field`), cache hits after warmup. Best-case launch path. |
+| `test_many_structs_cache_miss` | Same 5 structs + a `torch.Tensor` arg that changes `id()` each call, forcing a cache miss and full `_recursive_set_args` traversal every launch. |
+| `test_template_cached` | 5 `qd.template()` args, cache hits. Baseline — templates skip argument processing entirely. |
+| `test_template_cache_miss` | 5 templates + a `torch.Tensor`. Baseline with cache miss overhead. |
+
+The struct scenarios mimic Genesis rigid-body simulation patterns (forward kinematics, constraint solver) where kernels take 5–10 frozen dataclass parameters with 6–14 fields each.
+
+**Running locally:**
+
+```
+pytest tests/python/test_launch_overhead.py -m benchmarks -v -s
+pytest tests/python/test_launch_overhead.py -m benchmarks -k "cache_miss" -v -s
+```
+
+Benchmarks are marked with `pytest.mark.benchmarks` and excluded from normal test runs via the `addopts = "-m 'not benchmarks'"` setting in `pyproject.toml`.
+
+**CI pipeline:**
+
+1. `benchmarks.yml` runs on every push to `main` and on PRs. It builds quadrants, runs the benchmarks, writes results to a pipe-delimited artifact file, and uploads to the `quadrants-benchmarks` W&B project.
+2. `alarm.yml` triggers after `benchmarks.yml` completes on a PR. It compares the PR's results against the last several `main` commits stored in W&B. If any scenario regresses beyond the configured tolerance (default 10%), it posts a failure check and a comment on the PR.

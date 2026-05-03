@@ -1,46 +1,32 @@
-name: Interop Benchmarks
+name: Benchmarks
 
 on:
-  push:
-    branches: [main]
-  pull_request:
-    branches: [main]
+  workflow_run:
+    workflows: ["Manylinux wheel build"]
+    types: [completed]
   workflow_dispatch:
 
+permissions:
+  contents: read
+  actions: read
+
 concurrency:
-  group: ${{ github.workflow }}-${{ github.head_ref || github.ref }}
-  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+  group: ${{ github.workflow }}-${{ github.event.workflow_run.head_branch || github.ref }}
+  cancel-in-progress: true
 
 jobs:
-  build:
-    name: Build wheel
-    runs-on: ubuntu-22.04
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-      - uses: actions/setup-python@v4
-        with:
-          python-version: '3.10'
-      - name: Prerequisites
-        run: bash .github/workflows/scripts_new/linux/1_prerequisites.sh
-      - name: Build
-        run: bash .github/workflows/scripts_new/linux/2_build.sh
-      - name: Upload wheel
-        uses: actions/upload-artifact@v4
-        with:
-          name: bench-wheel
-          path: dist/*.whl
-
   benchmark-cuda:
     name: Interop benchmarks (CUDA)
-    needs: build
+    if: >
+      github.event_name == 'workflow_dispatch' ||
+      github.event.workflow_run.conclusion == 'success'
     runs-on: gpu-t4-4-core
     env:
       WANDB_API_KEY: ${{ secrets.WANDB_API_KEY }}
     steps:
       - uses: actions/checkout@v4
         with:
+          ref: ${{ github.event.workflow_run.head_sha || github.sha }}
           fetch-depth: 0
       - uses: actions/setup-python@v4
         with:
@@ -51,10 +37,12 @@ jobs:
             libcusparse-dev-12-8 libcusparse-12-8 libnvjitlink-12-8 libcublas-12-8
           echo "/usr/local/cuda/targets/x86_64-linux/lib" | sudo tee /etc/ld.so.conf.d/cuda-targets.conf
           sudo ldconfig
-      - name: Download wheel
+      - name: Download manylinux wheel
         uses: actions/download-artifact@v4
         with:
-          name: bench-wheel
+          name: manylinux_wheel_cp310_ubuntu-22.04
+          run-id: ${{ github.event.workflow_run.id }}
+          github-token: ${{ secrets.GITHUB_TOKEN }}
       - name: Install quadrants + torch
         run: |
           set -ex
@@ -70,7 +58,7 @@ jobs:
       - name: Upload results to W&B
         if: >
           github.repository == 'Genesis-Embodied-AI/gstaichi'
-          && github.ref == 'refs/heads/main'
+          && github.event.workflow_run.head_branch == 'main'
           && env.WANDB_API_KEY != ''
         run: |
           cat /tmp/bench_cuda*.txt > /tmp/bench_cuda_all.txt
@@ -89,21 +77,26 @@ jobs:
 
   benchmark-cpu:
     name: Interop benchmarks (CPU)
-    needs: build
+    if: >
+      github.event_name == 'workflow_dispatch' ||
+      github.event.workflow_run.conclusion == 'success'
     runs-on: ubuntu-22.04
     env:
       WANDB_API_KEY: ${{ secrets.WANDB_API_KEY }}
     steps:
       - uses: actions/checkout@v4
         with:
+          ref: ${{ github.event.workflow_run.head_sha || github.sha }}
           fetch-depth: 0
       - uses: actions/setup-python@v4
         with:
           python-version: '3.10'
-      - name: Download wheel
+      - name: Download manylinux wheel
         uses: actions/download-artifact@v4
         with:
-          name: bench-wheel
+          name: manylinux_wheel_cp310_ubuntu-22.04
+          run-id: ${{ github.event.workflow_run.id }}
+          github-token: ${{ secrets.GITHUB_TOKEN }}
       - name: Install quadrants + torch
         run: |
           set -ex
@@ -119,7 +112,7 @@ jobs:
       - name: Upload results to W&B
         if: >
           github.repository == 'Genesis-Embodied-AI/gstaichi'
-          && github.ref == 'refs/heads/main'
+          && github.event.workflow_run.head_branch == 'main'
           && env.WANDB_API_KEY != ''
         run: |
           cat /tmp/bench_cpu*.txt > /tmp/bench_cpu_all.txt
@@ -135,3 +128,55 @@ jobs:
         with:
           name: bench-cpu
           path: /tmp/bench_cpu*.txt
+
+  launch-overhead:
+    name: Launch overhead (CPU)
+    if: >
+      github.event_name == 'workflow_dispatch' ||
+      github.event.workflow_run.conclusion == 'success'
+    runs-on: ubuntu-22.04
+    env:
+      WANDB_API_KEY: ${{ secrets.WANDB_API_KEY }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.workflow_run.head_sha || github.sha }}
+          fetch-depth: 0
+      - uses: actions/setup-python@v4
+        with:
+          python-version: '3.10'
+      - name: Download manylinux wheel
+        uses: actions/download-artifact@v4
+        with:
+          name: manylinux_wheel_cp310_ubuntu-22.04
+          run-id: ${{ github.event.workflow_run.id }}
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+      - name: Install quadrants + torch
+        run: |
+          set -ex
+          mkdir -p dist && mv *.whl dist/
+          pip install dist/*.whl
+          pip install torch --index-url https://download.pytorch.org/whl/cpu
+          pip install 'wandb<0.25' pytest
+      - name: Run launch-overhead benchmarks
+        run: |
+          mkdir -p /tmp/artifacts
+          pytest tests/python/test_launch_overhead.py \
+            -m benchmarks -v -s \
+            --speed-test-filepath /tmp/artifacts/speed_test_launch.txt
+      - name: Display results
+        if: always()
+        run: cat /tmp/artifacts/speed_test_launch.txt || true
+      - name: Upload to W&B (main only)
+        if: github.event.workflow_run.head_branch == 'main' && env.WANDB_API_KEY != ''
+        run: |
+          python .github/workflows/scripts/upload_launch_benchmarks_to_wandb.py \
+            --in-file /tmp/artifacts/speed_test_launch.txt \
+            --project quadrants-benchmarks \
+            --run-prefix launch
+      - name: Upload results as artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: speed-test-launch
+          path: /tmp/artifacts/speed_test_launch.txt

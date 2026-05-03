@@ -5,6 +5,15 @@ import time
 
 import pytest
 
+
+def pytest_addoption(parser):
+    parser.addoption("--bench-out", type=str, default="bench_interop.txt", help="Output file for benchmark results.")
+    parser.addoption(
+        "--speed-test-filepath",
+        default=None,
+        help="Path to write benchmark results in pipe-delimited format (used by CI).",
+    )
+
 # rerunfailures use xdist version number to determine if it is compatible
 # but we are using a forked version of xdist(with git hash as it's version),
 # so we need to override it
