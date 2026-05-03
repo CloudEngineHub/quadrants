@@ -231,6 +231,10 @@ void Program::synchronize() {
   program_impl_->synchronize();
 }
 
+void Program::synchronize_and_assert() {
+  program_impl_->synchronize_and_assert();
+}
+
 StreamSemaphore Program::flush() {
   return program_impl_->flush();
 }

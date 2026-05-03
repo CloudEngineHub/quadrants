@@ -100,7 +100,11 @@ class QD_DLL_EXPORT Program {
     return profiler.get();
   }
 
+  // Drain the backend command queue. Does not raise; for internal use only.
   void synchronize();
+
+  // Drain the queue and raise on any pending user-visible assert (e.g. adstack overflow). Bound to `qd.sync()`.
+  void synchronize_and_assert();
 
   StreamSemaphore flush();
 
