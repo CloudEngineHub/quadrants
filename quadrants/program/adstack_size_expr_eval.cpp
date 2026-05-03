@@ -27,12 +27,12 @@ namespace {
 
 int64_t evaluate_node(const SerializedSizeExpr &expr,
                       int32_t node_idx,
-                      const std::unordered_map<int32_t, int64_t> &bound_vars,
+                      std::unordered_map<int32_t, int64_t> &bound_vars,
                       Program *prog,
                       LaunchContextBuilder *ctx);
 
 int64_t evaluate_field_load(const SerializedSizeExprNode &node,
-                            const std::unordered_map<int32_t, int64_t> &bound_vars,
+                            std::unordered_map<int32_t, int64_t> &bound_vars,
                             Program *prog) {
   QD_ASSERT_INFO(node.snode_id >= 0, "SerializedSizeExpr FieldLoad with no snode_id");
   SNode *snode = prog->get_snode_by_id(node.snode_id);
@@ -59,7 +59,7 @@ int64_t evaluate_field_load(const SerializedSizeExprNode &node,
 }
 
 int64_t evaluate_external_tensor_read(const SerializedSizeExprNode &node,
-                                      const std::unordered_map<int32_t, int64_t> &bound_vars,
+                                      std::unordered_map<int32_t, int64_t> &bound_vars,
                                       LaunchContextBuilder *ctx) {
   QD_ASSERT_INFO(ctx != nullptr,
                  "SerializedSizeExpr ExternalTensorRead evaluated with no LaunchContextBuilder; the launcher "
@@ -146,7 +146,7 @@ int64_t evaluate_external_tensor_shape(const SerializedSizeExprNode &node, Launc
 
 int64_t evaluate_node(const SerializedSizeExpr &expr,
                       int32_t node_idx,
-                      const std::unordered_map<int32_t, int64_t> &bound_vars,
+                      std::unordered_map<int32_t, int64_t> &bound_vars,
                       Program *prog,
                       LaunchContextBuilder *ctx) {
   QD_ASSERT_INFO(node_idx >= 0 && static_cast<std::size_t>(node_idx) < expr.nodes.size(),
@@ -183,13 +183,23 @@ int64_t evaluate_node(const SerializedSizeExpr &expr,
                   "Shrink the enclosing reverse-mode loop or restructure the `SizeExpr` source kernel.",
                   end - begin, kMaxOverRangeIterations);
       int64_t result = 0;
-      auto extended = bound_vars;
+      // Bind `var_id` in `bound_vars` for the duration of the loop and restore the outer-scope value (or erase, if
+      // there was none) before returning, so nested `MaxOverRange` bindings of the same `var_id` stay correct without
+      // cloning the entire map per iteration.
+      auto prev_it = bound_vars.find(node.var_id);
+      bool had_prev = prev_it != bound_vars.end();
+      int64_t prev_val = had_prev ? prev_it->second : 0;
       for (int64_t i = begin; i < end; ++i) {
-        extended[node.var_id] = i;
-        int64_t v = evaluate_node(expr, node.body_node_idx, extended, prog, ctx);
+        bound_vars[node.var_id] = i;
+        int64_t v = evaluate_node(expr, node.body_node_idx, bound_vars, prog, ctx);
         if (v > result) {
           result = v;
         }
+      }
+      if (had_prev) {
+        bound_vars[node.var_id] = prev_val;
+      } else {
+        bound_vars.erase(node.var_id);
       }
       return result;
     }
