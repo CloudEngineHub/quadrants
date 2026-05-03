@@ -809,14 +809,18 @@ bool Program::try_size_expr_cache_hit(const SerializedSizeExpr *expr_key,
   return true;
 }
 
+// Per-thread backing for `SizeExprLaunchScope`. The outer scope on each thread points `t_launch_read_cache` here
+// after clearing the map; nested scopes are no-ops.
+thread_local LaunchScopedReadCache t_launch_read_cache_storage{};
+
 SizeExprLaunchScope::SizeExprLaunchScope() : owns_(t_launch_read_cache == nullptr) {
   if (owns_) {
-    t_launch_read_cache = new LaunchScopedReadCache();
+    t_launch_read_cache_storage.map.clear();
+    t_launch_read_cache = &t_launch_read_cache_storage;
   }
 }
 SizeExprLaunchScope::~SizeExprLaunchScope() {
   if (owns_) {
-    delete t_launch_read_cache;
     t_launch_read_cache = nullptr;
   }
 }
