@@ -27,6 +27,11 @@ namespace {
 
 using ReadSink = std::vector<Program::SizeExprReadObservation>;
 
+// Forward-declared, defined further down. Reads SNode `snode_id` at `indices` via the per-launch read
+// cache (when active) so multiple size-expr trees evaluated within the same outer launch share a single
+// reader-kernel dispatch per `(snode_id, indices)` pair.
+int64_t read_field_with_launch_cache(int snode_id, const std::vector<int> &indices, Program *prog);
+
 int64_t evaluate_node(const SerializedSizeExpr &expr,
                       int32_t node_idx,
                       std::unordered_map<int32_t, int64_t> &bound_vars,
@@ -58,8 +63,7 @@ int64_t evaluate_field_load(const SerializedSizeExprNode &node,
       indices.push_back(static_cast<int>(it->second));
     }
   }
-  auto accessors = prog->get_snode_rw_accessors_bank().get(snode);
-  int64_t v = accessors.read_int(indices);
+  int64_t v = read_field_with_launch_cache(node.snode_id, indices, prog);
   if (reads != nullptr) {
     Program::SizeExprReadObservation obs;
     obs.kind = Program::SizeExprReadObservation::FieldLoadObs;
@@ -672,6 +676,49 @@ int32_t encode_subtree(const SerializedSizeExpr &src,
 }  // namespace
 
 namespace {
+
+// Per-launch cache of `FieldLoad` re-reads, keyed by `(snode_id, indices)`. Within one host-side eval root
+// call the SNode field values are pinned (no other kernel runs concurrently), so deduping repeats across
+// the size-expr trees evaluated in that window is correctness-safe.
+struct LaunchScopedReadCache {
+  struct Key {
+    int snode_id;
+    std::vector<int> indices;
+    bool operator==(const Key &o) const noexcept {
+      return snode_id == o.snode_id && indices == o.indices;
+    }
+  };
+  struct KeyHash {
+    std::size_t operator()(const Key &k) const noexcept {
+      std::size_t h = std::hash<int>{}(k.snode_id);
+      for (int v : k.indices) {
+        h ^= std::hash<int>{}(v) + 0x9e3779b97f4a7c15ull + (h << 6) + (h >> 2);
+      }
+      return h;
+    }
+  };
+  std::unordered_map<Key, int64_t, KeyHash> map;
+};
+thread_local LaunchScopedReadCache *t_launch_read_cache = nullptr;
+
+int64_t read_field_with_launch_cache(int snode_id, const std::vector<int> &indices, Program *prog) {
+  SNode *snode = prog->get_snode_by_id(snode_id);
+  if (snode == nullptr) {
+    return std::numeric_limits<int64_t>::min();
+  }
+  if (t_launch_read_cache != nullptr) {
+    LaunchScopedReadCache::Key key{snode_id, indices};
+    auto it = t_launch_read_cache->map.find(key);
+    if (it != t_launch_read_cache->map.end()) {
+      return it->second;
+    }
+    int64_t v = prog->get_snode_rw_accessors_bank().get(snode).read_int(indices);
+    t_launch_read_cache->map.emplace(std::move(key), v);
+    return v;
+  }
+  return prog->get_snode_rw_accessors_bank().get(snode).read_int(indices);
+}
+
 // Read the input that `obs` describes against the live state and `ctx`. Caller compares the result to
 // `obs.observed_value` to decide whether the cached `SizeExprCacheEntry` is still valid. Each `obs.kind`
 // mirrors the corresponding leaf in `evaluate_field_load` / `evaluate_external_tensor_shape` /
@@ -680,11 +727,11 @@ int64_t replay_one_observation(const Program::SizeExprReadObservation &obs, Prog
   using Obs = Program::SizeExprReadObservation;
   switch (obs.kind) {
     case Obs::FieldLoadObs: {
-      SNode *snode = prog->get_snode_by_id(obs.snode_id);
-      if (snode == nullptr) {
+      int64_t v = read_field_with_launch_cache(obs.snode_id, obs.indices, prog);
+      if (v == std::numeric_limits<int64_t>::min()) {
         return obs.observed_value + 1;  // force a mismatch if SNode disappeared
       }
-      return prog->get_snode_rw_accessors_bank().get(snode).read_int(obs.indices);
+      return v;
     }
     case Obs::ExternalShapeObs: {
       if (ctx == nullptr) {
@@ -766,6 +813,21 @@ int64_t evaluate_adstack_size_expr(const SerializedSizeExpr &expr, Program *prog
   if (expr.nodes.empty()) {
     return -1;
   }
+  // Open a thread-local read cache scoped to this top-level eval if no enclosing scope already did.
+  bool owns_cache = (t_launch_read_cache == nullptr);
+  LaunchScopedReadCache local_cache;
+  if (owns_cache) {
+    t_launch_read_cache = &local_cache;
+  }
+  struct CacheGuard {
+    bool owned;
+    ~CacheGuard() {
+      if (owned) {
+        t_launch_read_cache = nullptr;
+      }
+    }
+  } guard{owns_cache};
+
   // Cache fast path: replay the recorded reads against the live state and reuse the cached result if
   // every input still matches. The full walk runs only on cache miss.
   if (prog != nullptr) {
