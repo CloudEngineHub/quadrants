@@ -510,7 +510,7 @@
 </section>
 <section id="lifetime-and-ownership">
 <h2>Lifetime and ownership<a class="headerlink" href="#lifetime-and-ownership" title="Link to this heading">#</a></h2>
-<p>The caller (your application) owns the command queue. Quadrants retains it for the duration of the runtime and does <strong>not</strong> release it on <code class="docutils literal notranslate"><span class="pre">qd.reset()</span></code>. You must keep PyTorch (and its MPS backend) alive for as long as the Quadrants runtime is active.</p>
+<p>The caller (your application) owns the command queue. Quadrants borrows the pointer without retaining it, so the caller must keep the queue alive for the lifetime of the Quadrants runtime. In practice this means keeping PyTorch (and its MPS backend) alive for as long as <code class="docutils literal notranslate"><span class="pre">qd.init()</span></code> is active.</p>
 </section>
 <section id="fallback">
 <h2>Fallback<a class="headerlink" href="#fallback" title="Link to this heading">#</a></h2>
