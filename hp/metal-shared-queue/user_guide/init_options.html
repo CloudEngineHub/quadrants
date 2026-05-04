@@ -466,6 +466,10 @@
 <section id="external-metal-command-queue">
 <h3><code class="docutils literal notranslate"><span class="pre">external_metal_command_queue</span></code><a class="headerlink" href="#external-metal-command-queue" title="Link to this heading">#</a></h3>
 <p>An <code class="docutils literal notranslate"><span class="pre">MTLCommandQueue*</span></code> pointer (as an integer) to use instead of creating a new Metal command queue. Default <code class="docutils literal notranslate"><span class="pre">0</span></code> (create a new queue). When non-zero, Quadrants dispatches all GPU work on the provided queue, which enables GPU-side ordering with other frameworks that share the same queue (most notably PyTorch MPS).</p>
+</section>
+<section id="external-metal-command-queue-is-torch-queue">
+<h3><code class="docutils literal notranslate"><span class="pre">external_metal_command_queue_is_torch_queue</span></code><a class="headerlink" href="#external-metal-command-queue-is-torch-queue" title="Link to this heading">#</a></h3>
+<p>Default <code class="docutils literal notranslate"><span class="pre">False</span></code>. Set to <code class="docutils literal notranslate"><span class="pre">True</span></code> when the <code class="docutils literal notranslate"><span class="pre">external_metal_command_queue</span></code> is PyTorch MPS’s command queue. This tells Quadrants that both frameworks share the same Metal queue, so the explicit <code class="docutils literal notranslate"><span class="pre">qd.sync()</span></code> / <code class="docutils literal notranslate"><span class="pre">torch.mps.synchronize()</span></code> calls at <code class="docutils literal notranslate"><span class="pre">to_torch</span></code> / <code class="docutils literal notranslate"><span class="pre">from_torch</span></code> interop points can be skipped. When <code class="docutils literal notranslate"><span class="pre">False</span></code> (or when no external queue is set), the interop syncs are preserved.</p>
 <p>See <a class="reference internal" href="metal_shared_queue.html"><span class="std std-doc">Shared Metal command queue</span></a> for the full setup guide, including how to extract the queue pointer from PyTorch and the synchronisation implications.</p>
 </section>
 </section>
@@ -623,6 +627,7 @@
 </li>
 <li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#apple-metal">Apple Metal</a><ul class="nav section-nav flex-column">
 <li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#external-metal-command-queue"><code class="docutils literal notranslate"><span class="pre">external_metal_command_queue</span></code></a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#external-metal-command-queue-is-torch-queue"><code class="docutils literal notranslate"><span class="pre">external_metal_command_queue_is_torch_queue</span></code></a></li>
 </ul>
 </li>
 <li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#debugging">Debugging</a><ul class="nav section-nav flex-column">
