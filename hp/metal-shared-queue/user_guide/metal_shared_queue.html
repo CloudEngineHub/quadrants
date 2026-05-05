@@ -402,8 +402,9 @@
 <section id="quick-start">
 <h2>Quick start<a class="headerlink" href="#quick-start" title="Link to this heading">#</a></h2>
 <div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">import</span><span class="w"> </span><span class="nn">quadrants</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">qd</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">quadrants.interop</span><span class="w"> </span><span class="kn">import</span> <span class="n">get_mps_command_queue</span>
 
-<span class="n">queue_ptr</span> <span class="o">=</span> <span class="n">get_mps_command_queue</span><span class="p">()</span>   <span class="c1"># see below</span>
+<span class="n">queue_ptr</span> <span class="o">=</span> <span class="n">get_mps_command_queue</span><span class="p">()</span>
 <span class="n">qd</span><span class="o">.</span><span class="n">init</span><span class="p">(</span>
     <span class="n">arch</span><span class="o">=</span><span class="n">qd</span><span class="o">.</span><span class="n">metal</span><span class="p">,</span>
     <span class="n">external_metal_command_queue</span><span class="o">=</span><span class="n">queue_ptr</span><span class="p">,</span>
@@ -426,63 +427,21 @@
 </section>
 <section id="extracting-pytorch-s-mtlcommandqueue">
 <h2>Extracting PyTorch’s MTLCommandQueue<a class="headerlink" href="#extracting-pytorch-s-mtlcommandqueue" title="Link to this heading">#</a></h2>
-<p>PyTorch does not expose its MPS command queue through a public Python API. The following helper extracts it at runtime using <code class="docutils literal notranslate"><span class="pre">ctypes</span></code> and the Objective-C runtime, with no build-time PyTorch dependency:</p>
-<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">import</span><span class="w"> </span><span class="nn">ctypes</span>
-<span class="kn">import</span><span class="w"> </span><span class="nn">os</span>
-<span class="kn">import</span><span class="w"> </span><span class="nn">torch</span>
+<p>PyTorch does not expose its MPS command queue through a public Python API. Quadrants provides a built-in helper that extracts it at runtime using <code class="docutils literal notranslate"><span class="pre">ctypes</span></code> and the Objective-C runtime:</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">from</span><span class="w"> </span><span class="nn">quadrants.interop</span><span class="w"> </span><span class="kn">import</span> <span class="n">get_mps_command_queue</span>
 
-
-<span class="k">def</span><span class="w"> </span><span class="nf">get_mps_command_queue</span><span class="p">()</span> <span class="o">-&gt;</span> <span class="nb">int</span><span class="p">:</span>
-<span class="w">    </span><span class="sd">&quot;&quot;&quot;Return PyTorch MPS&#39;s MTLCommandQueue* as a Python int.&quot;&quot;&quot;</span>
-    <span class="c1"># Ensure MPS is initialised</span>
-    <span class="n">torch</span><span class="o">.</span><span class="n">zeros</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="n">device</span><span class="o">=</span><span class="s2">&quot;mps&quot;</span><span class="p">)</span>
-
-    <span class="n">torch_lib</span> <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span>
-        <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">dirname</span><span class="p">(</span><span class="n">torch</span><span class="o">.</span><span class="vm">__file__</span><span class="p">),</span> <span class="s2">&quot;lib&quot;</span><span class="p">,</span> <span class="s2">&quot;libtorch_cpu.dylib&quot;</span>
-    <span class="p">)</span>
-    <span class="n">handle</span> <span class="o">=</span> <span class="n">ctypes</span><span class="o">.</span><span class="n">CDLL</span><span class="p">(</span><span class="n">torch_lib</span><span class="p">)</span><span class="o">.</span><span class="n">_handle</span>
-
-    <span class="n">libdl</span> <span class="o">=</span> <span class="n">ctypes</span><span class="o">.</span><span class="n">CDLL</span><span class="p">(</span><span class="kc">None</span><span class="p">)</span>
-    <span class="n">dlsym</span> <span class="o">=</span> <span class="n">libdl</span><span class="o">.</span><span class="n">dlsym</span>
-    <span class="n">dlsym</span><span class="o">.</span><span class="n">restype</span> <span class="o">=</span> <span class="n">ctypes</span><span class="o">.</span><span class="n">c_void_p</span>
-    <span class="n">dlsym</span><span class="o">.</span><span class="n">argtypes</span> <span class="o">=</span> <span class="p">[</span><span class="n">ctypes</span><span class="o">.</span><span class="n">c_void_p</span><span class="p">,</span> <span class="n">ctypes</span><span class="o">.</span><span class="n">c_char_p</span><span class="p">]</span>
-
-    <span class="c1"># at::mps::getDefaultMPSStream() -&gt; MPSStream*</span>
-    <span class="n">func_addr</span> <span class="o">=</span> <span class="n">dlsym</span><span class="p">(</span><span class="n">handle</span><span class="p">,</span> <span class="sa">b</span><span class="s2">&quot;_ZN2at3mps19getDefaultMPSStreamEv&quot;</span><span class="p">)</span>
-    <span class="k">assert</span> <span class="n">func_addr</span><span class="p">,</span> <span class="s2">&quot;Cannot find getDefaultMPSStream — check PyTorch version&quot;</span>
-    <span class="n">stream_ptr</span> <span class="o">=</span> <span class="n">ctypes</span><span class="o">.</span><span class="n">CFUNCTYPE</span><span class="p">(</span><span class="n">ctypes</span><span class="o">.</span><span class="n">c_void_p</span><span class="p">)(</span><span class="n">func_addr</span><span class="p">)()</span>
-
-    <span class="c1"># MPSStream::commandBuffer() -&gt; id&lt;MTLCommandBuffer&gt;</span>
-    <span class="n">cb_addr</span> <span class="o">=</span> <span class="n">dlsym</span><span class="p">(</span><span class="n">handle</span><span class="p">,</span> <span class="sa">b</span><span class="s2">&quot;_ZN2at3mps9MPSStream13commandBufferEv&quot;</span><span class="p">)</span>
-    <span class="k">assert</span> <span class="n">cb_addr</span><span class="p">,</span> <span class="s2">&quot;Cannot find MPSStream::commandBuffer&quot;</span>
-    <span class="n">cb_ptr</span> <span class="o">=</span> <span class="n">ctypes</span><span class="o">.</span><span class="n">CFUNCTYPE</span><span class="p">(</span><span class="n">ctypes</span><span class="o">.</span><span class="n">c_void_p</span><span class="p">,</span> <span class="n">ctypes</span><span class="o">.</span><span class="n">c_void_p</span><span class="p">)(</span><span class="n">cb_addr</span><span class="p">)(</span>
-        <span class="n">stream_ptr</span>
-    <span class="p">)</span>
-
-    <span class="c1"># [commandBuffer commandQueue] via ObjC runtime</span>
-    <span class="n">objc</span> <span class="o">=</span> <span class="n">ctypes</span><span class="o">.</span><span class="n">CDLL</span><span class="p">(</span><span class="s2">&quot;/usr/lib/libobjc.A.dylib&quot;</span><span class="p">)</span>
-    <span class="n">sel_reg</span> <span class="o">=</span> <span class="n">objc</span><span class="o">.</span><span class="n">sel_registerName</span>
-    <span class="n">sel_reg</span><span class="o">.</span><span class="n">restype</span> <span class="o">=</span> <span class="n">ctypes</span><span class="o">.</span><span class="n">c_void_p</span>
-    <span class="n">sel_reg</span><span class="o">.</span><span class="n">argtypes</span> <span class="o">=</span> <span class="p">[</span><span class="n">ctypes</span><span class="o">.</span><span class="n">c_char_p</span><span class="p">]</span>
-    <span class="n">msg_send</span> <span class="o">=</span> <span class="n">objc</span><span class="o">.</span><span class="n">objc_msgSend</span>
-    <span class="n">msg_send</span><span class="o">.</span><span class="n">restype</span> <span class="o">=</span> <span class="n">ctypes</span><span class="o">.</span><span class="n">c_void_p</span>
-    <span class="n">msg_send</span><span class="o">.</span><span class="n">argtypes</span> <span class="o">=</span> <span class="p">[</span><span class="n">ctypes</span><span class="o">.</span><span class="n">c_void_p</span><span class="p">,</span> <span class="n">ctypes</span><span class="o">.</span><span class="n">c_void_p</span><span class="p">]</span>
-
-    <span class="n">queue_ptr</span> <span class="o">=</span> <span class="n">msg_send</span><span class="p">(</span><span class="n">cb_ptr</span><span class="p">,</span> <span class="n">sel_reg</span><span class="p">(</span><span class="sa">b</span><span class="s2">&quot;commandQueue&quot;</span><span class="p">))</span>
-    <span class="k">assert</span> <span class="n">queue_ptr</span><span class="p">,</span> <span class="s2">&quot;Failed to extract MTLCommandQueue&quot;</span>
-    <span class="k">return</span> <span class="n">queue_ptr</span>
+<span class="n">queue_ptr</span> <span class="o">=</span> <span class="n">get_mps_command_queue</span><span class="p">()</span>  <span class="c1"># returns int (raw pointer), or 0 on failure</span>
 </pre></div>
 </div>
-<p>The C++ symbol <code class="docutils literal notranslate"><span class="pre">_ZN2at3mps19getDefaultMPSStreamEv</span></code> has been stable since PyTorch 1.13.</p>
+<p>The function initialises PyTorch MPS if needed, then returns the <code class="docutils literal notranslate"><span class="pre">MTLCommandQueue*</span></code> as a Python <code class="docutils literal notranslate"><span class="pre">int</span></code>. It returns <code class="docutils literal notranslate"><span class="pre">0</span></code> if extraction fails (e.g. non-macOS platform, PyTorch not installed, MPS not available, or unsupported PyTorch build). The underlying C++ symbol (<code class="docutils literal notranslate"><span class="pre">_ZN2at3mps19getDefaultMPSStreamEv</span></code>) has been stable since PyTorch 1.13.</p>
 </section>
 <section id="init-ordering">
 <h2>Init ordering<a class="headerlink" href="#init-ordering" title="Link to this heading">#</a></h2>
-<p>PyTorch MPS must be initialised <strong>before</strong> <code class="docutils literal notranslate"><span class="pre">qd.init()</span></code> so that the command queue exists when Quadrants starts:</p>
-<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">import</span><span class="w"> </span><span class="nn">torch</span>
-<span class="n">torch</span><span class="o">.</span><span class="n">zeros</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="n">device</span><span class="o">=</span><span class="s2">&quot;mps&quot;</span><span class="p">)</span>        <span class="c1"># trigger MPS init</span>
+<p><code class="docutils literal notranslate"><span class="pre">get_mps_command_queue()</span></code> handles PyTorch MPS initialisation internally, so you can call it before <code class="docutils literal notranslate"><span class="pre">qd.init()</span></code> without any manual setup:</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">import</span><span class="w"> </span><span class="nn">quadrants</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">qd</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">quadrants.interop</span><span class="w"> </span><span class="kn">import</span> <span class="n">get_mps_command_queue</span>
 
-<span class="kn">import</span><span class="w"> </span><span class="nn">quadrants</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">qd</span>
-<span class="n">queue_ptr</span> <span class="o">=</span> <span class="n">get_mps_command_queue</span><span class="p">()</span>
+<span class="n">queue_ptr</span> <span class="o">=</span> <span class="n">get_mps_command_queue</span><span class="p">()</span>  <span class="c1"># initialises MPS if needed</span>
 <span class="n">qd</span><span class="o">.</span><span class="n">init</span><span class="p">(</span>
     <span class="n">arch</span><span class="o">=</span><span class="n">qd</span><span class="o">.</span><span class="n">metal</span><span class="p">,</span>
     <span class="n">external_metal_command_queue</span><span class="o">=</span><span class="n">queue_ptr</span><span class="p">,</span>
@@ -527,19 +486,18 @@
 </section>
 <section id="fallback">
 <h2>Fallback<a class="headerlink" href="#fallback" title="Link to this heading">#</a></h2>
-<p>If extracting the queue fails (e.g. on an older PyTorch version or a non-Apple system), fall back to the default separate-queue path:</p>
-<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="k">try</span><span class="p">:</span>
-    <span class="n">queue_ptr</span> <span class="o">=</span> <span class="n">get_mps_command_queue</span><span class="p">()</span>
-<span class="k">except</span> <span class="p">(</span><span class="ne">AssertionError</span><span class="p">,</span> <span class="ne">OSError</span><span class="p">):</span>
-    <span class="n">queue_ptr</span> <span class="o">=</span> <span class="mi">0</span>   <span class="c1"># 0 means &quot;create a new queue&quot; (the default)</span>
+<p><code class="docutils literal notranslate"><span class="pre">get_mps_command_queue()</span></code> returns <code class="docutils literal notranslate"><span class="pre">0</span></code> on failure (non-macOS, missing PyTorch, unsupported build) rather than raising. You can use this to fall back to the default separate-queue path:</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">from</span><span class="w"> </span><span class="nn">quadrants.interop</span><span class="w"> </span><span class="kn">import</span> <span class="n">get_mps_command_queue</span>
 
+<span class="n">queue_ptr</span> <span class="o">=</span> <span class="n">get_mps_command_queue</span><span class="p">()</span>
 <span class="n">qd</span><span class="o">.</span><span class="n">init</span><span class="p">(</span>
     <span class="n">arch</span><span class="o">=</span><span class="n">qd</span><span class="o">.</span><span class="n">metal</span><span class="p">,</span>
-    <span class="n">external_metal_command_queue</span><span class="o">=</span><span class="n">queue_ptr</span><span class="p">,</span>
+    <span class="n">external_metal_command_queue</span><span class="o">=</span><span class="n">queue_ptr</span> <span class="ow">or</span> <span class="kc">None</span><span class="p">,</span>
     <span class="n">external_metal_command_queue_is_torch_queue</span><span class="o">=</span><span class="n">queue_ptr</span> <span class="o">!=</span> <span class="mi">0</span><span class="p">,</span>
 <span class="p">)</span>
 </pre></div>
 </div>
+<p>When <code class="docutils literal notranslate"><span class="pre">external_metal_command_queue</span></code> is <code class="docutils literal notranslate"><span class="pre">0</span></code> (or omitted), Quadrants creates its own queue and the explicit sync path is used as before.</p>
 </section>
 </section>
 

@@ -8,7 +8,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="viewport" content="width=device-width, initial-scale=1" />
 
-    <title>quadrants.experimental &#8212; Quadrants 0.7.6 documentation</title>
+    <title>quadrants.interop &#8212; Quadrants 0.7.6 documentation</title>
   
   
   
@@ -55,12 +55,12 @@
     <script>var togglebuttonSelector = '.toggle, .admonition.dropdown';</script>
     <script src="../../../_static/design-tabs.js?v=f930bc37"></script>
     <script>var togglebuttonSelector = '.toggle, .admonition.dropdown';</script>
-    <script>DOCUMENTATION_OPTIONS.pagename = 'autoapi/quadrants/experimental/index';</script>
+    <script>DOCUMENTATION_OPTIONS.pagename = 'autoapi/quadrants/interop/index';</script>
     <script>DOCUMENTATION_OPTIONS.search_as_you_type = false;</script>
     <link rel="index" title="Index" href="../../../genindex.html" />
     <link rel="search" title="Search" href="../../../search.html" />
-    <link rel="next" title="quadrants.interop" href="../interop/index.html" />
-    <link rel="prev" title="quadrants.algorithms" href="../algorithms/index.html" />
+    <link rel="next" title="quadrants.lang" href="../lang/index.html" />
+    <link rel="prev" title="quadrants.experimental" href="../experimental/index.html" />
   <meta name="viewport" content="width=device-width, initial-scale=1"/>
   <meta name="docsearch:language" content="en"/>
   <meta name="docsearch:version" content="0.7.6" />
@@ -326,7 +326,7 @@
     
     <li class="breadcrumb-item"><a href="../index.html" class="nav-link">quadrants</a></li>
     
-    <li class="breadcrumb-item active" aria-current="page"><span class="ellipsis">quadrants.experimental</span></li>
+    <li class="breadcrumb-item active" aria-current="page"><span class="ellipsis">quadrants.interop</span></li>
   </ul>
 </nav>
 </div>
@@ -343,27 +343,11 @@
 <div id="searchbox"></div>
                 <article class="bd-article">
                   
-  <section id="module-quadrants.experimental">
-<span id="quadrants-experimental"></span><h1>quadrants.experimental<a class="headerlink" href="#module-quadrants.experimental" title="Link to this heading">#</a></h1>
-<section id="functions">
-<h2>Functions<a class="headerlink" href="#functions" title="Link to this heading">#</a></h2>
-<div class="pst-scrollable-table-container"><table class="autosummary longtable table autosummary">
-<tbody>
-<tr class="row-odd"><td><p><a class="reference internal" href="#quadrants.experimental.real_func" title="quadrants.experimental.real_func"><code class="xref py py-obj docutils literal notranslate"><span class="pre">real_func</span></code></a>(func)</p></td>
-<td><p></p></td>
-</tr>
-</tbody>
-</table>
-</div>
-</section>
-<section id="module-contents">
-<h2>Module Contents<a class="headerlink" href="#module-contents" title="Link to this heading">#</a></h2>
-<dl class="py function">
-<dt class="sig sig-object py" id="quadrants.experimental.real_func">
-<span class="sig-prename descclassname"><span class="pre">quadrants.experimental.</span></span><span class="sig-name descname"><span class="pre">real_func</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">func</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../../../_modules/quadrants/experimental.html#real_func"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#quadrants.experimental.real_func" title="Link to this definition">#</a></dt>
-<dd></dd></dl>
-
-</section>
+  <section id="module-quadrants.interop">
+<span id="quadrants-interop"></span><h1>quadrants.interop<a class="headerlink" href="#module-quadrants.interop" title="Link to this heading">#</a></h1>
+<p>Cross-framework interop utilities for Quadrants.</p>
+<p>This module provides helpers for integrating Quadrants with other GPU frameworks (e.g. PyTorch MPS) at the
+command-queue level, enabling zero-overhead shared-queue execution without explicit synchronisation.</p>
 </section>
 
 
@@ -377,20 +361,20 @@
                   
 <div class="prev-next-area">
     <a class="left-prev"
-       href="../algorithms/index.html"
+       href="../experimental/index.html"
        title="previous page">
       <i class="fa-solid fa-angle-left"></i>
       <div class="prev-next-info">
         <p class="prev-next-subtitle">previous</p>
-        <p class="prev-next-title">quadrants.algorithms</p>
+        <p class="prev-next-title">quadrants.experimental</p>
       </div>
     </a>
     <a class="right-next"
-       href="../interop/index.html"
+       href="../lang/index.html"
        title="next page">
       <div class="prev-next-info">
         <p class="prev-next-subtitle">next</p>
-        <p class="prev-next-title">quadrants.interop</p>
+        <p class="prev-next-title">quadrants.lang</p>
       </div>
       <i class="fa-solid fa-angle-right"></i>
     </a>
@@ -406,25 +390,9 @@
 
 
   <div class="sidebar-secondary-item">
-<div
-    id="pst-page-navigation-heading-2"
-    class="page-toc tocsection onthispage">
-    <i class="fa-solid fa-list"></i> On this page
-  </div>
-  <nav id="pst-page-toc-nav" class="page-toc" aria-labelledby="pst-page-navigation-heading-2">
-    <ul class="pst-show_toc_level nav section-nav flex-column">
-<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#functions">Functions</a></li>
-<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#module-contents">Module Contents</a><ul class="nav section-nav flex-column">
-<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#quadrants.experimental.real_func"><code class="docutils literal notranslate"><span class="pre">real_func()</span></code></a></li>
-</ul>
-</li>
-</ul>
-  </nav></div>
-
-  <div class="sidebar-secondary-item">
 
   <div class="tocsection sourcelink">
-    <a href="../../../_sources/autoapi/quadrants/experimental/index.rst.txt">
+    <a href="../../../_sources/autoapi/quadrants/interop/index.rst.txt">
       <i class="fa-solid fa-file-lines"></i> Show Source
     </a>
   </div>
