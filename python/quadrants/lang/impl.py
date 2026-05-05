@@ -2,7 +2,7 @@ import numbers
 import threading
 import weakref
 from types import FunctionType, MethodType
-from typing import TYPE_CHECKING, Any, Iterable, Sequence
+from typing import TYPE_CHECKING, Any, Callable, Iterable, Sequence
 
 import numpy as np
 
@@ -586,6 +586,14 @@ def get_runtime() -> PyQuadrants:
     return pyquadrants
 
 
+_reset_hooks: list[Callable[[], None]] = []
+
+
+def on_reset(hook: Callable[[], None]) -> None:
+    """Register a callback to be invoked on ``reset()``.  Invalidates module-level caches without coupling."""
+    _reset_hooks.append(hook)
+
+
 def reset():
     global pyquadrants
     old_ndarrays = pyquadrants.ndarrays
@@ -597,9 +605,9 @@ def reset():
     for k in old_kernels:
         k.reset()
     _qd_core.reset_default_compile_config()
-    from quadrants.lang._func_base import _frozen_dc_plans  # pylint: disable=C0415
 
-    _frozen_dc_plans.clear()
+    for hook in _reset_hooks:
+        hook()
 
 
 @quadrants_scope
