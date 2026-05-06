@@ -477,6 +477,123 @@ def test_eliminate_recomputable_pushes_preserves_zero_body_store():
     assert c.grad[None] == pytest.approx(expected_grad, rel=1e-5)
 
 
+@test_utils.test(require=qd.extension.adstack, cfg_optimization=False, ad_stack_experimental_enabled=True)
+def test_backup_ssa_load_top_with_subsequent_pushes():
+    # Pins `BackupSSA::is_load_top_stable` against the reverse-mode aliasing bug where cloning an
+    # `AdStackLoadTopStmt` at the reverse cursor reads the stack's live top - which differs from the original
+    # forward-time top whenever the same stack received another push between the original load_top and the end of
+    # the IB. The minimal IR shape that exhibits this:
+    #
+    #   - A multi-axis `qd.ndrange(...)` whose flat loop index is decomposed into per-axis indices via repeated
+    #     `floordiv` / `sub` over an adstack-backed value (each step pushes its result, then a subsequent
+    #     `load_top` reads that pushed value to feed the next decomposition step).
+    #   - A guarded division `out = in / mass` inside the kernel: `MakeAdjoint` emits two reverse formulas
+    #     (`adj(in) += adj(out) / mass`, `adj(mass) += -adj(out) * in / mass^2`) that re-evaluate `mass` and `in`
+    #     at the reverse cursor; that re-evaluation walks the per-axis index DAG, which BackupSSA was happy to
+    #     reconstruct from `floordiv(load_top(stack), const)` clones - the load_top clones read the stack's
+    #     final top, which is the LAST push (the inner axis) instead of the intermediate flat index.
+    #
+    # With the stable-load-top guard, BackupSSA detects the unsafe load_top, falls back to the per-IB alloca
+    # spill (`load(op)`), and the reverse re-evaluation reads the per-iteration forward-time index, producing
+    # the analytic gradients. Without the guard, the reverse pass reads `g_mass[j/2, j]` and `g_in[j/2, j]`
+    # instead of `g_mass[i, j]` / `g_in[i, j]`, so cells whose forward gate was true at `(i=1, j=1)` end up
+    # dividing `adj(out)` by `g_mass[0, 1]` (= 0) and the gradient comes out as `inf`/`nan`.
+    #
+    # Internal details: `cfg_optimization=False` keeps the compound `if true && (g_mass[i, j] > 0)` form alive
+    # (the `&&` lowering inserts the multi-push into the gate stack that the chain analyzer must clone through);
+    # `ad_stack_experimental_enabled=True` is the configuration where the cloned-load_top path actually fires.
+    g_mass = qd.field(qd.f32, shape=(2, 2), needs_grad=True)
+    g_in = qd.field(qd.f32, shape=(2, 2), needs_grad=True)
+    g_out = qd.field(qd.f32, shape=(2, 2), needs_grad=True)
+
+    @qd.kernel
+    def gated_div():
+        for i, j in qd.ndrange(2, 2):
+            if g_mass[i, j] > 0.0:
+                g_out[i, j] = g_in[i, j] / g_mass[i, j]
+
+    g_mass[1, 1] = 2.0
+    g_in[1, 1] = 4.0
+    g_out.grad[1, 1] = 1.0
+    gated_div.grad()
+
+    # Forward: g_out[1, 1] = g_in[1, 1] / g_mass[1, 1] = 2.0; gate is false at every other cell so all other
+    # gradients are zero. With dy = 1.0 on the active cell:
+    #   d(g_in[1, 1])   = 1 / g_mass[1, 1]                = 0.5
+    #   d(g_mass[1, 1]) = -g_in[1, 1] / g_mass[1, 1]^2    = -1.0
+    assert g_in.grad[1, 1] == pytest.approx(0.5, rel=1e-6)
+    assert g_mass.grad[1, 1] == pytest.approx(-1.0, rel=1e-6)
+    # Inactive cells must not have received any gradient. A regression where `BackupSSA` re-clones the
+    # load_top at the reverse cursor reads `g_mass[j/2, j] = g_mass[0, 1] = 0`, so 1/g_mass[0, 1] = inf
+    # would land on `g_in.grad[0, 1]` via the wrong index. Probing every other cell catches both the inf
+    # spill and any silent off-by-one accumulation.
+    for i in range(2):
+        for j in range(2):
+            if (i, j) == (1, 1):
+                continue
+            assert g_in.grad[i, j] == pytest.approx(0.0, abs=1e-6)
+            assert g_mass.grad[i, j] == pytest.approx(0.0, abs=1e-6)
+
+
+@test_utils.test(
+    require=qd.extension.adstack,
+    cfg_optimization=False,
+    force_scalarize_matrix=True,
+    ad_stack_experimental_enabled=True,
+)
+def test_eliminate_recomputable_pushes_rejects_mutated_snode_chain_leaf():
+    # Pins the `mutated_snodes` guard inside `RecomputableChainAnalyzer::is_recomputable` against the chain-clone
+    # post-write read miscompile: a forward `GlobalLoadStmt` chain leaf reading a SNode the same kernel mutates
+    # cannot be re-cloned at the reverse cursor - the cloned load re-issues the read after the forward writes have
+    # updated the SNode, producing wrong gradients (`nan` / `inf`).
+    #
+    # Internal details:
+    #   - Kernel shape: three top-level for-loops over the same `field` SNode.
+    #     1. Atomic-add into `field[base, 0]` keyed by `base = floor(data[0]).cast(i32)`.
+    #     2. Gated divide-by-self over the whole `field`, gate predicate `field[I, 0][0] > 0.0`.
+    #     3. Consumer that reads `field[base, 0]` and accumulates into `data[1]` (the gradient endpoint).
+    #   - `mutated_snodes(IB) = {field}`.
+    #   - Without the guard: the analyzer admits the chain `GlobalLoad(GlobalPtr(field, base))` as recomputable;
+    #     ERAP drops the adstack carrying that chain's value; `BackupSSA::generic_visit` re-clones the chain at
+    #     the reverse cursor; the cloned `GlobalLoadStmt` reads `field` POST stage 2 (the divide-by-self has set
+    #     every gated cell to the all-ones vector), so the adjoint flowing through `data[0]` blows up.
+    #   - With the guard: the chain is rejected, ERAP keeps the original push/pop, reverse pops the iter-k value
+    #     verbatim, and `data.grad[0]` matches the analytic all-ones vector.
+    #   - `force_scalarize_matrix=True` is structural: the matrix-typed `field` value path is what ERAP latches
+    #     onto; with scalarization off the chain's leaf shape changes and the bug no longer fires.
+    #   - `cfg_optimization=False` keeps the gate's compound `&&` lowering alive so the reverse clone path
+    #     actually triggers; with cfg-opt the cond folds and the clone never happens.
+    #   - The trailing `1` axis on `field` matches `MakeAdjoint::visit(RangeForStmt)`'s reverse iteration;
+    #     collapsing it folds the loop into a shape that misses ERAP's eligibility entirely.
+    vec3 = qd.types.vector(3, qd.f32)
+    data = qd.field(dtype=vec3, shape=(2,), needs_grad=True)
+    field = qd.field(dtype=vec3, shape=(2, 2, 2, 1), needs_grad=True)
+
+    data[0] = qd.Vector([1.0, 1.0, 1.0])
+
+    @qd.kernel
+    def k(data: qd.template(), field: qd.template()):
+        for _ in qd.ndrange(1):
+            base = qd.floor(data[0]).cast(qd.i32)
+            field[base, 0] += data[0]
+        for ii, jj, kk, i_b in qd.ndrange(2, 2, 2, 1):
+            I = (ii, jj, kk)
+            if field[I, i_b][0] > 0.0:
+                field[I, i_b] = field[I, i_b] / field[I, i_b]
+        for _ in qd.ndrange(1):
+            base = qd.floor(data[0]).cast(qd.i32)
+            data[1] = data[0] + field[base, 0]
+
+    field[1, 1, 1, 0] = qd.Vector([1.0, 1.0, 1.0])
+    data.grad[1] = qd.Vector([1.0, 1.0, 1.0])
+    k.grad(data, field)
+
+    expected = [1.0, 1.0, 1.0]
+    for d in range(3):
+        assert math.isfinite(data.grad[0][d]), f"non-finite at axis {d}: {data.grad[0][d]}"
+        assert data.grad[0][d] == pytest.approx(expected[d], rel=1e-6, abs=1e-6)
+
+
 @pytest.mark.parametrize("n_iter", [1, 3, 10])
 @pytest.mark.parametrize("wrap_inner_in_func", [False, True])
 @test_utils.test(ad_stack_experimental_enabled=False)

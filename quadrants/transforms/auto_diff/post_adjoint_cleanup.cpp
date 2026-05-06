@@ -20,10 +20,14 @@ class BackupSSA : public BasicStmtVisitor {
 
   Block *independent_block;
   std::map<Stmt *, Stmt *> backup_alloca;
+  std::unordered_set<SNode *> mutated_snodes_;
 
-  explicit BackupSSA(Block *independent_block) : independent_block(independent_block) {
+  explicit BackupSSA(Block *independent_block)
+      : independent_block(independent_block),
+        mutated_snodes_(RecomputableChainAnalyzer::collect_mutated_snodes(independent_block)) {
     allow_undefined_visitor = true;
     invoke_default_visitor = true;
+    compute_forward_preorder();
   }
 
   Stmt *load(Stmt *stmt) {
@@ -54,8 +58,17 @@ class BackupSSA : public BasicStmtVisitor {
       if (std::find(leaf_to_root.begin(), leaf_to_root.end(), op->parent) == leaf_to_root.end() &&
           !op->is<AllocaStmt>()) {
         if (op->is<AdStackLoadTopStmt>()) {
-          // Just create another AdStackLoadTopStmt
-          stmt->set_operand(i, stmt->insert_before_me(op->clone()));
+          // Cloning an AdStackLoadTopStmt at the reverse cursor reads the stack's live top there. Correct iff every
+          // subsequent forward push to the same stack has had its matching reverse pop fire before the consumer.
+          // The unsafe case is a push whose parent block strictly contains the consumer's parent AND precedes the
+          // consumer's enclosing-scope stmt in document order: pop_P lands AFTER consumer's reverse code. On
+          // rejection, fall back to the per-IB alloca spill.
+          if (is_load_top_safe_for_consumer(op->as<AdStackLoadTopStmt>(), stmt)) {
+            stmt->set_operand(i, stmt->insert_before_me(op->clone()));
+          } else {
+            auto alloca = load(op);
+            stmt->set_operand(i, stmt->insert_before_me(Stmt::make<LocalLoadStmt>(alloca)));
+          }
         } else if (op->is<AdStackAllocaStmt>()) {
           // Backup AdStackAllocaStmt because it should not be local stored and local loaded.
           auto stack_alloca = op->as<AdStackAllocaStmt>();
@@ -83,7 +96,11 @@ class BackupSSA : public BasicStmtVisitor {
           // of a needs_grad SNode whose value the reverse must read at last-write rather than recompute, for instance)
           // and shapes outside one of our independent blocks. The recomputable path above takes precedence when its
           // predicate matches; otherwise control falls through to the `load(op)` line.
-          if (RecomputableChainAnalyzer::is_recomputable(op, recomputable_cache_)) {
+          // `is_chain_clone_safe` adds a per-leaf check on top of `is_recomputable`: each `AdStackLoadTopStmt` chain
+          // leaf must satisfy the consumer-aware ancestor predicate (same rule as the bare-`AdStackLoadTopStmt`
+          // operand path). On rejection, fall back to the per-IB alloca spill.
+          if (RecomputableChainAnalyzer::is_recomputable(op, recomputable_cache_, mutated_snodes_) &&
+              is_chain_clone_safe(op, stmt)) {
             std::unordered_map<Stmt *, Stmt *> clone_cache;
             Stmt *cloned = RecomputableChainCloner::clone_at(op, stmt, clone_cache);
             stmt->set_operand(i, cloned);
@@ -99,6 +116,149 @@ class BackupSSA : public BasicStmtVisitor {
   // Memoization cache for `RecomputableChainAnalyzer::is_recomputable` queries within one BackupSSA run. Re-used across
   // all generic_visit calls; invariant during the visit because forward IR is read-only here.
   std::unordered_map<Stmt *, bool> recomputable_cache_;
+
+  // Document-order index of every stmt reachable from `independent_block` at construction time. Captures forward-IR
+  // positions before any reverse-side insertion occurs; reused by `is_load_top_safe_for_consumer` so the per-load_top
+  // ancestor check runs in O(1) per query after a single O(N) walk.
+  std::unordered_map<Stmt *, int> forward_preorder_;
+
+  void compute_forward_preorder() {
+    int idx = 0;
+    std::function<void(Block *)> walk = [&](Block *block) {
+      for (auto &owned : block->statements) {
+        Stmt *s = owned.get();
+        forward_preorder_[s] = idx++;
+        if (auto *if_s = s->cast<IfStmt>()) {
+          if (if_s->true_statements)
+            walk(if_s->true_statements.get());
+          if (if_s->false_statements)
+            walk(if_s->false_statements.get());
+        } else if (auto *for_s = s->cast<RangeForStmt>()) {
+          if (for_s->body)
+            walk(for_s->body.get());
+        } else if (auto *for_s = s->cast<StructForStmt>()) {
+          if (for_s->body)
+            walk(for_s->body.get());
+        } else if (auto *for_s = s->cast<MeshForStmt>()) {
+          if (for_s->body)
+            walk(for_s->body.get());
+        }
+      }
+    };
+    walk(independent_block);
+  }
+
+  static bool is_strict_ancestor(Block *ancestor, Block *descendant) {
+    if (ancestor == nullptr || descendant == nullptr || ancestor == descendant) {
+      return false;
+    }
+    Block *cur = descendant->parent_block();
+    while (cur != nullptr) {
+      if (cur == ancestor) {
+        return true;
+      }
+      cur = cur->parent_block();
+    }
+    return false;
+  }
+
+  static Stmt *ancestor_in_block(Stmt *stmt, Block *target_block) {
+    Stmt *cur = stmt;
+    while (cur != nullptr) {
+      if (cur->parent == target_block) {
+        return cur;
+      }
+      Block *cur_parent = cur->parent;
+      if (cur_parent == nullptr) {
+        return nullptr;
+      }
+      cur = cur_parent->parent_stmt();
+    }
+    return nullptr;
+  }
+
+  // Returns true iff cloning `lt` at `consumer`'s position reads `lt`'s forward value. The unsafe case is a forward
+  // push P to the same stack such that (a) P's parent block is a strict ancestor of `consumer`'s parent and (b) P
+  // precedes consumer's enclosing-scope stmt in P's parent block. Both conditions together mean pop_P fires after
+  // `consumer` in execution order, so the cloned load_top reads the post-push top.
+  bool is_load_top_safe_for_consumer(AdStackLoadTopStmt *lt, Stmt *consumer) {
+    auto lt_it = forward_preorder_.find(lt);
+    if (lt_it == forward_preorder_.end()) {
+      return true;
+    }
+    auto *stack = lt->stack ? lt->stack->cast<AdStackAllocaStmt>() : nullptr;
+    if (stack == nullptr) {
+      return true;
+    }
+    int lt_pos = lt_it->second;
+    Block *consumer_parent = consumer->parent;
+    auto pushes = irpass::analysis::gather_statements(independent_block, [&](Stmt *s) {
+      auto *p = s->cast<AdStackPushStmt>();
+      return p != nullptr && p->stack == stack;
+    });
+    for (auto *p : pushes) {
+      auto pit = forward_preorder_.find(p);
+      if (pit == forward_preorder_.end() || pit->second <= lt_pos) {
+        continue;
+      }
+      if (!is_strict_ancestor(p->parent, consumer_parent)) {
+        continue;
+      }
+      Stmt *consumer_anc = ancestor_in_block(consumer, p->parent);
+      if (consumer_anc != nullptr) {
+        auto cit = forward_preorder_.find(consumer_anc);
+        if (cit != forward_preorder_.end() && pit->second > cit->second) {
+          continue;
+        }
+      }
+      return false;
+    }
+    return true;
+  }
+
+  bool is_chain_clone_safe(Stmt *op, Stmt *consumer) {
+    Block *consumer_parent = consumer->parent;
+    auto cache_key = std::make_pair(op, consumer_parent);
+    auto it = chain_clone_safe_cache_.find(cache_key);
+    if (it != chain_clone_safe_cache_.end()) {
+      return it->second;
+    }
+    chain_clone_safe_cache_[cache_key] = false;
+    bool result = chain_clone_safe_check(op, consumer);
+    chain_clone_safe_cache_[cache_key] = result;
+    return result;
+  }
+
+  bool chain_clone_safe_check(Stmt *op, Stmt *consumer) {
+    if (auto *lt = op->cast<AdStackLoadTopStmt>()) {
+      return is_load_top_safe_for_consumer(lt, consumer);
+    }
+    if (op->is<AdStackAllocaStmt>() || op->is<ArgLoadStmt>() || op->is<ConstStmt>()) {
+      return true;
+    }
+    bool is_interior = op->is<UnaryOpStmt>() || op->is<BinaryOpStmt>() || op->is<TernaryOpStmt>() ||
+                       op->is<MatrixPtrStmt>() || op->is<GlobalPtrStmt>() || op->is<ExternalPtrStmt>() ||
+                       op->is<GlobalLoadStmt>();
+    if (!is_interior) {
+      return false;
+    }
+    for (auto *child : op->get_operands()) {
+      if (child == nullptr) {
+        continue;
+      }
+      if (!is_chain_clone_safe(child, consumer)) {
+        return false;
+      }
+    }
+    return true;
+  }
+
+  struct PairHash {
+    std::size_t operator()(const std::pair<Stmt *, Block *> &p) const noexcept {
+      return std::hash<Stmt *>{}(p.first) ^ (std::hash<Block *>{}(p.second) << 1);
+    }
+  };
+  std::unordered_map<std::pair<Stmt *, Block *>, bool, PairHash> chain_clone_safe_cache_;
 
   void visit(Stmt *stmt) override {
     generic_visit(stmt);
