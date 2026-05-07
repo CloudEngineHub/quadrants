@@ -288,6 +288,7 @@
 <li class="toctree-l1"><a class="reference internal" href="tensor_types.html">Tensor types</a></li>
 <li class="toctree-l1"><a class="reference internal" href="scalar_tensors.html">Scalar tensors</a></li>
 <li class="toctree-l1"><a class="reference internal" href="matrix_vector.html">Matrix and Vector</a></li>
+<li class="toctree-l1"><a class="reference internal" href="decompositions.html">Matrix decompositions and solvers</a></li>
 <li class="toctree-l1"><a class="reference internal" href="tensor.html">Tensors</a></li>
 <li class="toctree-l1"><a class="reference internal" href="compound_types.html">Compound types</a></li>
 <li class="toctree-l1"><a class="reference internal" href="buffer_view.html">BufferView</a></li>
@@ -306,6 +307,7 @@
 </ul>
 <p aria-level="2" class="caption" role="heading"><span class="caption-text">SIMT primitives</span></p>
 <ul class="nav bd-sidenav">
+<li class="toctree-l1"><a class="reference internal" href="block.html">Block primitives</a></li>
 <li class="toctree-l1"><a class="reference internal" href="subgroup.html">Subgroup primitives</a></li>
 <li class="toctree-l1"><a class="reference internal" href="tile16.html">Tile16x16: register-resident 16x16 tiles</a></li>
 </ul>
@@ -317,6 +319,7 @@
 <ul class="nav bd-sidenav">
 <li class="toctree-l1"><a class="reference internal" href="fastcache.html">Fastcache</a></li>
 <li class="toctree-l1"><a class="reference internal" href="graph.html">CUDA Graph</a></li>
+<li class="toctree-l1"><a class="reference internal" href="streams.html">Streams</a></li>
 <li class="toctree-l1"><a class="reference internal" href="perf_dispatch.html">Performance Dispatch</a></li>
 <li class="toctree-l1"><a class="reference internal" href="init_options.html">qd.init options</a></li>
 </ul>
@@ -402,7 +405,6 @@
   <section class="tex2jax_ignore mathjax_ignore" id="algorithms">
 <h1>Algorithms<a class="headerlink" href="#algorithms" title="Link to this heading">#</a></h1>
 <p>Device-wide algorithms — primitives that consume and produce whole arrays, executed as one or more kernel launches under the hood. They sit one tier above grid-scope synchronization: they <em>use</em> block, subgroup, and grid primitives internally and expose a high-level entry point that the user calls from host (Python) code, not from inside a kernel.</p>
-<p>The current <code class="docutils literal notranslate"><span class="pre">qd.algorithms</span></code> namespace is small — two ops, both built around prefix-style internal kernels. The set is expected to grow over time (radix sort, reduce-by-key, select / compact).</p>
 <section id="what-s-available">
 <h2>What’s available<a class="headerlink" href="#what-s-available" title="Link to this heading">#</a></h2>
 <div class="pst-scrollable-table-container"><table class="table">
@@ -439,7 +441,7 @@
 <h2>Semantics<a class="headerlink" href="#semantics" title="Link to this heading">#</a></h2>
 <section id="qd-algorithms-parallel-sort-keys-values-none">
 <h3><code class="docutils literal notranslate"><span class="pre">qd.algorithms.parallel_sort(keys,</span> <span class="pre">values=None)</span></code><a class="headerlink" href="#qd-algorithms-parallel-sort-keys-values-none" title="Link to this heading">#</a></h3>
-<p>In-place sort. Reorders <code class="docutils literal notranslate"><span class="pre">keys</span></code> ascending; if <code class="docutils literal notranslate"><span class="pre">values</span></code> is provided, applies the same permutation to <code class="docutils literal notranslate"><span class="pre">values</span></code> (key-value sort). Both arguments must be 1-D <code class="docutils literal notranslate"><span class="pre">field</span></code> or <code class="docutils literal notranslate"><span class="pre">ndarray</span></code>.</p>
+<p>In-place sort. Reorders <code class="docutils literal notranslate"><span class="pre">keys</span></code> ascending; if <code class="docutils literal notranslate"><span class="pre">values</span></code> is provided, applies the same permutation to <code class="docutils literal notranslate"><span class="pre">values</span></code> (key-value sort). Both arguments must be 1-D <code class="docutils literal notranslate"><span class="pre">qd.field</span></code> — <code class="docutils literal notranslate"><span class="pre">parallel_sort</span></code> reaches into <code class="docutils literal notranslate"><span class="pre">snode.ptr.offset</span></code> internally, so <code class="docutils literal notranslate"><span class="pre">ndarray</span></code> is <strong>not</strong> supported and will fail at trace time with an <code class="docutils literal notranslate"><span class="pre">AttributeError</span></code>.</p>
 <div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">keys</span> <span class="o">=</span> <span class="n">qd</span><span class="o">.</span><span class="n">field</span><span class="p">(</span><span class="n">qd</span><span class="o">.</span><span class="n">i32</span><span class="p">,</span> <span class="n">shape</span><span class="o">=</span><span class="p">(</span><span class="n">N</span><span class="p">,))</span>
 <span class="n">qd</span><span class="o">.</span><span class="n">algorithms</span><span class="o">.</span><span class="n">parallel_sort</span><span class="p">(</span><span class="n">keys</span><span class="p">)</span>
 </pre></div>
@@ -454,7 +456,7 @@
 <li><p><strong>Key dtype.</strong> Whatever the key field’s dtype is, as long as <code class="docutils literal notranslate"><span class="pre">&lt;</span></code> is meaningful for it (integer and float types).</p></li>
 <li><p><strong>Stability.</strong> Odd-even merge sort is <em>not</em> a stable sort — equal keys may be reordered relative to one another. If stability matters, encode tiebreakers into the keys (e.g. pack the original index into the low bits).</p></li>
 <li><p><strong>Memory.</strong> Strictly in-place — no auxiliary buffers from the caller’s perspective.</p></li>
-<li><p><strong>Performance characteristic.</strong> Beats radix-style sorts for small N (roughly N ≲ 4K), losing to them at large N. For million-element key sets prefer a radix sort (qipc / CUB-style); for thousands or tens of thousands, this is a fine choice.</p></li>
+<li><p><strong>Performance characteristic.</strong> Beats radix-style sorts for small N (roughly N ≲ 4K).</p></li>
 </ul>
 </section>
 <section id="qd-algorithms-prefixsumexecutor">
@@ -469,20 +471,21 @@
 </div>
 <p>Constructor:</p>
 <ul class="simple">
-<li><p><code class="docutils literal notranslate"><span class="pre">length:</span> <span class="pre">int</span></code> — the maximum number of elements the executor can scan. Internally allocates an auxiliary <code class="docutils literal notranslate"><span class="pre">qd.field(i32,</span> <span class="pre">shape=padded_length)</span></code> sized to the Kogge-Stone hierarchy (block size = 64).</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">length:</span> <span class="pre">int</span></code> — the <strong>fixed</strong> number of elements the executor will scan on every <code class="docutils literal notranslate"><span class="pre">.run()</span></code> call. Internally allocates an auxiliary <code class="docutils literal notranslate"><span class="pre">qd.field(i32,</span> <span class="pre">shape=padded_length)</span></code> sized to the Kogge-Stone hierarchy (block size = 64).</p></li>
 </ul>
 <p><code class="docutils literal notranslate"><span class="pre">run(input_arr)</span></code>:</p>
 <ul class="simple">
-<li><p><code class="docutils literal notranslate"><span class="pre">input_arr</span></code> must be a 1-D <code class="docutils literal notranslate"><span class="pre">qd.field(qd.i32,</span> <span class="pre">shape=(L,))</span></code> with <code class="docutils literal notranslate"><span class="pre">L</span> <span class="pre">&lt;=</span> <span class="pre">length</span></code>.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">input_arr</span></code> must be a 1-D <code class="docutils literal notranslate"><span class="pre">qd.field(qd.i32,</span> <span class="pre">shape=(length,))</span></code> — its length must match the constructor’s <code class="docutils literal notranslate"><span class="pre">length</span></code> exactly. <code class="docutils literal notranslate"><span class="pre">run()</span></code> always blits <code class="docutils literal notranslate"><span class="pre">length</span></code> elements between <code class="docutils literal notranslate"><span class="pre">input_arr</span></code> and the internal buffer; passing a shorter field results in out-of-bounds reads / writes (no runtime check today).</p></li>
 <li><p>Returns nothing; <code class="docutils literal notranslate"><span class="pre">input_arr</span></code> is overwritten with the scan result.</p></li>
 </ul>
 <p>Constraints:</p>
 <ul class="simple">
 <li><p><strong>Dtype:</strong> <code class="docutils literal notranslate"><span class="pre">qd.i32</span></code> only. Calling with any other dtype raises <code class="docutils literal notranslate"><span class="pre">RuntimeError(&quot;Only</span> <span class="pre">qd.i32</span> <span class="pre">type</span> <span class="pre">is</span> <span class="pre">supported</span> <span class="pre">for</span> <span class="pre">prefix</span> <span class="pre">sum.&quot;)</span></code>.</p></li>
 <li><p><strong>Inclusive only.</strong> No exclusive variant exposed. To convert to exclusive, post-process: <code class="docutils literal notranslate"><span class="pre">exclusive[i]</span> <span class="pre">=</span> <span class="pre">inclusive[i]</span> <span class="pre">-</span> <span class="pre">input_original[i]</span></code>.</p></li>
-<li><p><strong>Backend coverage.</strong> CUDA and Vulkan only. AMDGPU and Metal raise <code class="docutils literal notranslate"><span class="pre">RuntimeError(f&quot;{arch}</span> <span class="pre">is</span> <span class="pre">not</span> <span class="pre">supported</span> <span class="pre">for</span> <span class="pre">prefix</span> <span class="pre">sum.&quot;)</span></code> at trace time. Cross-platform code that needs a portable exclusive scan currently has to roll its own (see, for example, the qipc Onesweep / decoupled-look-back scan).</p></li>
+<li><p><strong>Backend coverage.</strong> CUDA and Vulkan only. AMDGPU and Metal raise <code class="docutils literal notranslate"><span class="pre">RuntimeError(f&quot;{arch}</span> <span class="pre">is</span> <span class="pre">not</span> <span class="pre">supported</span> <span class="pre">for</span> <span class="pre">prefix</span> <span class="pre">sum.&quot;)</span></code> at trace time.</p></li>
 </ul>
 <p>The implementation is a Kogge-Stone hierarchical scan: per-block inclusive scan on shared memory, then a small recursive scan over per-block totals, then a uniform-add pass to propagate back. This means the executor reuses the underlying buffer across calls, which is why it’s a class (allocate once, run many times) rather than a free function.</p>
+<p>No explicit fence is required between a kernel that writes the input and the subsequent <code class="docutils literal notranslate"><span class="pre">.run()</span></code> call. <code class="docutils literal notranslate"><span class="pre">.run()</span></code> launches its own kernels under the hood, and the kernel boundary serializes against prior writes from host-launched kernels.</p>
 </section>
 </section>
 <section id="examples">
@@ -531,15 +534,6 @@
 </div>
 <p>The compact-output kernel reads <code class="docutils literal notranslate"><span class="pre">offsets[i]</span></code> (or <code class="docutils literal notranslate"><span class="pre">offsets[i]</span> <span class="pre">-</span> <span class="pre">flags[i]</span></code> for 0-based) to decide where to write surviving elements. This is the textbook scan-based select / compact pattern; the only Quadrants-specific note is the <code class="docutils literal notranslate"><span class="pre">i32</span></code>-only restriction.</p>
 </section>
-</section>
-<section id="performance-and-portability-notes">
-<h2>Performance and portability notes<a class="headerlink" href="#performance-and-portability-notes" title="Link to this heading">#</a></h2>
-<ul class="simple">
-<li><p><strong><code class="docutils literal notranslate"><span class="pre">parallel_sort</span></code> is <code class="docutils literal notranslate"><span class="pre">O(N</span> <span class="pre">log²</span> <span class="pre">N)</span></code></strong>, which is fine up to a few thousand elements and noticeably slower than a radix sort beyond that. The algorithm is stable in <em>control flow</em> but not stable in element ordering — important for code that compacts after sorting.</p></li>
-<li><p><strong><code class="docutils literal notranslate"><span class="pre">PrefixSumExecutor</span></code> is <code class="docutils literal notranslate"><span class="pre">i32</span></code>-only and CUDA + Vulkan-only.</strong> This is the most-often-hit limitation in cross-platform code. If you need <code class="docutils literal notranslate"><span class="pre">u32</span></code> / <code class="docutils literal notranslate"><span class="pre">i64</span></code> / <code class="docutils literal notranslate"><span class="pre">f32</span></code> / <code class="docutils literal notranslate"><span class="pre">f64</span></code> keys or AMDGPU / Metal coverage, you currently have to compose your own scan from <code class="docutils literal notranslate"><span class="pre">qd.simt.subgroup.inclusive_add</span></code> (per-block) plus an outer kernel that handles the multi-block roll-up — or use the qipc Onesweep / decoupled-look-back scan if you have a hard dependency on it.</p></li>
-<li><p><strong>Allocate the executor once, run it many times.</strong> The internal auxiliary buffer is sized to the constructor’s <code class="docutils literal notranslate"><span class="pre">length</span></code>; constructing per call wastes allocation traffic. Each <code class="docutils literal notranslate"><span class="pre">.run()</span></code> is a sequence of kernel launches; the cost is <code class="docutils literal notranslate"><span class="pre">O(N</span> <span class="pre">/</span> <span class="pre">cache_line)</span></code> global memory bandwidth, not user-visible launch overhead.</p></li>
-<li><p><strong>No fence required between <code class="docutils literal notranslate"><span class="pre">populate</span></code> and <code class="docutils literal notranslate"><span class="pre">scan.run</span></code>.</strong> Each algorithm kernel launches its own kernels under the hood, and the kernel boundary serializes against prior writes from host-launched kernels.</p></li>
-</ul>
 </section>
 <section id="related">
 <h2>Related<a class="headerlink" href="#related" title="Link to this heading">#</a></h2>
@@ -610,7 +604,6 @@
 <li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#compact-array-offsets-via-prefix-sum">Compact-array offsets via prefix sum</a></li>
 </ul>
 </li>
-<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#performance-and-portability-notes">Performance and portability notes</a></li>
 <li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#related">Related</a></li>
 </ul>
   </nav></div>

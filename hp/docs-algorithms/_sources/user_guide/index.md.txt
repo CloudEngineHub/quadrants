@@ -17,6 +17,7 @@ supported_systems
 tensor_types
 scalar_tensors
 matrix_vector
+decompositions
 tensor
 compound_types
 buffer_view
@@ -47,6 +48,7 @@ autodiff
 :maxdepth: 1
 :titlesonly:
 
+block
 subgroup
 tile16
 ```
@@ -66,6 +68,7 @@ algorithms
 
 fastcache
 graph
+streams
 perf_dispatch
 init_options
 ```
