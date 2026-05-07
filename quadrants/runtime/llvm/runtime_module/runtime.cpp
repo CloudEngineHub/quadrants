@@ -1233,8 +1233,17 @@ void runtime_eval_adstack_max_reduce(LLVMRuntime *runtime, RuntimeContext *ctx, 
                    nodes[0].indices_offset, nodes[0].indices_count, nodes[0].prim_dt);
   if (nodes[0].arg_buffer_offset >= 0) {
     const void *const *slot_ptr = (const void *const *)(arg_buffer + nodes[0].arg_buffer_offset);
-    quadrants_printf(runtime, "[device max-reducer]   arg_buffer[+%d] = data_ptr=%p\n", nodes[0].arg_buffer_offset,
-                     (uint64)*slot_ptr);
+    // Print using both %p (with uint64 cast) and %llx in case CUDA's vprintf misformats one of them.
+    quadrants_printf(runtime, "[device max-reducer]   arg_buffer[+%d] = data_ptr=%p (as_llx=0x%llx)\n",
+                     nodes[0].arg_buffer_offset, (uint64)*slot_ptr, (uint64)*slot_ptr);
+    // Also reconstruct the same u64 byte-by-byte from arg_buffer to bypass any cast / dereference / printf weirdness.
+    const u8 *as_bytes_for_recon = (const u8 *)arg_buffer;
+    const i32 base_for_recon = nodes[0].arg_buffer_offset;
+    uint64 manual_data_ptr = 0;
+    for (i32 b = 0; b < 8; ++b) {
+      manual_data_ptr |= ((uint64)as_bytes_for_recon[base_for_recon + b]) << (8 * b);
+    }
+    quadrants_printf(runtime, "[device max-reducer]   manual_byte_ptr=0x%llx\n", manual_data_ptr);
     // Byte-level dump from device side: prints bytes at offsets [-8, +16) relative to arg_buffer_offset so we
     // can compare against the host's d2h dump and tell whether the kernel's view of memory differs from the
     // host's view (memory-mapping issue) or matches it (interpretation/cast issue).
