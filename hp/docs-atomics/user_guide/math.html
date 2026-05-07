@@ -8,7 +8,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="viewport" content="width=device-width, initial-scale=1" />
 
-    <title>Troubleshooting &#8212; Quadrants 0.7.6 documentation</title>
+    <title>Math &#8212; Quadrants 0.7.6 documentation</title>
   
   
   
@@ -55,12 +55,12 @@
     <script>var togglebuttonSelector = '.toggle, .admonition.dropdown';</script>
     <script src="../_static/design-tabs.js?v=f930bc37"></script>
     <script>var togglebuttonSelector = '.toggle, .admonition.dropdown';</script>
-    <script>DOCUMENTATION_OPTIONS.pagename = 'user_guide/troubleshooting';</script>
+    <script>DOCUMENTATION_OPTIONS.pagename = 'user_guide/math';</script>
     <script>DOCUMENTATION_OPTIONS.search_as_you_type = false;</script>
     <link rel="index" title="Index" href="../genindex.html" />
     <link rel="search" title="Search" href="../search.html" />
-    <link rel="next" title="Contributing to quadrants" href="contributing.html" />
-    <link rel="prev" title="Quirks" href="quirks.html" />
+    <link rel="next" title="Subgroup primitives" href="subgroup.html" />
+    <link rel="prev" title="Atomics" href="atomics.html" />
   <meta name="viewport" content="width=device-width, initial-scale=1"/>
   <meta name="docsearch:language" content="en"/>
   <meta name="docsearch:version" content="0.7.6" />
@@ -305,9 +305,9 @@
 <li class="toctree-l1"><a class="reference internal" href="autodiff.html">Automatic differentiation</a></li>
 </ul>
 <p aria-level="2" class="caption" role="heading"><span class="caption-text">SIMT primitives</span></p>
-<ul class="nav bd-sidenav">
+<ul class="current nav bd-sidenav">
 <li class="toctree-l1"><a class="reference internal" href="atomics.html">Atomics</a></li>
-<li class="toctree-l1"><a class="reference internal" href="math.html">Math</a></li>
+<li class="toctree-l1 current active"><a class="current reference internal" href="#">Math</a></li>
 <li class="toctree-l1"><a class="reference internal" href="subgroup.html">Subgroup primitives</a></li>
 <li class="toctree-l1"><a class="reference internal" href="tile16.html">Tile16x16: register-resident 16x16 tiles</a></li>
 </ul>
@@ -323,12 +323,12 @@
 <li class="toctree-l1"><a class="reference internal" href="kernel_coverage.html">Kernel code coverage</a></li>
 </ul>
 <p aria-level="2" class="caption" role="heading"><span class="caption-text">Reference</span></p>
-<ul class="current nav bd-sidenav">
+<ul class="nav bd-sidenav">
 <li class="toctree-l1"><a class="reference internal" href="unsupported_python.html">Python features in kernel scope</a></li>
 <li class="toctree-l1"><a class="reference internal" href="python_backend.html">Python backend</a></li>
 <li class="toctree-l1"><a class="reference internal" href="debug.html">Debug mode</a></li>
 <li class="toctree-l1"><a class="reference internal" href="quirks.html">Quirks</a></li>
-<li class="toctree-l1 current active"><a class="current reference internal" href="#">Troubleshooting</a></li>
+<li class="toctree-l1"><a class="reference internal" href="troubleshooting.html">Troubleshooting</a></li>
 </ul>
 <p aria-level="2" class="caption" role="heading"><span class="caption-text">Contributing</span></p>
 <ul class="nav bd-sidenav">
@@ -380,7 +380,7 @@
     
     <li class="breadcrumb-item"><a href="index.html" class="nav-link">User guide</a></li>
     
-    <li class="breadcrumb-item active" aria-current="page"><span class="ellipsis">Troubleshooting</span></li>
+    <li class="breadcrumb-item active" aria-current="page"><span class="ellipsis">Math</span></li>
   </ul>
 </nav>
 </div>
@@ -397,30 +397,88 @@
 <div id="searchbox"></div>
                 <article class="bd-article">
                   
-  <section class="tex2jax_ignore mathjax_ignore" id="troubleshooting">
-<h1>Troubleshooting<a class="headerlink" href="#troubleshooting" title="Link to this heading">#</a></h1>
-<section id="in-case-of-crash-seg-fault">
-<h2>In case of crash/seg fault<a class="headerlink" href="#in-case-of-crash-seg-fault" title="Link to this heading">#</a></h2>
-<ul class="simple">
-<li><p>run without cache - or clear cache - to see if this resolves the issue</p></li>
-<li><p>if running without cache solves the seg fault, then clear the cache</p></li>
-</ul>
-<p>To run without cache:</p>
-<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">qd</span><span class="o">.</span><span class="n">init</span><span class="p">(</span><span class="n">offline_cache</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="o">...</span><span class="p">)</span>
+  <section class="tex2jax_ignore mathjax_ignore" id="math">
+<h1>Math<a class="headerlink" href="#math" title="Link to this heading">#</a></h1>
+<p><code class="docutils literal notranslate"><span class="pre">qd.math</span></code> is the quadrants standard library of math helpers.</p>
+<p>This page currently documents only the bit-counting helpers. The broader <code class="docutils literal notranslate"><span class="pre">qd.math</span></code> surface is exported and usable today but is not yet documented here.</p>
+<section id="bit-operations">
+<h2>Bit operations<a class="headerlink" href="#bit-operations" title="Link to this heading">#</a></h2>
+<p>Single-thread integer-register operations. They do not access memory and do not synchronize threads — each thread independently transforms a value in its own register.</p>
+<div class="pst-scrollable-table-container"><table class="table">
+<thead>
+<tr class="row-odd"><th class="head"><p>Op</p></th>
+<th class="head"><p>What it returns</p></th>
+<th class="head"><p>i32</p></th>
+<th class="head"><p>u32</p></th>
+<th class="head"><p>i64</p></th>
+<th class="head"><p>u64</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">qd.math.popcnt(x)</span></code></p></td>
+<td><p>Number of set bits in <code class="docutils literal notranslate"><span class="pre">x</span></code></p></td>
+<td><p>yes</p></td>
+<td><p>yes</p></td>
+<td><p>yes</p></td>
+<td><p>yes</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">qd.math.clz(x)</span></code></p></td>
+<td><p>Number of leading zero bits in <code class="docutils literal notranslate"><span class="pre">x</span></code></p></td>
+<td><p>yes</p></td>
+<td><p>*</p></td>
+<td><p>yes</p></td>
+<td><p>*</p></td>
+</tr>
+</tbody>
+</table>
+</div>
+<p>* <code class="docutils literal notranslate"><span class="pre">qd.math.clz</span></code> on CUDA currently rejects unsigned 32- and 64-bit inputs (<code class="docutils literal notranslate"><span class="pre">QD_NOT_IMPLEMENTED</span></code>); cast through <code class="docutils literal notranslate"><span class="pre">qd.bit_cast(x,</span> <span class="pre">qd.i32)</span></code> / <code class="docutils literal notranslate"><span class="pre">qd.i64</span></code> as a workaround. On SPIR-V, <code class="docutils literal notranslate"><span class="pre">qd.math.clz</span></code> is hard-coded to 32-bit (<code class="docutils literal notranslate"><span class="pre">FindMSB</span></code>); 64-bit input is silently truncated.</p>
+<p>The classic CUDA bit-tricks <code class="docutils literal notranslate"><span class="pre">__ffs</span></code> (find first set bit) and <code class="docutils literal notranslate"><span class="pre">__fns</span></code> (find n-th set bit in a mask) are not exposed; for a leading-zero count of a u32, the <code class="docutils literal notranslate"><span class="pre">bit_cast</span></code> workaround above is the canonical approach.</p>
+<section id="qd-math-popcnt-x">
+<h3><code class="docutils literal notranslate"><span class="pre">qd.math.popcnt(x)</span></code><a class="headerlink" href="#qd-math-popcnt-x" title="Link to this heading">#</a></h3>
+<p>Counts set bits in <code class="docutils literal notranslate"><span class="pre">x</span></code> and returns an <code class="docutils literal notranslate"><span class="pre">i32</span></code>. Lowers to <code class="docutils literal notranslate"><span class="pre">__popc</span></code> / <code class="docutils literal notranslate"><span class="pre">__popcll</span></code> on CUDA, <code class="docutils literal notranslate"><span class="pre">OpBitCount</span></code> on SPIR-V, <code class="docutils literal notranslate"><span class="pre">__builtin_amdgcn_popcnt</span></code> on AMDGPU. Defined for all integer dtypes.</p>
+</section>
+<section id="qd-math-clz-x">
+<h3><code class="docutils literal notranslate"><span class="pre">qd.math.clz(x)</span></code><a class="headerlink" href="#qd-math-clz-x" title="Link to this heading">#</a></h3>
+<p>Counts leading zero bits in <code class="docutils literal notranslate"><span class="pre">x</span></code> and returns an <code class="docutils literal notranslate"><span class="pre">i32</span></code>. For a 32-bit input, <code class="docutils literal notranslate"><span class="pre">clz(0)</span> <span class="pre">=</span> <span class="pre">32</span></code>; otherwise the result is in <code class="docutils literal notranslate"><span class="pre">[0,</span> <span class="pre">31]</span></code>. Lowers to <code class="docutils literal notranslate"><span class="pre">__nv_clz</span></code> / <code class="docutils literal notranslate"><span class="pre">__nv_clzll</span></code> on CUDA, <code class="docutils literal notranslate"><span class="pre">FindMSB</span></code> on SPIR-V (with <code class="docutils literal notranslate"><span class="pre">bitwidth</span> <span class="pre">-</span> <span class="pre">1</span> <span class="pre">-</span> <span class="pre">FindMSB</span></code> to convert MSB index into leading-zero count), <code class="docutils literal notranslate"><span class="pre">__builtin_amdgcn_sffbh_i32</span></code> on AMDGPU. See the cross-backend caveats in the support table.</p>
+</section>
+</section>
+<section id="examples">
+<h2>Examples<a class="headerlink" href="#examples" title="Link to this heading">#</a></h2>
+<section id="bitset-population-count">
+<h3>Bitset population count<a class="headerlink" href="#bitset-population-count" title="Link to this heading">#</a></h3>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="nd">@qd</span><span class="o">.</span><span class="n">kernel</span>
+<span class="k">def</span><span class="w"> </span><span class="nf">count_bits</span><span class="p">(</span><span class="n">masks</span><span class="p">:</span> <span class="n">qd</span><span class="o">.</span><span class="n">types</span><span class="o">.</span><span class="n">NDArray</span><span class="p">[</span><span class="n">qd</span><span class="o">.</span><span class="n">u32</span><span class="p">,</span> <span class="mi">1</span><span class="p">],</span> <span class="n">total</span><span class="p">:</span> <span class="n">qd</span><span class="o">.</span><span class="n">types</span><span class="o">.</span><span class="n">NDArray</span><span class="p">[</span><span class="n">qd</span><span class="o">.</span><span class="n">i32</span><span class="p">,</span> <span class="mi">1</span><span class="p">])</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+    <span class="n">n</span> <span class="o">=</span> <span class="mi">0</span>
+    <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">masks</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">0</span><span class="p">]):</span>
+        <span class="n">n</span> <span class="o">+=</span> <span class="n">qd</span><span class="o">.</span><span class="n">math</span><span class="o">.</span><span class="n">popcnt</span><span class="p">(</span><span class="n">masks</span><span class="p">[</span><span class="n">i</span><span class="p">])</span>
+    <span class="n">qd</span><span class="o">.</span><span class="n">atomic_add</span><span class="p">(</span><span class="n">total</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span> <span class="n">n</span><span class="p">)</span>
 </pre></div>
 </div>
-<p>See <a class="reference internal" href="init_options.html"><span class="std std-doc">qd.init options</span></a> for what <code class="docutils literal notranslate"><span class="pre">offline_cache=False</span></code> actually does on CUDA (it bypasses both the Quadrants PtxCache and the NVIDIA driver compute cache).</p>
-<p>To clear cache:</p>
-<ul class="simple">
-<li><p>the cache is located by default on linux and mac at <code class="docutils literal notranslate"><span class="pre">~/.cache/quadrants</span></code></p></li>
-<li><p>simply remove this entire folder:</p></li>
-</ul>
-<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>rm<span class="w"> </span>-Rf<span class="w"> </span>~/.cache/quadrants
+</section>
+<section id="highest-set-bit-morton-code-depth">
+<h3>Highest set bit (Morton-code depth)<a class="headerlink" href="#highest-set-bit-morton-code-depth" title="Link to this heading">#</a></h3>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="nd">@qd</span><span class="o">.</span><span class="n">func</span>
+<span class="k">def</span><span class="w"> </span><span class="nf">msb</span><span class="p">(</span><span class="n">x</span><span class="p">:</span> <span class="n">qd</span><span class="o">.</span><span class="n">i32</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">qd</span><span class="o">.</span><span class="n">i32</span><span class="p">:</span>
+    <span class="k">return</span> <span class="mi">31</span> <span class="o">-</span> <span class="n">qd</span><span class="o">.</span><span class="n">math</span><span class="o">.</span><span class="n">clz</span><span class="p">(</span><span class="n">x</span><span class="p">)</span>
 </pre></div>
 </div>
-<p>If this doesn’t solve the problem, then you’ll likely need to log a github issue, providing
-as much information as possible, and crucially a minimum reproducible example, to reproduce
-the seg fault.</p>
+<p>For <code class="docutils literal notranslate"><span class="pre">qd.u32</span></code> input on CUDA, cast first: <code class="docutils literal notranslate"><span class="pre">qd.math.clz(qd.bit_cast(x,</span> <span class="pre">qd.i32))</span></code>.</p>
+</section>
+</section>
+<section id="performance-and-portability-notes">
+<h2>Performance and portability notes<a class="headerlink" href="#performance-and-portability-notes" title="Link to this heading">#</a></h2>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">qd.math.popcnt</span></code> is fully cross-backend.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">qd.math.clz</span></code> has the dtype caveats noted above. Tests that depend on <code class="docutils literal notranslate"><span class="pre">qd.math.clz</span></code> over u32 or u64 should <code class="docutils literal notranslate"><span class="pre">bit_cast</span></code> to the matching signed type for portability.</p></li>
+</ul>
+</section>
+<section id="related">
+<h2>Related<a class="headerlink" href="#related" title="Link to this heading">#</a></h2>
+<ul class="simple">
+<li><p><a class="reference internal" href="atomics.html"><span class="std std-doc">atomics</span></a> — atomic read-modify-write operations on global / shared memory; commonly paired with bit-counting in select / compact patterns.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">qd.bit_cast</span></code> — reinterprets a value’s bit pattern as another dtype, used as a workaround for the <code class="docutils literal notranslate"><span class="pre">clz</span></code> u32 / u64 caveats above.</p></li>
+</ul>
 </section>
 </section>
 
@@ -435,20 +493,20 @@ the seg fault.</p>
                   
 <div class="prev-next-area">
     <a class="left-prev"
-       href="quirks.html"
+       href="atomics.html"
        title="previous page">
       <i class="fa-solid fa-angle-left"></i>
       <div class="prev-next-info">
         <p class="prev-next-subtitle">previous</p>
-        <p class="prev-next-title">Quirks</p>
+        <p class="prev-next-title">Atomics</p>
       </div>
     </a>
     <a class="right-next"
-       href="contributing.html"
+       href="subgroup.html"
        title="next page">
       <div class="prev-next-info">
         <p class="prev-next-subtitle">next</p>
-        <p class="prev-next-title">Contributing to quadrants</p>
+        <p class="prev-next-title">Subgroup primitives</p>
       </div>
       <i class="fa-solid fa-angle-right"></i>
     </a>
@@ -471,14 +529,25 @@ the seg fault.</p>
   </div>
   <nav id="pst-page-toc-nav" class="page-toc" aria-labelledby="pst-page-navigation-heading-2">
     <ul class="pst-show_toc_level nav section-nav flex-column">
-<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#in-case-of-crash-seg-fault">In case of crash/seg fault</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#bit-operations">Bit operations</a><ul class="nav section-nav flex-column">
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#qd-math-popcnt-x"><code class="docutils literal notranslate"><span class="pre">qd.math.popcnt(x)</span></code></a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#qd-math-clz-x"><code class="docutils literal notranslate"><span class="pre">qd.math.clz(x)</span></code></a></li>
+</ul>
+</li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#examples">Examples</a><ul class="nav section-nav flex-column">
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#bitset-population-count">Bitset population count</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#highest-set-bit-morton-code-depth">Highest set bit (Morton-code depth)</a></li>
+</ul>
+</li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#performance-and-portability-notes">Performance and portability notes</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#related">Related</a></li>
 </ul>
   </nav></div>
 
   <div class="sidebar-secondary-item">
 
   <div class="tocsection sourcelink">
-    <a href="../_sources/user_guide/troubleshooting.md.txt">
+    <a href="../_sources/user_guide/math.md.txt">
       <i class="fa-solid fa-file-lines"></i> Show Source
     </a>
   </div>

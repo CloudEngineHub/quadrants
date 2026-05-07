@@ -8,7 +8,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="viewport" content="width=device-width, initial-scale=1" />
 
-    <title>Atomics and bit operations &#8212; Quadrants 0.7.6 documentation</title>
+    <title>Atomics &#8212; Quadrants 0.7.6 documentation</title>
   
   
   
@@ -59,7 +59,7 @@
     <script>DOCUMENTATION_OPTIONS.search_as_you_type = false;</script>
     <link rel="index" title="Index" href="../genindex.html" />
     <link rel="search" title="Search" href="../search.html" />
-    <link rel="next" title="Subgroup primitives" href="subgroup.html" />
+    <link rel="next" title="Math" href="math.html" />
     <link rel="prev" title="Automatic differentiation" href="autodiff.html" />
   <meta name="viewport" content="width=device-width, initial-scale=1"/>
   <meta name="docsearch:language" content="en"/>
@@ -306,7 +306,8 @@
 </ul>
 <p aria-level="2" class="caption" role="heading"><span class="caption-text">SIMT primitives</span></p>
 <ul class="current nav bd-sidenav">
-<li class="toctree-l1 current active"><a class="current reference internal" href="#">Atomics and bit operations</a></li>
+<li class="toctree-l1 current active"><a class="current reference internal" href="#">Atomics</a></li>
+<li class="toctree-l1"><a class="reference internal" href="math.html">Math</a></li>
 <li class="toctree-l1"><a class="reference internal" href="subgroup.html">Subgroup primitives</a></li>
 <li class="toctree-l1"><a class="reference internal" href="tile16.html">Tile16x16: register-resident 16x16 tiles</a></li>
 </ul>
@@ -379,7 +380,7 @@
     
     <li class="breadcrumb-item"><a href="index.html" class="nav-link">User guide</a></li>
     
-    <li class="breadcrumb-item active" aria-current="page"><span class="ellipsis">Atomics and bit operations</span></li>
+    <li class="breadcrumb-item active" aria-current="page"><span class="ellipsis">Atomics</span></li>
   </ul>
 </nav>
 </div>
@@ -396,14 +397,11 @@
 <div id="searchbox"></div>
                 <article class="bd-article">
                   
-  <section class="tex2jax_ignore mathjax_ignore" id="atomics-and-bit-operations">
-<h1>Atomics and bit operations<a class="headerlink" href="#atomics-and-bit-operations" title="Link to this heading">#</a></h1>
-<p>Per-thread primitives — operations a single thread executes on its own registers or on a single memory location. They do not synchronize threads; the only ordering they provide is the per-location atomicity of the read-modify-write itself. For cooperative ops across threads see the <code class="docutils literal notranslate"><span class="pre">qd.simt.block.*</span></code>, <code class="docutils literal notranslate"><span class="pre">qd.simt.subgroup.*</span></code>, and <code class="docutils literal notranslate"><span class="pre">qd.simt.grid.*</span></code> namespaces.</p>
-<p>This page covers two groups: atomic read-modify-write operations on global / shared memory (<code class="docutils literal notranslate"><span class="pre">qd.atomic_*</span></code>), and bit-counting helpers on integer registers (<code class="docutils literal notranslate"><span class="pre">qd.math.popcnt</span></code>, <code class="docutils literal notranslate"><span class="pre">qd.math.clz</span></code>).</p>
+  <section class="tex2jax_ignore mathjax_ignore" id="atomics">
+<h1>Atomics<a class="headerlink" href="#atomics" title="Link to this heading">#</a></h1>
+<p>Atomic read-modify-write operations on a single memory location. They do not synchronize threads; the only ordering they provide is the per-location atomicity of the read-modify-write itself. For cooperative ops across threads see the <code class="docutils literal notranslate"><span class="pre">qd.simt.block.*</span></code>, <code class="docutils literal notranslate"><span class="pre">qd.simt.subgroup.*</span></code>, and <code class="docutils literal notranslate"><span class="pre">qd.simt.grid.*</span></code> namespaces. Bit-counting helpers on integer registers (<code class="docutils literal notranslate"><span class="pre">qd.math.popcnt</span></code>, <code class="docutils literal notranslate"><span class="pre">qd.math.clz</span></code>) are documented in <a class="reference internal" href="math.html"><span class="std std-doc">math</span></a>.</p>
 <section id="what-s-available">
 <h2>What’s available<a class="headerlink" href="#what-s-available" title="Link to this heading">#</a></h2>
-<section id="atomics">
-<h3>Atomics<a class="headerlink" href="#atomics" title="Link to this heading">#</a></h3>
 <p>All atomic ops follow the same shape: <code class="docutils literal notranslate"><span class="pre">qd.atomic_op(x,</span> <span class="pre">y)</span></code> performs <code class="docutils literal notranslate"><span class="pre">x</span> <span class="pre">=</span> <span class="pre">op(x,</span> <span class="pre">y)</span></code> atomically and returns the <strong>old</strong> value of <code class="docutils literal notranslate"><span class="pre">x</span></code>. <code class="docutils literal notranslate"><span class="pre">x</span></code> must be a writable memory target (a field element, ndarray element, or matrix slot); scalars and constant expressions are not allowed.</p>
 <div class="pst-scrollable-table-container"><table class="table">
 <thead>
@@ -495,41 +493,7 @@
 </div>
 <p>* <code class="docutils literal notranslate"><span class="pre">f64</span></code> atomic add / sub / mul / min / max is hardware-dependent: supported on CUDA sm_60+ for <code class="docutils literal notranslate"><span class="pre">add</span></code>, falls back to a CAS loop elsewhere or raises at codegen time on older targets and on backends that do not lower a CAS loop. Prefer <code class="docutils literal notranslate"><span class="pre">f32</span></code> on hot paths if portability matters.</p>
 <p>There is no <code class="docutils literal notranslate"><span class="pre">atomic_cas</span></code> (compare-and-swap) exposed in Python today. The C++ runtime uses CmpXchg internally; surfacing it requires extending <code class="docutils literal notranslate"><span class="pre">AtomicOpType</span></code>.</p>
-<p>All atomic ops work on both global memory (fields, ndarrays) and block-shared memory (<code class="docutils literal notranslate"><span class="pre">qd.simt.block.SharedArray</span></code>). They are sequentially consistent on the location they touch; they are <strong>not</strong> memory fences for the rest of the address space — to publish other writes alongside an atomic, pair the atomic with <code class="docutils literal notranslate"><span class="pre">qd.simt.block.mem_sync()</span></code> (block scope) or <code class="docutils literal notranslate"><span class="pre">qd.simt.grid.memfence()</span></code> (device scope).</p>
-</section>
-<section id="bit-counting-helpers">
-<h3>Bit-counting helpers<a class="headerlink" href="#bit-counting-helpers" title="Link to this heading">#</a></h3>
-<div class="pst-scrollable-table-container"><table class="table">
-<thead>
-<tr class="row-odd"><th class="head"><p>Op</p></th>
-<th class="head"><p>What it returns</p></th>
-<th class="head"><p>i32</p></th>
-<th class="head"><p>u32</p></th>
-<th class="head"><p>i64</p></th>
-<th class="head"><p>u64</p></th>
-</tr>
-</thead>
-<tbody>
-<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">qd.math.popcnt(x)</span></code></p></td>
-<td><p>Number of set bits in <code class="docutils literal notranslate"><span class="pre">x</span></code></p></td>
-<td><p>yes</p></td>
-<td><p>yes</p></td>
-<td><p>yes</p></td>
-<td><p>yes</p></td>
-</tr>
-<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">qd.math.clz(x)</span></code></p></td>
-<td><p>Number of leading zero bits in <code class="docutils literal notranslate"><span class="pre">x</span></code></p></td>
-<td><p>yes</p></td>
-<td><p>*</p></td>
-<td><p>yes</p></td>
-<td><p>*</p></td>
-</tr>
-</tbody>
-</table>
-</div>
-<p>* <code class="docutils literal notranslate"><span class="pre">qd.math.clz</span></code> on CUDA currently rejects unsigned 32- and 64-bit inputs (<code class="docutils literal notranslate"><span class="pre">QD_NOT_IMPLEMENTED</span></code>); cast through <code class="docutils literal notranslate"><span class="pre">qd.bit_cast(x,</span> <span class="pre">qd.i32)</span></code> / <code class="docutils literal notranslate"><span class="pre">qd.i64</span></code> as a workaround. On SPIR-V, <code class="docutils literal notranslate"><span class="pre">qd.math.clz</span></code> is hard-coded to 32-bit (<code class="docutils literal notranslate"><span class="pre">FindMSB</span></code>); 64-bit input is silently truncated.</p>
-<p>The classic CUDA bit-tricks <code class="docutils literal notranslate"><span class="pre">__ffs</span></code> (find first set bit) and <code class="docutils literal notranslate"><span class="pre">__fns</span></code> (find n-th set bit in a mask) are not exposed; for a leading-zero count of a u32, the <code class="docutils literal notranslate"><span class="pre">bit_cast</span></code> workaround above is the canonical approach.</p>
-</section>
+<p>All atomic ops can be called on either global memory (fields, ndarrays) or block-shared memory (<code class="docutils literal notranslate"><span class="pre">qd.simt.block.SharedArray</span></code>). They are sequentially consistent on the location they touch; they are <strong>not</strong> memory fences for the rest of the address space — to publish other writes alongside an atomic, pair the atomic with <code class="docutils literal notranslate"><span class="pre">qd.simt.block.mem_sync()</span></code> (block scope) or <code class="docutils literal notranslate"><span class="pre">qd.simt.grid.memfence()</span></code> (device scope).</p>
 </section>
 <section id="semantics">
 <h2>Semantics<a class="headerlink" href="#semantics" title="Link to this heading">#</a></h2>
@@ -562,65 +526,6 @@
 <h3><code class="docutils literal notranslate"><span class="pre">qd.atomic_sub(x,</span> <span class="pre">y)</span></code> / <code class="docutils literal notranslate"><span class="pre">qd.atomic_mul(x,</span> <span class="pre">y)</span></code><a class="headerlink" href="#qd-atomic-sub-x-y-qd-atomic-mul-x-y" title="Link to this heading">#</a></h3>
 <p>Atomic subtract and atomic multiply. <code class="docutils literal notranslate"><span class="pre">atomic_sub</span></code> is supported natively on most backends; <code class="docutils literal notranslate"><span class="pre">atomic_mul</span></code> on integer types lowers to a CAS loop on hardware without a native multiply atomic and is intentionally not heavily optimised — prefer reducing to a different scheme on hot paths.</p>
 </section>
-<section id="qd-math-popcnt-x">
-<h3><code class="docutils literal notranslate"><span class="pre">qd.math.popcnt(x)</span></code><a class="headerlink" href="#qd-math-popcnt-x" title="Link to this heading">#</a></h3>
-<p>Counts set bits in <code class="docutils literal notranslate"><span class="pre">x</span></code> and returns an <code class="docutils literal notranslate"><span class="pre">i32</span></code>. Lowers to <code class="docutils literal notranslate"><span class="pre">__popc</span></code> / <code class="docutils literal notranslate"><span class="pre">__popcll</span></code> on CUDA, <code class="docutils literal notranslate"><span class="pre">OpBitCount</span></code> on SPIR-V, <code class="docutils literal notranslate"><span class="pre">__builtin_amdgcn_popcnt</span></code> on AMDGPU. Defined for all integer dtypes.</p>
-</section>
-<section id="qd-math-clz-x">
-<h3><code class="docutils literal notranslate"><span class="pre">qd.math.clz(x)</span></code><a class="headerlink" href="#qd-math-clz-x" title="Link to this heading">#</a></h3>
-<p>Counts leading zero bits in <code class="docutils literal notranslate"><span class="pre">x</span></code> and returns an <code class="docutils literal notranslate"><span class="pre">i32</span></code>. For a 32-bit input, <code class="docutils literal notranslate"><span class="pre">clz(0)</span> <span class="pre">=</span> <span class="pre">32</span></code>; otherwise the result is in <code class="docutils literal notranslate"><span class="pre">[0,</span> <span class="pre">31]</span></code>. Lowers to <code class="docutils literal notranslate"><span class="pre">__nv_clz</span></code> / <code class="docutils literal notranslate"><span class="pre">__nv_clzll</span></code> on CUDA, <code class="docutils literal notranslate"><span class="pre">FindMSB</span></code> on SPIR-V (with <code class="docutils literal notranslate"><span class="pre">bitwidth</span> <span class="pre">-</span> <span class="pre">1</span> <span class="pre">-</span> <span class="pre">FindMSB</span></code> to convert MSB index into leading-zero count), <code class="docutils literal notranslate"><span class="pre">__builtin_amdgcn_sffbh_i32</span></code> on AMDGPU. See the cross-backend caveats in the support table.</p>
-</section>
-</section>
-<section id="examples">
-<h2>Examples<a class="headerlink" href="#examples" title="Link to this heading">#</a></h2>
-<section id="reserving-a-slot-in-an-output-array">
-<h3>Reserving a slot in an output array<a class="headerlink" href="#reserving-a-slot-in-an-output-array" title="Link to this heading">#</a></h3>
-<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">counter</span> <span class="o">=</span> <span class="n">qd</span><span class="o">.</span><span class="n">field</span><span class="p">(</span><span class="n">qd</span><span class="o">.</span><span class="n">i32</span><span class="p">,</span> <span class="n">shape</span><span class="o">=</span><span class="p">())</span>
-<span class="n">output</span>  <span class="o">=</span> <span class="n">qd</span><span class="o">.</span><span class="n">field</span><span class="p">(</span><span class="n">qd</span><span class="o">.</span><span class="n">f32</span><span class="p">,</span> <span class="n">shape</span><span class="o">=</span><span class="p">(</span><span class="n">MAX_OUTPUTS</span><span class="p">,))</span>
-
-<span class="nd">@qd</span><span class="o">.</span><span class="n">kernel</span>
-<span class="k">def</span><span class="w"> </span><span class="nf">emit</span><span class="p">(</span><span class="n">values</span><span class="p">:</span> <span class="n">qd</span><span class="o">.</span><span class="n">types</span><span class="o">.</span><span class="n">NDArray</span><span class="p">[</span><span class="n">qd</span><span class="o">.</span><span class="n">f32</span><span class="p">,</span> <span class="mi">1</span><span class="p">],</span> <span class="n">threshold</span><span class="p">:</span> <span class="n">qd</span><span class="o">.</span><span class="n">f32</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
-    <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">values</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">0</span><span class="p">]):</span>
-        <span class="k">if</span> <span class="n">values</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="o">&gt;</span> <span class="n">threshold</span><span class="p">:</span>
-            <span class="n">slot</span> <span class="o">=</span> <span class="n">qd</span><span class="o">.</span><span class="n">atomic_add</span><span class="p">(</span><span class="n">counter</span><span class="p">[</span><span class="kc">None</span><span class="p">],</span> <span class="mi">1</span><span class="p">)</span>
-            <span class="n">output</span><span class="p">[</span><span class="n">slot</span><span class="p">]</span> <span class="o">=</span> <span class="n">values</span><span class="p">[</span><span class="n">i</span><span class="p">]</span>
-</pre></div>
-</div>
-<p>Every thread that passes the predicate gets a unique <code class="docutils literal notranslate"><span class="pre">slot</span></code> from the counter. The pattern is the workhorse of select / compact and contact-pair generation.</p>
-</section>
-<section id="histogram">
-<h3>Histogram<a class="headerlink" href="#histogram" title="Link to this heading">#</a></h3>
-<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">hist</span> <span class="o">=</span> <span class="n">qd</span><span class="o">.</span><span class="n">field</span><span class="p">(</span><span class="n">qd</span><span class="o">.</span><span class="n">i32</span><span class="p">,</span> <span class="n">shape</span><span class="o">=</span><span class="p">(</span><span class="n">NBINS</span><span class="p">,))</span>
-
-<span class="nd">@qd</span><span class="o">.</span><span class="n">kernel</span>
-<span class="k">def</span><span class="w"> </span><span class="nf">histogram</span><span class="p">(</span><span class="n">samples</span><span class="p">:</span> <span class="n">qd</span><span class="o">.</span><span class="n">types</span><span class="o">.</span><span class="n">NDArray</span><span class="p">[</span><span class="n">qd</span><span class="o">.</span><span class="n">f32</span><span class="p">,</span> <span class="mi">1</span><span class="p">])</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
-    <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">samples</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">0</span><span class="p">]):</span>
-        <span class="n">b</span> <span class="o">=</span> <span class="n">qd</span><span class="o">.</span><span class="n">i32</span><span class="p">(</span><span class="n">samples</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="o">*</span> <span class="n">NBINS</span><span class="p">)</span>
-        <span class="k">if</span> <span class="mi">0</span> <span class="o">&lt;=</span> <span class="n">b</span> <span class="o">&lt;</span> <span class="n">NBINS</span><span class="p">:</span>
-            <span class="n">qd</span><span class="o">.</span><span class="n">atomic_add</span><span class="p">(</span><span class="n">hist</span><span class="p">[</span><span class="n">b</span><span class="p">],</span> <span class="mi">1</span><span class="p">)</span>
-</pre></div>
-</div>
-</section>
-<section id="bitset-population-count">
-<h3>Bitset population count<a class="headerlink" href="#bitset-population-count" title="Link to this heading">#</a></h3>
-<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="nd">@qd</span><span class="o">.</span><span class="n">kernel</span>
-<span class="k">def</span><span class="w"> </span><span class="nf">count_bits</span><span class="p">(</span><span class="n">masks</span><span class="p">:</span> <span class="n">qd</span><span class="o">.</span><span class="n">types</span><span class="o">.</span><span class="n">NDArray</span><span class="p">[</span><span class="n">qd</span><span class="o">.</span><span class="n">u32</span><span class="p">,</span> <span class="mi">1</span><span class="p">],</span> <span class="n">total</span><span class="p">:</span> <span class="n">qd</span><span class="o">.</span><span class="n">types</span><span class="o">.</span><span class="n">NDArray</span><span class="p">[</span><span class="n">qd</span><span class="o">.</span><span class="n">i32</span><span class="p">,</span> <span class="mi">1</span><span class="p">])</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
-    <span class="n">n</span> <span class="o">=</span> <span class="mi">0</span>
-    <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">masks</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">0</span><span class="p">]):</span>
-        <span class="n">n</span> <span class="o">+=</span> <span class="n">qd</span><span class="o">.</span><span class="n">math</span><span class="o">.</span><span class="n">popcnt</span><span class="p">(</span><span class="n">masks</span><span class="p">[</span><span class="n">i</span><span class="p">])</span>
-    <span class="n">qd</span><span class="o">.</span><span class="n">atomic_add</span><span class="p">(</span><span class="n">total</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span> <span class="n">n</span><span class="p">)</span>
-</pre></div>
-</div>
-</section>
-<section id="highest-set-bit-morton-code-depth">
-<h3>Highest set bit (Morton-code depth)<a class="headerlink" href="#highest-set-bit-morton-code-depth" title="Link to this heading">#</a></h3>
-<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="nd">@qd</span><span class="o">.</span><span class="n">func</span>
-<span class="k">def</span><span class="w"> </span><span class="nf">msb</span><span class="p">(</span><span class="n">x</span><span class="p">:</span> <span class="n">qd</span><span class="o">.</span><span class="n">i32</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">qd</span><span class="o">.</span><span class="n">i32</span><span class="p">:</span>
-    <span class="k">return</span> <span class="mi">31</span> <span class="o">-</span> <span class="n">qd</span><span class="o">.</span><span class="n">math</span><span class="o">.</span><span class="n">clz</span><span class="p">(</span><span class="n">x</span><span class="p">)</span>
-</pre></div>
-</div>
-<p>For <code class="docutils literal notranslate"><span class="pre">qd.u32</span></code> input on CUDA, cast first: <code class="docutils literal notranslate"><span class="pre">qd.math.clz(qd.bit_cast(x,</span> <span class="pre">qd.i32))</span></code>.</p>
-</section>
 </section>
 <section id="performance-and-portability-notes">
 <h2>Performance and portability notes<a class="headerlink" href="#performance-and-portability-notes" title="Link to this heading">#</a></h2>
@@ -629,12 +534,12 @@
 <li><p><strong>Pair atomics with the right fence scope.</strong> A bare atomic only orders the location it touches. To make other writes visible to readers that observe the new atomic value, follow the atomic with a fence: block-scope (<code class="docutils literal notranslate"><span class="pre">qd.simt.block.mem_sync()</span></code>) for shared-memory publishing, or grid-scope (<code class="docutils literal notranslate"><span class="pre">qd.simt.grid.memfence()</span></code>) for cross-block coordination.</p></li>
 <li><p><strong><code class="docutils literal notranslate"><span class="pre">f64</span></code> atomics fall off the fast path</strong> on most backends; if you only need monotonic accumulation, consider Kahan summation in registers and a single atomic-add at the end of the block.</p></li>
 <li><p><strong><code class="docutils literal notranslate"><span class="pre">atomic_mul</span></code> is generally a CAS loop</strong> under the hood; don’t put it on the hot path.</p></li>
-<li><p><strong>Bit-trick portability is uneven.</strong> <code class="docutils literal notranslate"><span class="pre">qd.math.popcnt</span></code> is fully cross-backend; <code class="docutils literal notranslate"><span class="pre">qd.math.clz</span></code> has the dtype caveats noted above. Tests that depend on <code class="docutils literal notranslate"><span class="pre">qd.math.clz</span></code> over u32 or u64 should <code class="docutils literal notranslate"><span class="pre">bit_cast</span></code> to the matching signed type for portability.</p></li>
 </ul>
 </section>
 <section id="related">
 <h2>Related<a class="headerlink" href="#related" title="Link to this heading">#</a></h2>
 <ul class="simple">
+<li><p><a class="reference internal" href="math.html"><span class="std std-doc">math</span></a> — <code class="docutils literal notranslate"><span class="pre">qd.math.*</span></code>, including the bit-counting helpers (<code class="docutils literal notranslate"><span class="pre">popcnt</span></code>, <code class="docutils literal notranslate"><span class="pre">clz</span></code>) commonly paired with atomics in select / compact patterns.</p></li>
 <li><p><code class="docutils literal notranslate"><span class="pre">qd.simt.block.*</span></code> — block-scope barriers and memory fences (<code class="docutils literal notranslate"><span class="pre">qd.simt.block.mem_sync()</span></code>).</p></li>
 <li><p><code class="docutils literal notranslate"><span class="pre">qd.simt.subgroup.*</span></code> — warp-scope reductions and shuffles, the recommended pre-aggregation step before an atomic.</p></li>
 <li><p><code class="docutils literal notranslate"><span class="pre">qd.simt.grid.*</span></code> — device-scope memory fence (<code class="docutils literal notranslate"><span class="pre">qd.simt.grid.memfence()</span></code>).</p></li>
@@ -663,11 +568,11 @@
       </div>
     </a>
     <a class="right-next"
-       href="subgroup.html"
+       href="math.html"
        title="next page">
       <div class="prev-next-info">
         <p class="prev-next-subtitle">next</p>
-        <p class="prev-next-title">Subgroup primitives</p>
+        <p class="prev-next-title">Math</p>
       </div>
       <i class="fa-solid fa-angle-right"></i>
     </a>
@@ -690,25 +595,12 @@
   </div>
   <nav id="pst-page-toc-nav" class="page-toc" aria-labelledby="pst-page-navigation-heading-2">
     <ul class="pst-show_toc_level nav section-nav flex-column">
-<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#what-s-available">What’s available</a><ul class="nav section-nav flex-column">
-<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#atomics">Atomics</a></li>
-<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#bit-counting-helpers">Bit-counting helpers</a></li>
-</ul>
-</li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#what-s-available">What’s available</a></li>
 <li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#semantics">Semantics</a><ul class="nav section-nav flex-column">
 <li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#qd-atomic-add-x-y-and-the-rest-of-the-family"><code class="docutils literal notranslate"><span class="pre">qd.atomic_add(x,</span> <span class="pre">y)</span></code> — and the rest of the family</a></li>
 <li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#qd-atomic-min-x-y-qd-atomic-max-x-y"><code class="docutils literal notranslate"><span class="pre">qd.atomic_min(x,</span> <span class="pre">y)</span></code> / <code class="docutils literal notranslate"><span class="pre">qd.atomic_max(x,</span> <span class="pre">y)</span></code></a></li>
 <li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#qd-atomic-and-x-y-qd-atomic-or-x-y-qd-atomic-xor-x-y"><code class="docutils literal notranslate"><span class="pre">qd.atomic_and(x,</span> <span class="pre">y)</span></code> / <code class="docutils literal notranslate"><span class="pre">qd.atomic_or(x,</span> <span class="pre">y)</span></code> / <code class="docutils literal notranslate"><span class="pre">qd.atomic_xor(x,</span> <span class="pre">y)</span></code></a></li>
 <li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#qd-atomic-sub-x-y-qd-atomic-mul-x-y"><code class="docutils literal notranslate"><span class="pre">qd.atomic_sub(x,</span> <span class="pre">y)</span></code> / <code class="docutils literal notranslate"><span class="pre">qd.atomic_mul(x,</span> <span class="pre">y)</span></code></a></li>
-<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#qd-math-popcnt-x"><code class="docutils literal notranslate"><span class="pre">qd.math.popcnt(x)</span></code></a></li>
-<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#qd-math-clz-x"><code class="docutils literal notranslate"><span class="pre">qd.math.clz(x)</span></code></a></li>
-</ul>
-</li>
-<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#examples">Examples</a><ul class="nav section-nav flex-column">
-<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#reserving-a-slot-in-an-output-array">Reserving a slot in an output array</a></li>
-<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#histogram">Histogram</a></li>
-<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#bitset-population-count">Bitset population count</a></li>
-<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#highest-set-bit-morton-code-depth">Highest set bit (Morton-code depth)</a></li>
 </ul>
 </li>
 <li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#performance-and-portability-notes">Performance and portability notes</a></li>
