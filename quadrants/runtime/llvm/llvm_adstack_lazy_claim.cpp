@@ -661,14 +661,21 @@ std::unordered_map<uint64_t, int64_t> LlvmRuntimeExecutor::dispatch_max_reducers
       fprintf(stderr, "\n");
       fflush(stderr);
     }
-    // DEBUG: short-circuit the launch. Returning empty after the body encoder has already run lets
-    // `publish_adstack_metadata` fall through to the unsubstituted-tree path (which works at this commit thanks
-    // to the worst-case-num-threads fallback in the heap sizer), and fires the SIZER encoder so its
-    // `arg_buffer_offset` traces print and we can compare against the body encoder's offset.
-    fprintf(stderr, "[max-reducer dispatch] SHORT-CIRCUIT: skipping kernel launch; returning empty result map\n");
-    fflush(stderr);
-    (void)runtime_jit;  // suppress unused warning
-    return MaxReducerResultMap{};
+    // FIX HYPOTHESIS: the launcher's `memcpy_host_to_device_async(device_arg_buffer, ..., stream=nullptr)` is
+    // async on the null stream. The dispatch's kernel launch via `runtime_jit->call(...)` evidently runs on a
+    // different stream (CUDAContext's `stream_`), so the kernel could fire BEFORE the arg-buffer h2d copy has
+    // landed - reading stale / zero bytes at the encoder's resolved offsets (we observed `arg_buffer[+32]=0x3`
+    // in the kernel while the host-side dump at the same moment showed the correct device pointer there). Force
+    // a host-side sync of the null stream so prior async copies (arg buffer + ctx staging) are committed before
+    // the kernel reads.
+#if defined(QD_WITH_CUDA)
+    if (config_.arch == Arch::cuda) {
+      CUDADriver::get_instance().stream_synchronize(nullptr);
+    }
+#endif
+    runtime_jit->call<void *, void *, void *, void *>("runtime_eval_adstack_max_reduce", llvm_runtime_,
+                                                      runtime_context_ptr_for_reducer, params_dev_ptr,
+                                                      bytecode_dev_ptr);
   }
 
   // Read back the per-spec output slots. Single contiguous d2h.
