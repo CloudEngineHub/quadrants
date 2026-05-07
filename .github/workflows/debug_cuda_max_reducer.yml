@@ -1,0 +1,311 @@
+name: Debug CUDA T4 max-reducer hang
+
+# DO NOT MERGE. Single-job workflow that builds Quadrants in editable mode on a `gpu-t4-4-core`
+# runner, runs the proven reproducer, captures a compute-sanitizer trace + dmesg Xid events,
+# then drops into a blocking tmate session so we can iterate inside the same source tree.
+#
+# Findings carried over from the previous debug session:
+#   * Reproducer = `pytest -n 8 --count 50 tests/python/test_ad_ndarray.py -k cuda` on T4. ~50% of
+#     workers see their FIRST or SECOND launched test crash with `CUDA_ERROR_ILLEGAL_ADDRESS while
+#     calling cuStreamSynchronize / cuMemsetD8 / cuMemFreeAsync`.
+#   * `dmesg` shows `Xid 31 ... MMU Fault: ENGINE GRAPHICS GPC0 GPCCLIENT_T1_0 faulted @ 0x???_??000000.
+#     Fault is of type FAULT_PDE ACCESS_TYPE_VIRT_WRITE` followed by `Xid 109 CTX SWITCH TIMEOUT`.
+#     A CUDA kernel is writing to a stale / out-of-bounds device pointer; subsequent ops fail until
+#     the GPU is wedged.
+#   * Host stack at the surfaced symptom = `Ndarray::write_float -> Ndarray::write -> allocate_memory
+#     (small staging buffer) -> cuMemset` failing because the context is already corrupted by the
+#     earlier OOB write.
+#
+# This workflow:
+#   1. Builds Quadrants editable, CUDA-only (no Vulkan / AMDGPU / cpp tests, so iteration via
+#      `cd _skbuild/*/cmake-build && cmake --build .` inside tmate is fast).
+#   2. Pre-installs `nvidia-cuda-toolkit` so `compute-sanitizer` is available.
+#   3. Captures system / driver / HMM info + the pre-test `dmesg` snapshot.
+#   4. Runs the reproducer with `CUDA_LAUNCH_BLOCKING=1`, captures the failure traceback.
+#   5. Snapshots `dmesg` again so the new Xid lines are visible.
+#   6. Re-runs the previously-failed tests under `compute-sanitizer --tool memcheck`. Its first
+#      `Invalid write` block is the offending kernel.
+#   7. Drops into tmate. The full source tree is at `$GITHUB_WORKSPACE`; rebuild via
+#      `cd _skbuild/*/cmake-build && cmake --build .` after editing.
+#   8. Uploads `/tmp/repro/` as an artifact.
+
+on:
+  pull_request:
+    types: [opened, reopened, synchronize]
+  workflow_dispatch:
+    inputs:
+      quadrants_ref:
+        description: "Quadrants ref to build + test (branch / tag / SHA). Default = HEAD of duburcqa/adstack_max_reducer_shader without speculative fix."
+        required: false
+        default: "efd3f69abba15b574bf729ae11239d2a203a5f40"
+      tmate_timeout_minutes:
+        description: "tmate session timeout (minutes). `touch /tmp/continue` from inside the shell to skip the rest of the wait."
+        required: false
+        default: "60"
+      reproduce_count:
+        description: "pytest --count value for the reproducer (multiplier per test)."
+        required: false
+        default: "50"
+
+concurrency:
+  # Group keyed on the run id so two manual `workflow_dispatch` invocations (or a push synced on top
+  # of an active tmate session) coexist instead of cancelling each other. Debug runs are interactive
+  # via tmate; cancelling a live tmate session because a new push landed is exactly what we do not
+  # want here.
+  group: ${{ github.workflow }}-${{ github.run_id }}
+  cancel-in-progress: false
+
+jobs:
+  debug_cuda_t4:
+    name: Build + reproduce + sanitizer + tmate on CUDA T4
+    runs-on: gpu-t4-4-core
+    env:
+      QUADRANTS_REF: ${{ github.event.inputs.quadrants_ref || 'efd3f69abba15b574bf729ae11239d2a203a5f40' }}
+      TMATE_TIMEOUT: ${{ github.event.inputs.tmate_timeout_minutes || '60' }}
+      REPRODUCE_COUNT: ${{ github.event.inputs.reproduce_count || '50' }}
+      QD_OFFLINE_CACHE: "0"
+      QD_OFFLINE_CACHE_CLEANING_POLICY: "never"
+      QD_DEBUG_ADSTACK: "1"
+      PYTHONUNBUFFERED: "1"
+      PYTHONFAULTHANDLER: "1"
+      CUDA_LAUNCH_BLOCKING: "1"
+      QUADRANTS_CMAKE_ARGS: "-DQD_WITH_VULKAN:BOOL=OFF -DQD_WITH_CUDA:BOOL=ON -DQD_WITH_AMDGPU:BOOL=OFF -DQD_BUILD_TESTS:BOOL=OFF"
+    steps:
+      - name: Checkout Quadrants at the target ref
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ env.QUADRANTS_REF }}
+          fetch-depth: 1
+          submodules: recursive
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.10'
+
+      - name: Capture system / driver / HMM info + initial dmesg
+        run: |
+          set +e
+          mkdir -p /tmp/repro
+          {
+            echo "=== uname / lsb_release ==="
+            uname -a
+            cat /etc/os-release | head -5
+            echo "=== nvidia-smi ==="
+            nvidia-smi
+            echo "=== driver version ==="
+            cat /proc/driver/nvidia/version
+            echo "=== HMM device attrs ==="
+            python3 - <<'PY'
+          import ctypes
+          libcuda = ctypes.CDLL('libcuda.so.1'); libcuda.cuInit(0)
+          dev = ctypes.c_int(); libcuda.cuDeviceGet(ctypes.byref(dev), 0)
+          name = ctypes.create_string_buffer(256); libcuda.cuDeviceGetName(name, 256, dev)
+          attr = ctypes.c_int()
+          for code, label in [(83, 'MANAGED_MEMORY'), (88, 'PAGEABLE_MEMORY_ACCESS'),
+                              (99, 'PAGEABLE_MEMORY_ACCESS_USES_HOST_PAGE_TABLES')]:
+              libcuda.cuDeviceGetAttribute(ctypes.byref(attr), code, dev)
+              print(f"  {label}: {attr.value}")
+          print(f"  device: {name.value.decode()}")
+          PY
+            echo "=== runner image ==="
+            cat /imagegeneration/imagedata.json 2>/dev/null
+          } | tee /tmp/repro/system_identity.txt
+          # Snapshot dmesg BEFORE the reproducer so we can diff against a post-run snapshot.
+          sudo dmesg --ctime > /tmp/repro/dmesg_before.log 2>/dev/null
+
+      - name: Install OS build deps + CUDA libs + compute-sanitizer
+        run: |
+          set -ex
+          sudo apt-get update -y
+          sudo apt-get install -y \
+            build-essential cmake ninja-build pkg-config git \
+            libcusolver-dev-12-8 libcusolver-12-8 libcusparse-dev-12-8 libcusparse-12-8 \
+            libnvjitlink-12-8 libcublas-12-8 \
+            nvidia-cuda-toolkit
+          echo "/usr/local/cuda/targets/x86_64-linux/lib" | sudo tee /etc/ld.so.conf.d/cuda-targets.conf
+          sudo ldconfig
+          which compute-sanitizer
+          compute-sanitizer --version | head -3
+
+      - name: Install Python build deps + LLVM toolchain
+        run: |
+          set -ex
+          python -m pip install --upgrade pip setuptools wheel
+          pip install --group dev
+          pip install --group test || true
+          pip install -r requirements_test_xdist.txt || true
+          pip install py-spy pytest-repeat
+          LLVM_DIR=$(python download_llvm.py | tail -n 1)
+          echo "LLVM_DIR=${LLVM_DIR}" >> $GITHUB_ENV
+          echo "${LLVM_DIR}/bin" >> $GITHUB_PATH
+          chmod +x ${LLVM_DIR}/bin/* || true
+          ${LLVM_DIR}/bin/clang --version | head -1
+
+      - name: Build in develop mode (./build.py --write-env + python setup.py develop)
+        run: |
+          set -ex
+          # Develop install, no wheel, no isolation. Mirrors the project's local-iteration flow
+          # (`./build.py --shell` + `python setup.py develop`) but non-interactive: `./build.py
+          # --write-env=<file>` dumps the cmake / LLVM / sccache env vars (the same ones the
+          # interactive shell mode exports), we source it, then `setup.py develop` runs skbuild's
+          # cmake build + DevelopWithStubs install. After this the source tree IS the install: edit
+          # a .cpp, then `cd _skbuild/*/cmake-build && cmake --build . -j` and the egg-linked
+          # package picks up the new .so. NEVER `pip install -e` (this project does not use
+          # scikit-build-core as a build backend; editable install ships a python-only stub).
+          ./build.py --write-env=/tmp/build_env.sh
+          set +x; source /tmp/build_env.sh; set -x
+          python setup.py develop 2>&1 | tail -40
+          python -c "import quadrants as qd; qd.init(arch=qd.cuda); print('cuda init OK')" 2>&1 | tee /tmp/repro/cuda_init.log
+          BUILD_DIR=$(ls -d _skbuild/*/cmake-build 2>/dev/null | head -1)
+          echo "BUILD_DIR=${BUILD_DIR}" | tee -a $GITHUB_ENV
+          ls -la "${BUILD_DIR}/" | head -5
+
+      - name: Stage repro helpers under /tmp/repro/
+        run: |
+          set -ex
+          # Inline-write so the workflow does NOT depend on any file in the source tree.
+          cat <<'SH' > /tmp/repro/run_reproducer.sh
+          #!/bin/bash
+          set -x
+          cd "$(git rev-parse --show-toplevel 2>/dev/null || pwd)"
+          export QD_OFFLINE_CACHE=0 QD_DEBUG_ADSTACK=1 PYTHONUNBUFFERED=1 PYTHONFAULTHANDLER=1 CUDA_LAUNCH_BLOCKING=1
+          exec python -m pytest -n 8 --count "${1:-50}" -ra -v --tb=long \
+            tests/python/test_ad_ndarray.py -k cuda
+          SH
+          chmod +x /tmp/repro/run_reproducer.sh
+
+          cat <<'SH' > /tmp/repro/run_sanitizer.sh
+          #!/bin/bash
+          set -x
+          cd "$(git rev-parse --show-toplevel 2>/dev/null || pwd)"
+          export QD_OFFLINE_CACHE=0 QD_DEBUG_ADSTACK=1 PYTHONUNBUFFERED=1 PYTHONFAULTHANDLER=1 CUDA_LAUNCH_BLOCKING=1
+          # `--lf` runs only the previously-failed tests; serial (-n 0) so sanitizer output stays sane.
+          exec compute-sanitizer --tool memcheck --print-limit 50 --launch-timeout 0 --error-exitcode 99 \
+            python -m pytest -n 0 --lf -x --tb=long -v
+          SH
+          chmod +x /tmp/repro/run_sanitizer.sh
+
+          cat <<'PY' > /tmp/repro/repro_cuda.py
+          # Standalone repro of test_ad_fibonacci with faulthandler. Useful for `py-spy --native --locals`.
+          import argparse, faulthandler, os, sys, time
+          os.environ.setdefault("QD_OFFLINE_CACHE", "0")
+          faulthandler.enable(); faulthandler.dump_traceback_later(15, repeat=True, file=sys.stderr)
+          ap = argparse.ArgumentParser(); ap.add_argument("--arch", default="cuda"); args = ap.parse_args()
+          import quadrants as qd
+          qd.init(arch=getattr(qd, args.arch))
+          N = 15
+          a = qd.ndarray(qd.f32, shape=N, needs_grad=True); b = qd.ndarray(qd.f32, shape=N, needs_grad=True)
+          c = qd.ndarray(qd.i32, shape=N); f = qd.ndarray(qd.f32, shape=N, needs_grad=True)
+          @qd.kernel
+          def fib(a: qd.types.ndarray(), b: qd.types.ndarray(), c: qd.types.ndarray(), f: qd.types.ndarray()):
+              for i in range(N):
+                  p = a[i]; q = b[i]
+                  for j in range(c[i]): p, q = q, p + q
+                  f[i] = q
+          b.fill(1)
+          for i in range(N): c[i] = i
+          fib(a, b, c, f); qd.sync()
+          for i in range(N): f.grad[i] = 1
+          fib.grad(a, b, c, f); qd.sync()
+          print("OK")
+          PY
+
+          cat <<'EOF' > /tmp/repro/README.md
+          # Quick reference inside the tmate session
+
+          The Quadrants source tree is at \$GITHUB_WORKSPACE; the cmake build dir is at
+          _skbuild/<linux-arch>/cmake-build (path captured in env var BUILD_DIR).
+
+          Reproducer (-n 8 --count 50; full test_ad_ndarray.py -k cuda):
+              bash /tmp/repro/run_reproducer.sh
+
+          compute-sanitizer (memcheck) over previously-failed tests via pytest --lf:
+              bash /tmp/repro/run_sanitizer.sh
+
+          Standalone repro of test_ad_fibonacci with faulthandler self-dump:
+              python /tmp/repro/repro_cuda.py
+
+          Iterating: edit a .cpp file, rebuild only the changed compile unit, then copy the new .so
+          back into the installed package (NEVER \`pip install -e\` for iterative rebuilds; the
+          project does not use scikit-build-core, the editable install ships only python).
+              cd \$GITHUB_WORKSPACE
+              cd \$BUILD_DIR && cmake --build . -j && cd -
+              cp \$BUILD_DIR/quadrants_python.cpython-310-x86_64-linux-gnu.so \\
+                 python/quadrants/_lib/core/
+              bash /tmp/repro/run_reproducer.sh
+
+          Native stack of a hung repro (from a second tmate window):
+              sudo py-spy dump --pid \$(pgrep -f 'python -m pytest') --native --locals
+
+          Recovering after a GPU wedge: kill the live processes, then
+              touch /tmp/continue       # frees the workflow
+
+          dmesg Xid history (filled in pre-test, post-reproducer, post-sanitizer):
+              cat /tmp/repro/dmesg_*.log | grep -E 'Xid|MMU Fault'
+          EOF
+          ls -la /tmp/repro/
+
+      - name: Reproducer (-n 8 --count $REPRODUCE_COUNT, CUDA_LAUNCH_BLOCKING=1)
+        id: reproduce
+        continue-on-error: true
+        run: |
+          set -x
+          bash /tmp/repro/run_reproducer.sh "${REPRODUCE_COUNT}" 2>&1 | tee /tmp/repro/reproducer.log
+          echo "exit_code=${PIPESTATUS[0]}" >> $GITHUB_OUTPUT
+          # Snapshot dmesg right after the reproducer so the new Xid lines are visible.
+          sudo dmesg --ctime > /tmp/repro/dmesg_after_reproducer.log 2>/dev/null
+          echo "=== Xid lines added by the reproducer ==="
+          diff /tmp/repro/dmesg_before.log /tmp/repro/dmesg_after_reproducer.log \
+            | grep -E "Xid|MMU Fault|nvidia_uvm" | head -40 | tee /tmp/repro/xid_added.log
+
+      - name: compute-sanitizer over previously-failed tests
+        if: always() && steps.reproduce.outputs.exit_code != '0'
+        continue-on-error: true
+        run: |
+          set -x
+          bash /tmp/repro/run_sanitizer.sh 2>&1 | tee /tmp/repro/sanitizer.log
+          # Pull out the first illegal-access block.
+          {
+            echo "=== first illegal-access block ==="
+            grep -B 3 -A 40 "Invalid\|Out-of-bounds\|Misaligned\|Uninitialized\|Error" /tmp/repro/sanitizer.log | head -200
+            echo "=== summary ==="
+            tail -40 /tmp/repro/sanitizer.log
+          } | tee /tmp/repro/sanitizer_summary.txt
+
+      - name: Final dmesg snapshot
+        if: always()
+        run: |
+          sudo dmesg --ctime > /tmp/repro/dmesg_final.log 2>/dev/null
+          echo "=== Xid count by code (final) ==="
+          grep -oE "Xid \(PCI:[^)]*\): [0-9]+" /tmp/repro/dmesg_final.log 2>/dev/null \
+            | awk '{print $NF}' | sort | uniq -c | sort -rn | tee /tmp/repro/xid_summary.txt
+
+      - name: Upload all repro artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: debug_cuda_repro_artifacts
+          path: |
+            /tmp/repro/
+          if-no-files-found: ignore
+
+      - name: Tmate session AT THE VERY END (blocking, limit-access-to-actor)
+        # All log capture + artifact upload happens before this so the user attaches into a shell where
+        # `/tmp/repro/` is fully populated AND already mirrored to the workflow's artifact, even if the
+        # user's iteration inside the shell corrupts those files.
+        if: always()
+        uses: mxschmitt/action-tmate@v3
+        with:
+          limit-access-to-actor: true
+          detached: false
+          timeout-minutes: ${{ fromJSON(env.TMATE_TIMEOUT) }}
+
+      - name: Re-emit reproducer exit code
+        if: always()
+        run: |
+          ec="${{ steps.reproduce.outputs.exit_code }}"
+          echo "reproducer exit code: ${ec}"
+          if [ "${ec}" != "0" ]; then
+            exit "${ec:-1}"
+          fi

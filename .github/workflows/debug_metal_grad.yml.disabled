@@ -1,0 +1,236 @@
+name: Debug Metal AD pipeline
+
+# DO NOT MERGE. This workflow exists only on `duburcqa/debug_metal_grad_repro`
+# to reproduce the macos-15 (Apple M1 Virtual) reverse-grad pipeline-creation
+# failure seen in Genesis CI run 25099014645 (Genesis PR #2743). All other
+# workflows on this branch are renamed to `*.yml.disabled` so this is the
+# only job that runs on PR sync.
+
+on:
+  pull_request:
+    types: [opened, reopened, synchronize]
+  workflow_dispatch:
+    inputs:
+      genesis_ref:
+        description: "Genesis ref to test against (branch, tag, or SHA)"
+        required: false
+        default: "f8ed535c83dd275b321009f33952a7e0b4e67a3d"
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.head_ref || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  repro:
+    name: Build Quadrants + run failing Genesis grad tests (${{ matrix.os }})
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [macos-26]
+    runs-on: ${{ matrix.os }}
+
+    env:
+      GENESIS_REF: ${{ github.event.inputs.genesis_ref || 'f8ed535c83dd275b321009f33952a7e0b4e67a3d' }}
+      HF_HUB_DOWNLOAD_TIMEOUT: "60"
+      FORCE_COLOR: "1"
+      PY_COLORS: "1"
+      GS_CACHE_FILE_PATH: ".cache/genesis"
+      GS_ENABLE_NDARRAY: "1"
+      GS_TORCH_FORCE_CPU_DEVICE: "1"
+      # Cache off so the rebuild always observes the patched metal_device.mm.
+      QD_OFFLINE_CACHE: "0"
+      QD_OFFLINE_CACHE_CLEANING_POLICY: "never"
+      QD_OFFLINE_CACHE_FILE_PATH: ".cache/quadrants"
+      QD_ENABLE_CUDA: "0"
+      QD_ENABLE_AMDGPU: "0"
+      QD_ENABLE_METAL: "1"
+      # Instrumentation (verbose logging, IR / MSL dumps) is commented out for this run so the workflow
+      # exercises the production path with no extra side-effects on memory pressure or pipeline-create timing.
+      # QD_DEBUG: "1"
+      # QD_LOG_LEVEL: "trace"
+      # QD_DUMP_MSL: "1"
+      # QD_DUMP_IR: "1"
+      OMNI_KIT_ACCEPT_EULA: "yes"
+
+    steps:
+      - name: Checkout Quadrants
+        uses: actions/checkout@v4
+        with:
+          path: quadrants
+          submodules: recursive
+          fetch-depth: 1
+
+      - name: Checkout Genesis
+        uses: actions/checkout@v4
+        with:
+          repository: Genesis-Embodied-AI/Genesis
+          ref: ${{ env.GENESIS_REF }}
+          path: genesis
+          fetch-depth: 1
+
+      # - name: Print system information
+      #   run: |
+      #     sw_vers
+      #     uname -a
+      #     system_profiler SPDisplaysDataType | head -40 || true
+      #     clang --version
+      #     sysctl hw.memsize hw.physicalcpu hw.ncpu hw.cputype hw.cpusubtype hw.cpubrand_string 2>&1 | head -10
+      #     vm_stat 2>&1 | head -20
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Quadrants - prerequisites
+        working-directory: quadrants
+        run: bash .github/workflows/scripts_new/macosx/1_prerequisites.sh
+
+      - name: Quadrants - build wheel
+        working-directory: quadrants
+        run: bash .github/workflows/scripts_new/macosx/2_build.sh
+
+      - name: Install built Quadrants wheel
+        working-directory: quadrants
+        run: |
+          python -m pip install --upgrade pip setuptools wheel
+          pip install dist/*.whl
+          python -c "import quadrants as qd; print('Quadrants version:', qd.__version__)"
+
+      - name: Install torch (CPU build, matches Genesis CI)
+        run: |
+          pip3 install torch --upgrade --index-url https://download.pytorch.org/whl/cpu
+
+      - name: Install Genesis (and pin our Quadrants wheel afterwards)
+        working-directory: genesis
+        run: |
+          pip install ".[dev,usd]"
+          # Genesis pulls quadrants from PyPI as a dep; override with our locally built wheel.
+          pip install --force-reinstall --no-deps ../quadrants/dist/*.whl
+          python -c "import quadrants as qd; print('Quadrants version after pin:', qd.__version__)"
+          python -c "import genesis as gs; print('Genesis version:', gs.__version__)"
+
+      - name: Run failing reverse-grad tests
+        id: run_tests
+        working-directory: genesis
+        continue-on-error: true
+        run: |
+          set -x
+          # Run the entire test_grad module on the gpu backend so this exercises every reverse-mode path the
+          # sparse-adstack-heap PR touches, not just the original M1 push-test repro.
+          pytest -v -ra --logical --dev --backend gpu -n 0 -s \
+            ./tests/test_grad.py 2>&1 | tee pytest.log
+          echo "exit_code=${PIPESTATUS[0]}" >> $GITHUB_OUTPUT
+
+      # - name: Capture jetsam / MTLCompilerService kill events from system log
+      #   if: always()
+      #   run: |
+      #     mkdir -p /tmp/syslog
+      #     log show --last 10m --predicate 'eventMessage CONTAINS "jetsam" OR eventMessage CONTAINS "MTLCompilerService" OR eventMessage CONTAINS "MTLCompiler" OR eventMessage CONTAINS "AGXCompiler"' 2>&1 | head -200 > /tmp/syslog/jetsam_and_metal.txt || true
+      #     wc -l /tmp/syslog/jetsam_and_metal.txt
+      #     head -50 /tmp/syslog/jetsam_and_metal.txt
+      #     log show --last 10m --predicate 'eventMessage CONTAINS "lowSwap"' 2>&1 | head -100 > /tmp/syslog/lowSwap.txt || true
+      #     memory_pressure 2>&1 | tee /tmp/syslog/memory_pressure_now.txt | head -10 || true
+
+      - name: Upload pytest log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: pytest-log-${{ matrix.os }}
+          path: genesis/pytest.log
+          if-no-files-found: ignore
+
+      # - name: Upload IR / MSL dumps
+      #   if: always()
+      #   uses: actions/upload-artifact@v4
+      #   with:
+      #     name: ir-dump-${{ matrix.os }}
+      #     path: /tmp/ir/
+      #     if-no-files-found: ignore
+
+      # - name: Capture Apple's actual Metal-compiler output per kernel (xcrun metal -c)
+      #   if: always()
+      #   working-directory: genesis
+      #   run: |
+      #     set -x
+      #     xcrun metal --version 2>&1 | head -5 | tee /tmp/metal_toolchain_version.txt
+      #     xcrun --show-sdk-version | tee -a /tmp/metal_toolchain_version.txt
+      #     mkdir -p /tmp/metal_compile
+      #     python3 - <<'PY'
+      #     import re, os, subprocess
+      #     os.makedirs('/tmp/metal_compile', exist_ok=True)
+      #     log = open('pytest.log', 'r', errors='replace').read()
+      #     pattern = re.compile(r"=== MSL for kernel '([^']+)' ===\n(.*?)\n=== END MSL ===", re.DOTALL)
+      #     summary = []
+      #     for m in pattern.finditer(log):
+      #         name, body = m.group(1), m.group(2)
+      #         metal_path = f'/tmp/metal_compile/{name}.metal'
+      #         air_path = f'/tmp/metal_compile/{name}.air'
+      #         diag_path = f'/tmp/metal_compile/{name}.diag.txt'
+      #         with open(metal_path, 'w') as f:
+      #             f.write(body)
+      #         proc = subprocess.run(
+      #             ['xcrun', '-sdk', 'macosx', 'metal', '-std=macos-metal2.3', '-v', '-c', metal_path,
+      #              '-o', air_path],
+      #             capture_output=True, text=True, timeout=300)
+      #         with open(diag_path, 'w') as f:
+      #             f.write(f'# rc={proc.returncode}\n# stdout:\n{proc.stdout}\n# stderr:\n{proc.stderr}\n')
+      #         air_size = os.path.getsize(air_path) if os.path.exists(air_path) else 0
+      #         msl_size = os.path.getsize(metal_path)
+      #         summary.append((proc.returncode, msl_size, air_size, name))
+      #         print(f'[{proc.returncode}] {name}: msl={msl_size} bytes, air={air_size} bytes')
+      #     summary.sort(key=lambda r: (r[0], -r[1]))
+      #     with open('/tmp/metal_compile/_summary.tsv', 'w') as f:
+      #         f.write('returncode\tmsl_bytes\tair_bytes\tkernel\n')
+      #         for rc, ms, ab, n in summary:
+      #             f.write(f'{rc}\t{ms}\t{ab}\t{n}\n')
+      #     fails = [r for r in summary if r[0] != 0]
+      #     if fails:
+      #         print(f'\n=== {len(fails)} kernel(s) failed xcrun metal -c on ${{ matrix.os }} ===')
+      #         for rc, ms, ab, n in fails[:5]:
+      #             print(f'  rc={rc} msl_bytes={ms} kernel={n}')
+      #         first = fails[0][3]
+      #         print(f'\n=== Diagnostic for {first} ===')
+      #         with open(f'/tmp/metal_compile/{first}.diag.txt') as f:
+      #             print(f.read())
+      #     else:
+      #         print(f'\nAll {len(summary)} kernel(s) compiled cleanly via xcrun metal -c on ${{ matrix.os }}.')
+      #     PY
+
+      # - name: Upload xcrun metal compile diagnostics
+      #   if: always()
+      #   uses: actions/upload-artifact@v4
+      #   with:
+      #     name: metal-compile-${{ matrix.os }}
+      #     path: |
+      #       /tmp/metal_compile/
+      #       /tmp/metal_toolchain_version.txt
+      #     if-no-files-found: ignore
+
+      # - name: Upload memory / jetsam diagnostics
+      #   if: always()
+      #   uses: actions/upload-artifact@v4
+      #   with:
+      #     name: memory-diagnostics-${{ matrix.os }}
+      #     path: |
+      #       /tmp/mem_before.txt
+      #       /tmp/mem_after.txt
+      #       /tmp/syslog/
+      #     if-no-files-found: ignore
+
+      # - name: Setup tmate session for interactive debugging
+      #   if: always()
+      #   uses: mxschmitt/action-tmate@v3
+      #   with:
+      #     limit-access-to-actor: true
+      #     detached: false
+      #     timeout-minutes: 60
+
+      - name: Re-emit pytest exit code
+        if: always()
+        run: |
+          ec="${{ steps.run_tests.outputs.exit_code }}"
+          echo "pytest exit code: ${ec}"
+          if [ "${ec}" != "0" ]; then
+            exit "${ec:-1}"
+          fi
