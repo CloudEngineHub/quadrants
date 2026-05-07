@@ -306,6 +306,7 @@
 </ul>
 <p aria-level="2" class="caption" role="heading"><span class="caption-text">SIMT primitives</span></p>
 <ul class="nav bd-sidenav">
+<li class="toctree-l1"><a class="reference internal" href="block.html">Block primitives</a></li>
 <li class="toctree-l1"><a class="reference internal" href="subgroup.html">Subgroup primitives</a></li>
 <li class="toctree-l1"><a class="reference internal" href="tile16.html">Tile16x16: register-resident 16x16 tiles</a></li>
 </ul>
@@ -472,11 +473,17 @@
 <p>For cases that require manual control — such as launching separate kernels on different streams or interoperating with PyTorch — you can create and manage streams directly.</p>
 <section id="creating-and-using-streams">
 <h3>Creating and using streams<a class="headerlink" href="#creating-and-using-streams" title="Link to this heading">#</a></h3>
-<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">s1</span> <span class="o">=</span> <span class="n">qd</span><span class="o">.</span><span class="n">create_stream</span><span class="p">()</span>
+<p>Any <code class="docutils literal notranslate"><span class="pre">&#64;qd.kernel</span></code> function accepts a special <code class="docutils literal notranslate"><span class="pre">qd_stream</span></code> keyword argument — you do not need to declare it in the kernel signature. The <code class="docutils literal notranslate"><span class="pre">&#64;qd.kernel</span></code> decorator handles it automatically.</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="nd">@qd</span><span class="o">.</span><span class="n">kernel</span>
+<span class="k">def</span><span class="w"> </span><span class="nf">my_kernel</span><span class="p">():</span>
+    <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">N</span><span class="p">):</span>
+        <span class="n">a</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="o">=</span> <span class="n">i</span>
+
+<span class="n">s1</span> <span class="o">=</span> <span class="n">qd</span><span class="o">.</span><span class="n">create_stream</span><span class="p">()</span>
 <span class="n">s2</span> <span class="o">=</span> <span class="n">qd</span><span class="o">.</span><span class="n">create_stream</span><span class="p">()</span>
 
-<span class="n">fill_a</span><span class="p">(</span><span class="n">qd_stream</span><span class="o">=</span><span class="n">s1</span><span class="p">)</span>
-<span class="n">fill_b</span><span class="p">(</span><span class="n">qd_stream</span><span class="o">=</span><span class="n">s2</span><span class="p">)</span>
+<span class="n">my_kernel</span><span class="p">(</span><span class="n">qd_stream</span><span class="o">=</span><span class="n">s1</span><span class="p">)</span>
+<span class="n">my_kernel</span><span class="p">(</span><span class="n">qd_stream</span><span class="o">=</span><span class="n">s2</span><span class="p">)</span>
 
 <span class="n">s1</span><span class="o">.</span><span class="n">synchronize</span><span class="p">()</span>
 <span class="n">s2</span><span class="o">.</span><span class="n">synchronize</span><span class="p">()</span>
@@ -485,7 +492,7 @@
 <span class="n">s2</span><span class="o">.</span><span class="n">destroy</span><span class="p">()</span>
 </pre></div>
 </div>
-<p>Pass <code class="docutils literal notranslate"><span class="pre">qd_stream=</span></code> to any kernel call to launch it on that stream. Kernels on different streams may execute concurrently. Call <code class="docutils literal notranslate"><span class="pre">synchronize()</span></code> to block until all work on a stream completes.</p>
+<p>Kernels on different streams may execute concurrently. Call <code class="docutils literal notranslate"><span class="pre">synchronize()</span></code> to block until all work on a stream completes.</p>
 </section>
 <section id="events">
 <h3>Events<a class="headerlink" href="#events" title="Link to this heading">#</a></h3>
@@ -523,54 +530,24 @@
 <h3>Context managers<a class="headerlink" href="#context-managers" title="Link to this heading">#</a></h3>
 <p>Streams and events support <code class="docutils literal notranslate"><span class="pre">with</span></code> blocks for automatic cleanup:</p>
 <div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="k">with</span> <span class="n">qd</span><span class="o">.</span><span class="n">create_stream</span><span class="p">()</span> <span class="k">as</span> <span class="n">s</span><span class="p">:</span>
-    <span class="n">fill_a</span><span class="p">(</span><span class="n">qd_stream</span><span class="o">=</span><span class="n">s</span><span class="p">)</span>
-    <span class="n">s</span><span class="o">.</span><span class="n">synchronize</span><span class="p">()</span>
-<span class="c1"># s.destroy() called automatically</span>
+    <span class="n">some_func1</span><span class="p">(</span><span class="n">qd_stream</span><span class="o">=</span><span class="n">s</span><span class="p">)</span>
+<span class="c1"># s.destroy() called automatically — waits for in-flight work</span>
 </pre></div>
 </div>
 </section>
-<section id="pytorch-interop-cuda">
-<h3>PyTorch interop (CUDA)<a class="headerlink" href="#pytorch-interop-cuda" title="Link to this heading">#</a></h3>
-<p>When mixing Quadrants kernels with PyTorch operations on CUDA, both frameworks must use the same stream to avoid race conditions. Without explicit stream management, Quadrants and PyTorch may launch work on different streams with no ordering guarantees, leading to intermittent data corruption.</p>
-<section id="running-quadrants-kernels-on-pytorch-s-stream">
-<h4>Running Quadrants kernels on PyTorch’s stream<a class="headerlink" href="#running-quadrants-kernels-on-pytorch-s-stream" title="Link to this heading">#</a></h4>
-<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">import</span><span class="w"> </span><span class="nn">torch</span>
-<span class="kn">from</span><span class="w"> </span><span class="nn">quadrants.lang.stream</span><span class="w"> </span><span class="kn">import</span> <span class="n">Stream</span>
-
-<span class="n">torch_stream_ptr</span> <span class="o">=</span> <span class="n">torch</span><span class="o">.</span><span class="n">cuda</span><span class="o">.</span><span class="n">current_stream</span><span class="p">()</span><span class="o">.</span><span class="n">cuda_stream</span>
-<span class="n">stream</span> <span class="o">=</span> <span class="n">Stream</span><span class="p">(</span><span class="n">torch_stream_ptr</span><span class="p">)</span>
-
-<span class="n">physics_kernel</span><span class="p">(</span><span class="n">qd_stream</span><span class="o">=</span><span class="n">stream</span><span class="p">)</span>
-<span class="n">observations</span> <span class="o">=</span> <span class="n">compute_obs_tensor</span><span class="p">()</span>  <span class="c1"># PyTorch op on the same stream</span>
-<span class="n">apply_actions_kernel</span><span class="p">(</span><span class="n">qd_stream</span><span class="o">=</span><span class="n">stream</span><span class="p">)</span>
-</pre></div>
-</div>
-<p>Wrap PyTorch’s raw <code class="docutils literal notranslate"><span class="pre">CUstream</span></code> pointer in a Quadrants <code class="docutils literal notranslate"><span class="pre">Stream</span></code> object. Do <strong>not</strong> call <code class="docutils literal notranslate"><span class="pre">destroy()</span></code> on this wrapper — PyTorch owns the underlying stream.</p>
 </section>
-<section id="running-pytorch-operations-on-a-quadrants-stream">
-<h4>Running PyTorch operations on a Quadrants stream<a class="headerlink" href="#running-pytorch-operations-on-a-quadrants-stream" title="Link to this heading">#</a></h4>
-<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">qd_stream</span> <span class="o">=</span> <span class="n">qd</span><span class="o">.</span><span class="n">create_stream</span><span class="p">()</span>
-<span class="n">torch_stream</span> <span class="o">=</span> <span class="n">torch</span><span class="o">.</span><span class="n">cuda</span><span class="o">.</span><span class="n">ExternalStream</span><span class="p">(</span><span class="n">qd_stream</span><span class="o">.</span><span class="n">handle</span><span class="p">)</span>
-
-<span class="k">with</span> <span class="n">torch</span><span class="o">.</span><span class="n">cuda</span><span class="o">.</span><span class="n">stream</span><span class="p">(</span><span class="n">torch_stream</span><span class="p">):</span>
-    <span class="n">physics_kernel</span><span class="p">(</span><span class="n">qd_stream</span><span class="o">=</span><span class="n">qd_stream</span><span class="p">)</span>
-    <span class="n">observations</span> <span class="o">=</span> <span class="n">compute_obs_tensor</span><span class="p">()</span>
-    <span class="n">apply_actions_kernel</span><span class="p">(</span><span class="n">qd_stream</span><span class="o">=</span><span class="n">qd_stream</span><span class="p">)</span>
-
-<span class="n">qd_stream</span><span class="o">.</span><span class="n">destroy</span><span class="p">()</span>
-</pre></div>
-</div>
-<p><code class="docutils literal notranslate"><span class="pre">Stream.handle</span></code> is the raw <code class="docutils literal notranslate"><span class="pre">CUstream</span></code> pointer, which <code class="docutils literal notranslate"><span class="pre">torch.cuda.ExternalStream</span></code> accepts directly.</p>
-</section>
-</section>
+<section id="synchronization-notes">
+<h2>Synchronization notes<a class="headerlink" href="#synchronization-notes" title="Link to this heading">#</a></h2>
+<ul class="simple">
+<li><p><strong><code class="docutils literal notranslate"><span class="pre">qd.sync()</span></code> only waits on the default stream.</strong> It does not drain explicit streams. Call <code class="docutils literal notranslate"><span class="pre">stream.synchronize()</span></code> on each stream you need to wait for.</p></li>
+<li><p><strong>No automatic synchronization with explicit streams.</strong> When using explicit streams, you are responsible for inserting events or <code class="docutils literal notranslate"><span class="pre">synchronize()</span></code> calls when one stream’s output is another stream’s input. <code class="docutils literal notranslate"><span class="pre">stream_parallel</span></code> handles this automatically.</p></li>
+</ul>
 </section>
 <section id="limitations">
 <h2>Limitations<a class="headerlink" href="#limitations" title="Link to this heading">#</a></h2>
 <ul class="simple">
-<li><p><strong>Not compatible with graphs.</strong> Do not pass <code class="docutils literal notranslate"><span class="pre">qd_stream</span></code> to a kernel decorated with <code class="docutils literal notranslate"><span class="pre">graph=True</span></code>.</p></li>
-<li><p><strong>Not compatible with autodiff.</strong> Do not pass <code class="docutils literal notranslate"><span class="pre">qd_stream</span></code> to a kernel that uses reverse-mode or forward-mode differentiation, or inside a <code class="docutils literal notranslate"><span class="pre">qd.ad.Tape</span></code> context.</p></li>
-<li><p><strong><code class="docutils literal notranslate"><span class="pre">qd.sync()</span></code> only waits on the default stream.</strong> It does not drain explicit streams. Call <code class="docutils literal notranslate"><span class="pre">stream.synchronize()</span></code> on each stream you need to wait for.</p></li>
-<li><p><strong>No automatic synchronization with explicit streams.</strong> When using explicit streams, you are responsible for inserting events or <code class="docutils literal notranslate"><span class="pre">synchronize()</span></code> calls when one stream’s output is another stream’s input. <code class="docutils literal notranslate"><span class="pre">stream_parallel</span></code> handles this automatically.</p></li>
+<li><p><strong>Not compatible with graphs.</strong> Do not pass <code class="docutils literal notranslate"><span class="pre">qd_stream</span></code> to a kernel decorated with <code class="docutils literal notranslate"><span class="pre">graph=True</span></code> (if you do, a <code class="docutils literal notranslate"><span class="pre">RuntimeError</span></code> will be raised).</p></li>
+<li><p><strong>Not compatible with autodiff.</strong> Do not pass <code class="docutils literal notranslate"><span class="pre">qd_stream</span></code> to a kernel that uses reverse-mode or forward-mode differentiation, or inside a <code class="docutils literal notranslate"><span class="pre">qd.ad.Tape</span></code> context (if you do, a <code class="docutils literal notranslate"><span class="pre">RuntimeError</span></code> will be raised).</p></li>
 </ul>
 </section>
 </section>
@@ -631,13 +608,9 @@
 <li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#creating-and-using-streams">Creating and using streams</a></li>
 <li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#events">Events</a></li>
 <li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#context-managers">Context managers</a></li>
-<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#pytorch-interop-cuda">PyTorch interop (CUDA)</a><ul class="nav section-nav flex-column">
-<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#running-quadrants-kernels-on-pytorch-s-stream">Running Quadrants kernels on PyTorch’s stream</a></li>
-<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#running-pytorch-operations-on-a-quadrants-stream">Running PyTorch operations on a Quadrants stream</a></li>
 </ul>
 </li>
-</ul>
-</li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#synchronization-notes">Synchronization notes</a></li>
 <li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#limitations">Limitations</a></li>
 </ul>
   </nav></div>

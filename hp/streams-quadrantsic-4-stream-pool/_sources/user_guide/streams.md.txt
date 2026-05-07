@@ -59,12 +59,19 @@ For cases that require manual control — such as launching separate kernels on 
 
 ### Creating and using streams
 
+Any `@qd.kernel` function accepts a special `qd_stream` keyword argument — you do not need to declare it in the kernel signature. The `@qd.kernel` decorator handles it automatically.
+
 ```python
+@qd.kernel
+def my_kernel():
+    for i in range(N):
+        a[i] = i
+
 s1 = qd.create_stream()
 s2 = qd.create_stream()
 
-fill_a(qd_stream=s1)
-fill_b(qd_stream=s2)
+my_kernel(qd_stream=s1)
+my_kernel(qd_stream=s2)
 
 s1.synchronize()
 s2.synchronize()
@@ -73,7 +80,7 @@ s1.destroy()
 s2.destroy()
 ```
 
-Pass `qd_stream=` to any kernel call to launch it on that stream. Kernels on different streams may execute concurrently. Call `synchronize()` to block until all work on a stream completes.
+Kernels on different streams may execute concurrently. Call `synchronize()` to block until all work on a stream completes.
 
 ### Events
 
@@ -115,50 +122,16 @@ Streams and events support `with` blocks for automatic cleanup:
 
 ```python
 with qd.create_stream() as s:
-    fill_a(qd_stream=s)
-    s.synchronize()
-# s.destroy() called automatically
+    some_func1(qd_stream=s)
+# s.destroy() called automatically — waits for in-flight work
 ```
 
-### PyTorch interop (CUDA)
+## Synchronization notes
 
-When mixing Quadrants kernels with PyTorch operations on CUDA, both frameworks must use the same stream to avoid race conditions. Without explicit stream management, Quadrants and PyTorch may launch work on different streams with no ordering guarantees, leading to intermittent data corruption.
-
-#### Running Quadrants kernels on PyTorch's stream
-
-```python
-import torch
-from quadrants.lang.stream import Stream
-
-torch_stream_ptr = torch.cuda.current_stream().cuda_stream
-stream = Stream(torch_stream_ptr)
-
-physics_kernel(qd_stream=stream)
-observations = compute_obs_tensor()  # PyTorch op on the same stream
-apply_actions_kernel(qd_stream=stream)
-```
-
-Wrap PyTorch's raw `CUstream` pointer in a Quadrants `Stream` object. Do **not** call `destroy()` on this wrapper — PyTorch owns the underlying stream.
-
-#### Running PyTorch operations on a Quadrants stream
-
-```python
-qd_stream = qd.create_stream()
-torch_stream = torch.cuda.ExternalStream(qd_stream.handle)
-
-with torch.cuda.stream(torch_stream):
-    physics_kernel(qd_stream=qd_stream)
-    observations = compute_obs_tensor()
-    apply_actions_kernel(qd_stream=qd_stream)
-
-qd_stream.destroy()
-```
-
-`Stream.handle` is the raw `CUstream` pointer, which `torch.cuda.ExternalStream` accepts directly.
+- **`qd.sync()` only waits on the default stream.** It does not drain explicit streams. Call `stream.synchronize()` on each stream you need to wait for.
+- **No automatic synchronization with explicit streams.** When using explicit streams, you are responsible for inserting events or `synchronize()` calls when one stream's output is another stream's input. `stream_parallel` handles this automatically.
 
 ## Limitations
 
-- **Not compatible with graphs.** Do not pass `qd_stream` to a kernel decorated with `graph=True`.
-- **Not compatible with autodiff.** Do not pass `qd_stream` to a kernel that uses reverse-mode or forward-mode differentiation, or inside a `qd.ad.Tape` context.
-- **`qd.sync()` only waits on the default stream.** It does not drain explicit streams. Call `stream.synchronize()` on each stream you need to wait for.
-- **No automatic synchronization with explicit streams.** When using explicit streams, you are responsible for inserting events or `synchronize()` calls when one stream's output is another stream's input. `stream_parallel` handles this automatically.
+- **Not compatible with graphs.** Do not pass `qd_stream` to a kernel decorated with `graph=True` (if you do, a `RuntimeError` will be raised).
+- **Not compatible with autodiff.** Do not pass `qd_stream` to a kernel that uses reverse-mode or forward-mode differentiation, or inside a `qd.ad.Tape` context (if you do, a `RuntimeError` will be raised).
