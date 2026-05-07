@@ -461,7 +461,7 @@
 </table>
 </div>
 <p>Calling a backend marked “no” raises <code class="docutils literal notranslate"><span class="pre">ValueError</span></code> from the Python layer at trace time. <code class="docutils literal notranslate"><span class="pre">global_thread_idx()</span></code> is verified on CUDA and AMDGPU; the SPIR-V codepath in the wrapper exists but is currently unreachable due to a control-flow quirk in the dispatch and is therefore left undocumented here.</p>
-<p>* On CUDA, <code class="docutils literal notranslate"><span class="pre">block.mem_sync()</span></code> currently lowers via <code class="docutils literal notranslate"><span class="pre">block_barrier</span></code> (i.e. <code class="docutils literal notranslate"><span class="pre">__syncthreads()</span></code>), which doubles as a memory fence but additionally requires thread convergence — meaning calling it from divergent control flow today deadlocks. A fix to lower <code class="docutils literal notranslate"><span class="pre">mem_sync()</span></code> to a pure <code class="docutils literal notranslate"><span class="pre">__threadfence_block()</span></code> is in flight as <a class="reference external" href="https://github.com/Genesis-Embodied-AI/quadrants/pull/637">quadrants#637</a>; once merged, the pattern shown in the <a class="reference internal" href="#memory-fence-in-a-divergent-branch">memory-fence example</a> below works as written. Until then, prefer calling <code class="docutils literal notranslate"><span class="pre">mem_sync()</span></code> from uniform control flow on CUDA.</p>
+<p>* On CUDA, <code class="docutils literal notranslate"><span class="pre">block.mem_sync()</span></code> currently lowers via <code class="docutils literal notranslate"><span class="pre">block_barrier</span></code> (i.e. <code class="docutils literal notranslate"><span class="pre">__syncthreads()</span></code>), which doubles as a memory fence but additionally requires thread convergence — meaning calling it from divergent control flow today deadlocks. A fix to lower <code class="docutils literal notranslate"><span class="pre">mem_sync()</span></code> to a pure <code class="docutils literal notranslate"><span class="pre">__threadfence_block()</span></code> is in flight as <a class="reference external" href="https://github.com/Genesis-Embodied-AI/quadrants/pull/637">quadrants#637</a>; once merged, the divergent-branch pattern shown in the <code class="docutils literal notranslate"><span class="pre">block.mem_sync()</span></code> semantics section below works as written. Until then, prefer calling <code class="docutils literal notranslate"><span class="pre">mem_sync()</span></code> from uniform control flow on CUDA.</p>
 </section>
 <section id="barrier-vs-fence-the-distinction-that-matters">
 <h2>Barrier vs fence: the distinction that matters<a class="headerlink" href="#barrier-vs-fence-the-distinction-that-matters" title="Link to this heading">#</a></h2>
@@ -528,7 +528,7 @@
 </section>
 <section id="block-thread-idx">
 <h3><code class="docutils literal notranslate"><span class="pre">block.thread_idx()</span></code><a class="headerlink" href="#block-thread-idx" title="Link to this heading">#</a></h3>
-<p>Returns the local thread index within the block. Currently only implemented on SPIR-V backends (Vulkan / Metal); on CUDA / AMDGPU it raises. On CUDA / AMDGPU, use <code class="docutils literal notranslate"><span class="pre">global_thread_idx()</span></code> and the loop-driven indexing pattern instead — see the <a class="reference internal" href="#examples">examples</a> below.</p>
+<p>Returns the local thread index within the block. Currently only implemented on SPIR-V backends (Vulkan / Metal); on CUDA / AMDGPU it raises. On CUDA / AMDGPU, use <code class="docutils literal notranslate"><span class="pre">global_thread_idx()</span></code> together with <code class="docutils literal notranslate"><span class="pre">qd.loop_config(block_dim=...)</span></code> and recover the in-block index via <code class="docutils literal notranslate"><span class="pre">global_thread_idx()</span> <span class="pre">%</span> <span class="pre">block_dim</span></code>.</p>
 </section>
 </section>
 <section id="grid-scope-fence-qd-simt-grid-memfence">
@@ -536,90 +536,6 @@
 <p><code class="docutils literal notranslate"><span class="pre">grid.memfence()</span></code> is the device-scope counterpart of <code class="docutils literal notranslate"><span class="pre">block.mem_sync()</span></code>. It orders memory operations across the entire grid, so writes made by one block become visible to other blocks after the fence. CUDA only today; lowers to <code class="docutils literal notranslate"><span class="pre">__threadfence()</span></code> (<code class="docutils literal notranslate"><span class="pre">nvvm_membar_gl</span></code>).</p>
 <p>Use it when you need cross-block coordination via global memory (decoupled look-back scan, inter-block flag publishing, single-pass reductions, etc.). For coordination within a single block, prefer <code class="docutils literal notranslate"><span class="pre">block.mem_sync()</span></code> — it is cheaper.</p>
 <p>There is no built-in grid-wide barrier (cooperative-groups-style); the only way to converge threads across blocks is to finish the kernel and launch a new one.</p>
-</section>
-<section id="examples">
-<h2>Examples<a class="headerlink" href="#examples" title="Link to this heading">#</a></h2>
-<section id="block-barrier-with-shared-memory">
-<h3>Block barrier with shared memory<a class="headerlink" href="#block-barrier-with-shared-memory" title="Link to this heading">#</a></h3>
-<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">import</span><span class="w"> </span><span class="nn">quadrants</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">qd</span>
-
-<span class="n">BLOCK</span> <span class="o">=</span> <span class="mi">256</span>
-
-<span class="nd">@qd</span><span class="o">.</span><span class="n">kernel</span>
-<span class="k">def</span><span class="w"> </span><span class="nf">reduce_per_block</span><span class="p">(</span><span class="n">a</span><span class="p">:</span> <span class="n">qd</span><span class="o">.</span><span class="n">types</span><span class="o">.</span><span class="n">ndarray</span><span class="p">(</span><span class="n">dtype</span><span class="o">=</span><span class="n">qd</span><span class="o">.</span><span class="n">f32</span><span class="p">,</span> <span class="n">ndim</span><span class="o">=</span><span class="mi">1</span><span class="p">),</span>
-                     <span class="n">out</span><span class="p">:</span> <span class="n">qd</span><span class="o">.</span><span class="n">types</span><span class="o">.</span><span class="n">ndarray</span><span class="p">(</span><span class="n">dtype</span><span class="o">=</span><span class="n">qd</span><span class="o">.</span><span class="n">f32</span><span class="p">,</span> <span class="n">ndim</span><span class="o">=</span><span class="mi">1</span><span class="p">))</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
-    <span class="n">sh</span> <span class="o">=</span> <span class="n">qd</span><span class="o">.</span><span class="n">simt</span><span class="o">.</span><span class="n">block</span><span class="o">.</span><span class="n">SharedArray</span><span class="p">(</span><span class="n">BLOCK</span><span class="p">,</span> <span class="n">qd</span><span class="o">.</span><span class="n">f32</span><span class="p">)</span>
-    <span class="n">qd</span><span class="o">.</span><span class="n">loop_config</span><span class="p">(</span><span class="n">block_dim</span><span class="o">=</span><span class="n">BLOCK</span><span class="p">)</span>
-    <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">a</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">0</span><span class="p">]):</span>
-        <span class="n">tid</span> <span class="o">=</span> <span class="n">i</span> <span class="o">%</span> <span class="n">BLOCK</span>
-        <span class="n">sh</span><span class="p">[</span><span class="n">tid</span><span class="p">]</span> <span class="o">=</span> <span class="n">a</span><span class="p">[</span><span class="n">i</span><span class="p">]</span>
-        <span class="n">qd</span><span class="o">.</span><span class="n">simt</span><span class="o">.</span><span class="n">block</span><span class="o">.</span><span class="n">sync</span><span class="p">()</span>
-        <span class="c1"># ... cooperative reduction over `sh` ...</span>
-</pre></div>
-</div>
-<p>Every thread in the block writes its slot in <code class="docutils literal notranslate"><span class="pre">sh</span></code>, then <code class="docutils literal notranslate"><span class="pre">sync()</span></code> ensures every write is visible to every other thread before the reduction begins.</p>
-</section>
-<section id="memory-fence-in-a-divergent-branch">
-<h3>Memory fence in a divergent branch<a class="headerlink" href="#memory-fence-in-a-divergent-branch" title="Link to this heading">#</a></h3>
-<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="nd">@qd</span><span class="o">.</span><span class="n">kernel</span>
-<span class="k">def</span><span class="w"> </span><span class="nf">publish_then_sync</span><span class="p">()</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
-    <span class="n">sh</span> <span class="o">=</span> <span class="n">qd</span><span class="o">.</span><span class="n">simt</span><span class="o">.</span><span class="n">block</span><span class="o">.</span><span class="n">SharedArray</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="n">qd</span><span class="o">.</span><span class="n">i32</span><span class="p">)</span>
-    <span class="n">flag</span> <span class="o">=</span> <span class="n">qd</span><span class="o">.</span><span class="n">simt</span><span class="o">.</span><span class="n">block</span><span class="o">.</span><span class="n">SharedArray</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="n">qd</span><span class="o">.</span><span class="n">i32</span><span class="p">)</span>
-    <span class="n">qd</span><span class="o">.</span><span class="n">loop_config</span><span class="p">(</span><span class="n">block_dim</span><span class="o">=</span><span class="mi">32</span><span class="p">)</span>
-    <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="mi">32</span><span class="p">):</span>
-        <span class="n">tid</span> <span class="o">=</span> <span class="n">i</span> <span class="o">%</span> <span class="mi">32</span>
-        <span class="k">if</span> <span class="n">tid</span> <span class="o">==</span> <span class="mi">0</span><span class="p">:</span>
-            <span class="n">sh</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="o">=</span> <span class="mi">42</span>
-            <span class="n">qd</span><span class="o">.</span><span class="n">simt</span><span class="o">.</span><span class="n">block</span><span class="o">.</span><span class="n">mem_sync</span><span class="p">()</span>
-            <span class="n">flag</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="o">=</span> <span class="mi">1</span>
-        <span class="n">qd</span><span class="o">.</span><span class="n">simt</span><span class="o">.</span><span class="n">block</span><span class="o">.</span><span class="n">sync</span><span class="p">()</span>
-        <span class="c1"># all threads now see sh[0] == 42 once flag[0] == 1</span>
-</pre></div>
-</div>
-<p><code class="docutils literal notranslate"><span class="pre">mem_sync()</span></code> runs on a single thread inside the divergent branch. Substituting <code class="docutils literal notranslate"><span class="pre">sync()</span></code> here would deadlock, since the other 31 threads never enter the <code class="docutils literal notranslate"><span class="pre">if</span></code>. On CUDA this pattern depends on the lowering fix tracked in <a class="reference external" href="https://github.com/Genesis-Embodied-AI/quadrants/pull/637">#637</a>; on SPIR-V it already works.</p>
-</section>
-<section id="block-wide-predicate-reductions">
-<h3>Block-wide predicate reductions<a class="headerlink" href="#block-wide-predicate-reductions" title="Link to this heading">#</a></h3>
-<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="nd">@qd</span><span class="o">.</span><span class="n">kernel</span>
-<span class="k">def</span><span class="w"> </span><span class="nf">vote</span><span class="p">(</span><span class="n">b</span><span class="p">:</span> <span class="n">qd</span><span class="o">.</span><span class="n">types</span><span class="o">.</span><span class="n">ndarray</span><span class="p">(</span><span class="n">dtype</span><span class="o">=</span><span class="n">qd</span><span class="o">.</span><span class="n">i32</span><span class="p">,</span> <span class="n">ndim</span><span class="o">=</span><span class="mi">1</span><span class="p">),</span>
-         <span class="n">out_all</span><span class="p">:</span> <span class="n">qd</span><span class="o">.</span><span class="n">types</span><span class="o">.</span><span class="n">ndarray</span><span class="p">(</span><span class="n">dtype</span><span class="o">=</span><span class="n">qd</span><span class="o">.</span><span class="n">i32</span><span class="p">,</span> <span class="n">ndim</span><span class="o">=</span><span class="mi">1</span><span class="p">),</span>
-         <span class="n">out_any</span><span class="p">:</span> <span class="n">qd</span><span class="o">.</span><span class="n">types</span><span class="o">.</span><span class="n">ndarray</span><span class="p">(</span><span class="n">dtype</span><span class="o">=</span><span class="n">qd</span><span class="o">.</span><span class="n">i32</span><span class="p">,</span> <span class="n">ndim</span><span class="o">=</span><span class="mi">1</span><span class="p">),</span>
-         <span class="n">out_cnt</span><span class="p">:</span> <span class="n">qd</span><span class="o">.</span><span class="n">types</span><span class="o">.</span><span class="n">ndarray</span><span class="p">(</span><span class="n">dtype</span><span class="o">=</span><span class="n">qd</span><span class="o">.</span><span class="n">i32</span><span class="p">,</span> <span class="n">ndim</span><span class="o">=</span><span class="mi">1</span><span class="p">))</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
-    <span class="n">qd</span><span class="o">.</span><span class="n">loop_config</span><span class="p">(</span><span class="n">block_dim</span><span class="o">=</span><span class="mi">32</span><span class="p">)</span>
-    <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="mi">32</span><span class="p">):</span>
-        <span class="n">out_all</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="o">=</span> <span class="n">qd</span><span class="o">.</span><span class="n">simt</span><span class="o">.</span><span class="n">block</span><span class="o">.</span><span class="n">sync_all_nonzero</span><span class="p">(</span><span class="n">b</span><span class="p">[</span><span class="n">i</span><span class="p">])</span>
-        <span class="n">out_any</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="o">=</span> <span class="n">qd</span><span class="o">.</span><span class="n">simt</span><span class="o">.</span><span class="n">block</span><span class="o">.</span><span class="n">sync_any_nonzero</span><span class="p">(</span><span class="n">b</span><span class="p">[</span><span class="n">i</span><span class="p">])</span>
-        <span class="n">out_cnt</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="o">=</span> <span class="n">qd</span><span class="o">.</span><span class="n">simt</span><span class="o">.</span><span class="n">block</span><span class="o">.</span><span class="n">sync_count_nonzero</span><span class="p">(</span><span class="n">b</span><span class="p">[</span><span class="n">i</span><span class="p">])</span>
-</pre></div>
-</div>
-<p>Each op both synchronizes the block and returns the reduction result, in a single instruction. CUDA only.</p>
-</section>
-<section id="cross-block-publish-via-grid-memfence">
-<h3>Cross-block publish via <code class="docutils literal notranslate"><span class="pre">grid.memfence()</span></code><a class="headerlink" href="#cross-block-publish-via-grid-memfence" title="Link to this heading">#</a></h3>
-<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="nd">@qd</span><span class="o">.</span><span class="n">kernel</span>
-<span class="k">def</span><span class="w"> </span><span class="nf">publish</span><span class="p">(</span><span class="n">buf</span><span class="p">:</span> <span class="n">qd</span><span class="o">.</span><span class="n">types</span><span class="o">.</span><span class="n">ndarray</span><span class="p">(</span><span class="n">dtype</span><span class="o">=</span><span class="n">qd</span><span class="o">.</span><span class="n">i32</span><span class="p">,</span> <span class="n">ndim</span><span class="o">=</span><span class="mi">1</span><span class="p">),</span>
-            <span class="n">flag</span><span class="p">:</span> <span class="n">qd</span><span class="o">.</span><span class="n">types</span><span class="o">.</span><span class="n">ndarray</span><span class="p">(</span><span class="n">dtype</span><span class="o">=</span><span class="n">qd</span><span class="o">.</span><span class="n">i32</span><span class="p">,</span> <span class="n">ndim</span><span class="o">=</span><span class="mi">1</span><span class="p">))</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
-    <span class="n">qd</span><span class="o">.</span><span class="n">loop_config</span><span class="p">(</span><span class="n">block_dim</span><span class="o">=</span><span class="mi">32</span><span class="p">)</span>
-    <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">buf</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">0</span><span class="p">]):</span>
-        <span class="n">tid</span> <span class="o">=</span> <span class="n">i</span> <span class="o">%</span> <span class="mi">32</span>
-        <span class="k">if</span> <span class="n">tid</span> <span class="o">==</span> <span class="mi">0</span><span class="p">:</span>
-            <span class="n">buf</span><span class="p">[</span><span class="n">i</span> <span class="o">//</span> <span class="mi">32</span><span class="p">]</span> <span class="o">=</span> <span class="n">i</span> <span class="o">//</span> <span class="mi">32</span>
-            <span class="n">qd</span><span class="o">.</span><span class="n">simt</span><span class="o">.</span><span class="n">grid</span><span class="o">.</span><span class="n">memfence</span><span class="p">()</span>
-            <span class="n">qd</span><span class="o">.</span><span class="n">atomic_add</span><span class="p">(</span><span class="n">flag</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="mi">1</span><span class="p">)</span>
-</pre></div>
-</div>
-<p>The <code class="docutils literal notranslate"><span class="pre">memfence()</span></code> here ensures that the data write to <code class="docutils literal notranslate"><span class="pre">buf</span></code> becomes visible to other blocks before the atomic increment of <code class="docutils literal notranslate"><span class="pre">flag</span></code> does, so any block reading <code class="docutils literal notranslate"><span class="pre">flag</span> <span class="pre">&gt;</span> <span class="pre">N</span></code> is guaranteed to see at least <code class="docutils literal notranslate"><span class="pre">N</span></code> published <code class="docutils literal notranslate"><span class="pre">buf</span></code> entries. This is the building block of decoupled-look-back scan and other single-pass multi-block algorithms.</p>
-</section>
-</section>
-<section id="performance-and-portability-notes">
-<h2>Performance and portability notes<a class="headerlink" href="#performance-and-portability-notes" title="Link to this heading">#</a></h2>
-<ul class="simple">
-<li><p><code class="docutils literal notranslate"><span class="pre">sync()</span></code> is a couple of instructions on every backend and is essentially free in steady state; the cost is the implicit serialization point.</p></li>
-<li><p><code class="docutils literal notranslate"><span class="pre">mem_sync()</span></code> is cheaper than <code class="docutils literal notranslate"><span class="pre">sync()</span></code> (no thread convergence) but costs more than uncached register-only work — use it only where memory-ordering is actually needed.</p></li>
-<li><p><code class="docutils literal notranslate"><span class="pre">SharedArray</span></code> is statically allocated per block; the total per-block budget depends on the GPU (typically 48 KB or 100 KB on CUDA). Exceeding the budget fails at compile time.</p></li>
-<li><p><code class="docutils literal notranslate"><span class="pre">grid.memfence()</span></code> is more expensive than <code class="docutils literal notranslate"><span class="pre">mem_sync()</span></code> because it orders memory at device scope. Prefer the cheapest fence that gives the visibility you need.</p></li>
-<li><p>The CUDA-only ops (<code class="docutils literal notranslate"><span class="pre">sync_*_nonzero</span></code>) and the SPV-only <code class="docutils literal notranslate"><span class="pre">thread_idx()</span></code> are flagged in the support table above; calling them on the wrong backend raises at trace time, so portability mistakes are caught early.</p></li>
-</ul>
 </section>
 <section id="related">
 <h2>Related<a class="headerlink" href="#related" title="Link to this heading">#</a></h2>
@@ -691,14 +607,6 @@
 </ul>
 </li>
 <li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#grid-scope-fence-qd-simt-grid-memfence">Grid-scope fence: <code class="docutils literal notranslate"><span class="pre">qd.simt.grid.memfence()</span></code></a></li>
-<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#examples">Examples</a><ul class="nav section-nav flex-column">
-<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#block-barrier-with-shared-memory">Block barrier with shared memory</a></li>
-<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#memory-fence-in-a-divergent-branch">Memory fence in a divergent branch</a></li>
-<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#block-wide-predicate-reductions">Block-wide predicate reductions</a></li>
-<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#cross-block-publish-via-grid-memfence">Cross-block publish via <code class="docutils literal notranslate"><span class="pre">grid.memfence()</span></code></a></li>
-</ul>
-</li>
-<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#performance-and-portability-notes">Performance and portability notes</a></li>
 <li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#related">Related</a></li>
 </ul>
   </nav></div>
