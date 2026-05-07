@@ -454,6 +454,7 @@
 </table>
 </div>
 <p>* AMDGPU <code class="docutils literal notranslate"><span class="pre">shuffle_down</span></code> (and therefore <code class="docutils literal notranslate"><span class="pre">reduce_add</span></code>, which is built on it) is currently emulated via <code class="docutils literal notranslate"><span class="pre">ds_bpermute</span></code> (~50 cycle latency).</p>
+<p>The remaining shuffle flavours (<code class="docutils literal notranslate"><span class="pre">shuffle_up</span></code>, <code class="docutils literal notranslate"><span class="pre">shuffle_xor</span></code>) are exposed in the Python module but are not yet implemented across backends. Calling them will fail at codegen. Use <code class="docutils literal notranslate"><span class="pre">shuffle</span></code> with an explicit lane index in the meantime — every shuffle pattern can be expressed that way.</p>
 </section>
 <section id="identification-and-control">
 <h3>Identification and control<a class="headerlink" href="#identification-and-control" title="Link to this heading">#</a></h3>
