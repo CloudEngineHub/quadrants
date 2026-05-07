@@ -641,9 +641,34 @@ std::unordered_map<uint64_t, int64_t> LlvmRuntimeExecutor::dispatch_max_reducers
       fprintf(stderr, "\n");
       fflush(stderr);
     }
-    runtime_jit->call<void *, void *, void *, void *>("runtime_eval_adstack_max_reduce", llvm_runtime_,
-                                                      runtime_context_ptr_for_reducer, params_dev_ptr,
-                                                      bytecode_dev_ptr);
+    // DEBUG: dump first 128 bytes of the device arg buffer to see exactly what the launcher wrote into each slot.
+    // Lets us correlate the encoder's claimed `arg_buffer_offset` against actual buffer contents.
+    if (ctx->arg_buffer_size > 0 && ctx->get_context().arg_buffer != nullptr) {
+      const std::size_t dump_bytes = std::min<std::size_t>(128, ctx->arg_buffer_size);
+      std::vector<uint8_t> host_view(dump_bytes, 0);
+      copy_d2h(host_view.data(), ctx->get_context().arg_buffer, dump_bytes);
+      fprintf(stderr, "[max-reducer dispatch] arg_buffer[0..%zu] hex:", dump_bytes);
+      for (std::size_t b = 0; b < dump_bytes; ++b)
+        fprintf(stderr, " %02x", host_view[b]);
+      fprintf(stderr, "\n");
+      // Decode as 8-byte slots (potential pointers / i64s):
+      fprintf(stderr, "[max-reducer dispatch] arg_buffer slots (i64):");
+      for (std::size_t off = 0; off + 8 <= dump_bytes; off += 8) {
+        uint64_t v = 0;
+        std::memcpy(&v, host_view.data() + off, 8);
+        fprintf(stderr, " [+%zu]=0x%016llx", off, (unsigned long long)v);
+      }
+      fprintf(stderr, "\n");
+      fflush(stderr);
+    }
+    // DEBUG: short-circuit the launch. Returning empty after the body encoder has already run lets
+    // `publish_adstack_metadata` fall through to the unsubstituted-tree path (which works at this commit thanks
+    // to the worst-case-num-threads fallback in the heap sizer), and fires the SIZER encoder so its
+    // `arg_buffer_offset` traces print and we can compare against the body encoder's offset.
+    fprintf(stderr, "[max-reducer dispatch] SHORT-CIRCUIT: skipping kernel launch; returning empty result map\n");
+    fflush(stderr);
+    (void)runtime_jit;  // suppress unused warning
+    return MaxReducerResultMap{};
   }
 
   // Read back the per-spec output slots. Single contiguous d2h.
