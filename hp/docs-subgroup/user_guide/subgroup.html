@@ -495,9 +495,16 @@
 </tbody>
 </table>
 </div>
+<p>Naming note: two of the names above are planned to be renamed in a future release, to align with the project’s naming conventions across scopes:</p>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">subgroup.barrier()</span></code> will be renamed to <code class="docutils literal notranslate"><span class="pre">subgroup.sync()</span></code> (matching <code class="docutils literal notranslate"><span class="pre">block.sync()</span></code>).</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">subgroup.memory_barrier()</span></code> will be renamed to <code class="docutils literal notranslate"><span class="pre">subgroup.mem_fence()</span></code> (matching the planned <code class="docutils literal notranslate"><span class="pre">block.mem_fence()</span></code> and <code class="docutils literal notranslate"><span class="pre">grid.mem_fence()</span></code>).</p></li>
+</ul>
+<p>The new names are not yet available; this page uses the current names throughout.</p>
 </section>
 <section id="voting-and-predicate-ops">
 <h3>Voting and predicate ops<a class="headerlink" href="#voting-and-predicate-ops" title="Link to this heading">#</a></h3>
+<p>Although these functions exist, we will migrate them to have an additional <code class="docutils literal notranslate"><span class="pre">log2_size</span></code> parameter, similar to <code class="docutils literal notranslate"><span class="pre">reduce_add</span></code> — so that the vote is over the first <code class="docutils literal notranslate"><span class="pre">2**log2_size</span></code> lanes rather than the full subgroup.</p>
 <div class="pst-scrollable-table-container"><table class="table">
 <thead>
 <tr class="row-odd"><th class="head"><p>Op</p></th>
@@ -529,6 +536,7 @@
 </section>
 <section id="reductions-and-scans">
 <h3>Reductions and scans<a class="headerlink" href="#reductions-and-scans" title="Link to this heading">#</a></h3>
+<p><code class="docutils literal notranslate"><span class="pre">reduce_add</span></code> and <code class="docutils literal notranslate"><span class="pre">reduce_all_add</span></code> already take a <code class="docutils literal notranslate"><span class="pre">log2_size</span></code> parameter. The <code class="docutils literal notranslate"><span class="pre">inclusive_*</span></code> and <code class="docutils literal notranslate"><span class="pre">exclusive_*</span></code> rows below do not. Although these functions exist, we will migrate the <code class="docutils literal notranslate"><span class="pre">inclusive_*</span></code> and <code class="docutils literal notranslate"><span class="pre">exclusive_*</span></code> ops to have an additional <code class="docutils literal notranslate"><span class="pre">log2_size</span></code> parameter, similar to <code class="docutils literal notranslate"><span class="pre">reduce_add</span></code> — so that the scan is over the first <code class="docutils literal notranslate"><span class="pre">2**log2_size</span></code> lanes rather than the full subgroup.</p>
 <div class="pst-scrollable-table-container"><table class="table">
 <thead>
 <tr class="row-odd"><th class="head"><p>Op</p></th>
@@ -669,6 +677,7 @@
 </section>
 <section id="barrier-memory-barrier">
 <h3><code class="docutils literal notranslate"><span class="pre">barrier()</span></code> / <code class="docutils literal notranslate"><span class="pre">memory_barrier()</span></code><a class="headerlink" href="#barrier-memory-barrier" title="Link to this heading">#</a></h3>
+<p><strong>Planned renames: <code class="docutils literal notranslate"><span class="pre">subgroup.sync()</span></code> (in place of <code class="docutils literal notranslate"><span class="pre">barrier()</span></code>) and <code class="docutils literal notranslate"><span class="pre">subgroup.mem_fence()</span></code> (in place of <code class="docutils literal notranslate"><span class="pre">memory_barrier()</span></code>).</strong> Both will be renamed in a future release; the current names remain the only spellings available today, and the rest of this section uses them.</p>
 <p><code class="docutils literal notranslate"><span class="pre">barrier()</span></code> is a subgroup-scope thread-converging barrier — every lane in the subgroup must reach the call before any lane proceeds. <code class="docutils literal notranslate"><span class="pre">memory_barrier()</span></code> is a subgroup-scope memory fence: it orders memory operations within the subgroup without requiring thread convergence.</p>
 <ul class="simple">
 <li><p>Both currently SPIR-V only (<code class="docutils literal notranslate"><span class="pre">OpControlBarrier</span></code> / <code class="docutils literal notranslate"><span class="pre">OpMemoryBarrier</span></code>, both scoped to <code class="docutils literal notranslate"><span class="pre">Subgroup</span></code>). On CUDA / AMDGPU, subgroups (warps) execute in lockstep and these are typically unnecessary; the equivalent under divergent control flow on CUDA is <code class="docutils literal notranslate"><span class="pre">__syncwarp(active_mask)</span></code>, which is not currently exposed through <code class="docutils literal notranslate"><span class="pre">qd.simt.subgroup</span></code>.</p></li>
