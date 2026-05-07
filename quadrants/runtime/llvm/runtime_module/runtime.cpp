@@ -1235,6 +1235,21 @@ void runtime_eval_adstack_max_reduce(LLVMRuntime *runtime, RuntimeContext *ctx, 
     const void *const *slot_ptr = (const void *const *)(arg_buffer + nodes[0].arg_buffer_offset);
     quadrants_printf(runtime, "[device max-reducer]   arg_buffer[+%d] = data_ptr=%p\n", nodes[0].arg_buffer_offset,
                      (uint64)*slot_ptr);
+    // Byte-level dump from device side: prints bytes at offsets [-8, +16) relative to arg_buffer_offset so we
+    // can compare against the host's d2h dump and tell whether the kernel's view of memory differs from the
+    // host's view (memory-mapping issue) or matches it (interpretation/cast issue).
+    const u8 *as_bytes = (const u8 *)arg_buffer;
+    const i32 base = nodes[0].arg_buffer_offset;
+    quadrants_printf(runtime,
+                     "[device max-reducer]   bytes[%d..%d]= %d %d %d %d %d %d %d %d / %d %d %d %d %d %d %d %d / %d %d "
+                     "%d %d %d %d %d %d\n",
+                     base - 8, base + 16, (i32)as_bytes[base - 8], (i32)as_bytes[base - 7], (i32)as_bytes[base - 6],
+                     (i32)as_bytes[base - 5], (i32)as_bytes[base - 4], (i32)as_bytes[base - 3], (i32)as_bytes[base - 2],
+                     (i32)as_bytes[base - 1], (i32)as_bytes[base + 0], (i32)as_bytes[base + 1], (i32)as_bytes[base + 2],
+                     (i32)as_bytes[base + 3], (i32)as_bytes[base + 4], (i32)as_bytes[base + 5], (i32)as_bytes[base + 6],
+                     (i32)as_bytes[base + 7], (i32)as_bytes[base + 8], (i32)as_bytes[base + 9],
+                     (i32)as_bytes[base + 10], (i32)as_bytes[base + 11], (i32)as_bytes[base + 12],
+                     (i32)as_bytes[base + 13], (i32)as_bytes[base + 14], (i32)as_bytes[base + 15]);
   }
   for (u32 i = 0; i < length; ++i) {
     if (var_in_range) {
