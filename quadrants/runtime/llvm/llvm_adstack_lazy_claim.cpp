@@ -422,17 +422,14 @@ std::unordered_map<uint64_t, int64_t> LlvmRuntimeExecutor::dispatch_max_reducers
   if (ctx == nullptr || ctx->args_type == nullptr) {
     return result;
   }
-  // Skip the dispatch on pre-Ampere CUDA (compute capability < 8.0). The runtime helper kernel
-  // `runtime_eval_adstack_max_reduce` reads ndarray data through `ctx->arg_buffer` -> stream-ordered allocations made
-  // via `cuMemAllocAsync`. CUDA's stream-ordered allocator scopes those allocations to the stream that allocated them;
-  // the helper kernel runs on a different stream than the launcher's allocations, and on Turing-class hardware (sm_75
-  // and earlier) the kernel either reads stale bytes (returning the empty-range sentinel and undersizing the adstack)
-  // or faults at `cuLaunchKernel` with an illegal-address. Ampere and newer (sm_80+) work in practice (verified on
-  // Blackwell sm_120). Gating on compute capability rather than HMM attributes models the actual hardware boundary -
-  // the issue is the cross-stream allocator visibility on Turing-class GPUs, which correlates with hardware generation
-  // and not with whether HMM is available. With an empty result map here, `publish_adstack_metadata` walks the
-  // unsubstituted `SerializedSizeExpr` tree and the per-stack sizer falls through to the worst-case-num-threads heap
-  // budget, which is sufficient for correctness on this hardware. AMDGPU keeps the dispatch enabled.
+  // Skip the dispatch on pre-Ampere CUDA (compute capability < 8.0). On Turing-class hardware (sm_75 and earlier),
+  // `runtime_eval_adstack_max_reduce` faults at `cuLaunchKernel` with an illegal-address when reading ndarray data
+  // through `ctx->arg_buffer`. The host-side d2h view of the same memory at the launch site shows the correct
+  // bytes, so the kernel's view diverges from the host's; the precise root cause has not been pinned down. Ampere
+  // and newer (sm_80+) work in practice (verified on Blackwell sm_120). With an empty result map here,
+  // `publish_adstack_metadata` walks the unsubstituted `SerializedSizeExpr` tree and the per-stack sizer falls
+  // through to the worst-case-num-threads heap budget, which is sufficient for correctness on this hardware.
+  // AMDGPU keeps the dispatch enabled.
 #if defined(QD_WITH_CUDA)
   if (config_.arch == Arch::cuda && CUDAContext::get_instance().get_compute_capability() < 80) {
     return result;
