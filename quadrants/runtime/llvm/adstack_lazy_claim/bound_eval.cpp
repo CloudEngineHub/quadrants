@@ -7,6 +7,7 @@
 #include "quadrants/program/adstack_size_expr_eval.h"
 #include "quadrants/program/program.h"
 
+#include <cstdio>
 #include <cstring>
 #include <limits>
 #include <vector>
@@ -286,10 +287,19 @@ std::unordered_map<uint64_t, int64_t> LlvmRuntimeExecutor::dispatch_max_reducers
   current_max_reducer_results_.clear();
   MaxReducerResultMap result;
   if (ctx == nullptr || ctx->args_type == nullptr) {
+    fprintf(stderr, "[trace dispatch_max_reducers] ENTER ctx=%p args_type=%p -> early return (no ctx)\n", (void *)ctx,
+            (void *)(ctx ? ctx->args_type : nullptr));
+    fflush(stderr);
     return result;
   }
   Program *prog = (program_impl_ != nullptr) ? program_impl_->program : nullptr;
   AdStackCache *cache = (prog != nullptr) ? &prog->adstack_cache() : nullptr;
+  fprintf(stderr,
+          "[trace dispatch_max_reducers] ENTER arch=%d ad_stacks.size()=%zu device_runtime_ctx=%p host_ctx=%p "
+          "llvm_runtime=%p\n",
+          (int)config_.arch, ad_stacks.size(), device_runtime_context_ptr, static_cast<void *>(&ctx->get_context()),
+          llvm_runtime_);
+  fflush(stderr);
 
   // Pass 1: per-spec cache lookup. Hits drop straight into `result`; misses go to pending with back-refs to the
   // source `SerializedSizeExpr` and `StaticAdStackMaxReducerSpec`. Host-evaluation of begin / end and body bytecode
@@ -339,22 +349,36 @@ std::unordered_map<uint64_t, int64_t> LlvmRuntimeExecutor::dispatch_max_reducers
       p.mor_node_idx = spec.mor_node_idx;
       p.expr = &ad_stack.size_exprs[spec.stack_id];
       p.spec = &spec;
+      fprintf(stderr,
+              "[trace dispatch_max_reducers]   miss reg=%u stack=%d mor=%d cache_key=0x%016llx num_axes=%zu deps=%zu\n",
+              registry_id, spec.stack_id, spec.mor_node_idx, (unsigned long long)key, spec.axis_var_ids.size(),
+              spec.dependent_mor_node_idxs.size());
+      fflush(stderr);
       pending.push_back(std::move(p));
     }
   }
+  fprintf(stderr, "[trace dispatch_max_reducers] pass1 done, pending=%zu cache_hits=%zu\n", pending.size(),
+          result.size());
+  fflush(stderr);
   if (pending.empty()) {
     return result;
   }
 
   // Lazy-resolve the runtime-field address for `adstack_max_reducer_outputs` once per program lifetime.
   if (runtime_adstack_max_reducer_outputs_field_ptr_ == nullptr) {
+    fprintf(stderr, "[trace dispatch_max_reducers] resolving runtime_adstack_max_reducer_outputs_field_ptr_\n");
+    fflush(stderr);
     auto *const runtime_jit = get_runtime_jit_module();
     runtime_jit->call<void *>("runtime_get_adstack_max_reducer_field_ptr", llvm_runtime_);
     runtime_adstack_max_reducer_outputs_field_ptr_ = quadrants_union_cast_with_different_sizes<void *>(
         fetch_result_uint64(quadrants_result_buffer_ret_value_id, result_buffer_cache_));
+    fprintf(stderr, "[trace dispatch_max_reducers]   field_ptr=%p\n", runtime_adstack_max_reducer_outputs_field_ptr_);
+    fflush(stderr);
   }
 
   auto copy_h2d = [&](void *dst, const void *src, std::size_t bytes) {
+    fprintf(stderr, "[trace copy_h2d] dst=%p src=%p bytes=%zu arch=%d\n", dst, src, bytes, (int)config_.arch);
+    fflush(stderr);
     if (config_.arch == Arch::cuda) {
 #if defined(QD_WITH_CUDA)
       CUDADriver::get_instance().memcpy_host_to_device(dst, const_cast<void *>(src), bytes);
@@ -370,8 +394,12 @@ std::unordered_map<uint64_t, int64_t> LlvmRuntimeExecutor::dispatch_max_reducers
     } else {
       std::memcpy(dst, src, bytes);
     }
+    fprintf(stderr, "[trace copy_h2d]   done\n");
+    fflush(stderr);
   };
   auto copy_d2h = [&](void *dst, const void *src, std::size_t bytes) {
+    fprintf(stderr, "[trace copy_d2h] dst=%p src=%p bytes=%zu arch=%d\n", dst, src, bytes, (int)config_.arch);
+    fflush(stderr);
     if (config_.arch == Arch::cuda) {
 #if defined(QD_WITH_CUDA)
       CUDADriver::get_instance().memcpy_device_to_host(dst, const_cast<void *>(src), bytes);
@@ -387,6 +415,8 @@ std::unordered_map<uint64_t, int64_t> LlvmRuntimeExecutor::dispatch_max_reducers
     } else {
       std::memcpy(dst, src, bytes);
     }
+    fprintf(stderr, "[trace copy_d2h]   done\n");
+    fflush(stderr);
   };
 
   auto *const runtime_jit = get_runtime_jit_module();
@@ -411,7 +441,11 @@ std::unordered_map<uint64_t, int64_t> LlvmRuntimeExecutor::dispatch_max_reducers
   // No-progress rounds drop the remaining specs and let the per-task sizer's loud-error path absorb them.
   std::size_t dispatched_count = 0;
   std::size_t dropped_count = 0;
+  std::size_t round_idx = 0;
   while (dispatched_count + dropped_count < pending.size()) {
+    fprintf(stderr, "[trace dispatch_max_reducers] ROUND %zu start (dispatched=%zu dropped=%zu pending=%zu)\n",
+            round_idx, dispatched_count, dropped_count, pending.size());
+    fflush(stderr);
     std::vector<std::size_t> level_indices;
     for (std::size_t k = 0; k < pending.size(); ++k) {
       if (pending[k].dispatched || pending[k].dropped)
@@ -429,7 +463,13 @@ std::unordered_map<uint64_t, int64_t> LlvmRuntimeExecutor::dispatch_max_reducers
       if (deps_ok)
         level_indices.push_back(k);
     }
+    fprintf(stderr, "[trace dispatch_max_reducers] ROUND %zu level_indices.size()=%zu\n", round_idx,
+            level_indices.size());
+    fflush(stderr);
     if (level_indices.empty()) {
+      fprintf(stderr, "[trace dispatch_max_reducers] ROUND %zu no progress; dropping remaining %zu specs\n", round_idx,
+              pending.size() - dispatched_count - dropped_count);
+      fflush(stderr);
       for (std::size_t k = 0; k < pending.size(); ++k) {
         if (!pending[k].dispatched && !pending[k].dropped) {
           pending[k].dropped = true;
@@ -498,9 +538,19 @@ std::unordered_map<uint64_t, int64_t> LlvmRuntimeExecutor::dispatch_max_reducers
       }
       pending[k].body_bytecode = std::move(encoded.bytes);
       pending[k].reads = std::move(encoded.body_reads);
+      fprintf(stderr,
+              "[trace dispatch_max_reducers]   prep[k=%zu] reg=%u stack=%d mor=%d num_axes=%zu total_length=%llu "
+              "body_node_count=%u body_bytecode_size=%zu\n",
+              k, pending[k].registry_id, pending[k].stack_id, pending[k].mor_node_idx, num_axes,
+              (unsigned long long)total_length, encoded.body_node_count, pending[k].body_bytecode.size());
+      fflush(stderr);
       level_dispatch.push_back(k);
     }
+    fprintf(stderr, "[trace dispatch_max_reducers] ROUND %zu level_dispatch.size()=%zu\n", round_idx,
+            level_dispatch.size());
+    fflush(stderr);
     if (level_dispatch.empty()) {
+      ++round_idx;
       continue;
     }
 
@@ -509,6 +559,9 @@ std::unordered_map<uint64_t, int64_t> LlvmRuntimeExecutor::dispatch_max_reducers
     // launcher's per-round output-buffer reuse. Re-publishing is required if the alloc grew across rounds because the
     // runtime field stores a raw device pointer.
     const std::size_t needed_output_bytes = level_dispatch.size() * sizeof(int64_t);
+    fprintf(stderr, "[trace dispatch_max_reducers] ROUND %zu outputs alloc check: needed=%zu capacity=%zu\n", round_idx,
+            needed_output_bytes, adstack_max_reducer_outputs_capacity_);
+    fflush(stderr);
     if (needed_output_bytes > adstack_max_reducer_outputs_capacity_) {
       Device::AllocParams alloc_params{};
       alloc_params.size = std::max<std::size_t>(needed_output_bytes, 2 * adstack_max_reducer_outputs_capacity_);
@@ -516,8 +569,13 @@ std::unordered_map<uint64_t, int64_t> LlvmRuntimeExecutor::dispatch_max_reducers
       alloc_params.host_write = true;
       alloc_params.export_sharing = false;
       alloc_params.usage = AllocUsage::Storage;
+      fprintf(stderr, "[trace dispatch_max_reducers]   allocating outputs buffer size=%zu\n",
+              static_cast<std::size_t>(alloc_params.size));
+      fflush(stderr);
       DeviceAllocation new_alloc;
       RhiResult res = llvm_device()->allocate_memory(alloc_params, &new_alloc);
+      fprintf(stderr, "[trace dispatch_max_reducers]   allocate_memory returned res=%d\n", (int)res);
+      fflush(stderr);
       QD_ERROR_IF(res != RhiResult::success,
                   "Failed to allocate {} bytes for adstack max reducer outputs buffer (err: {})", alloc_params.size,
                   int(res));
@@ -525,6 +583,9 @@ std::unordered_map<uint64_t, int64_t> LlvmRuntimeExecutor::dispatch_max_reducers
       adstack_max_reducer_outputs_capacity_ = alloc_params.size;
     }
     void *outputs_dev_ptr = get_device_alloc_info_ptr(*adstack_max_reducer_outputs_alloc_);
+    fprintf(stderr, "[trace dispatch_max_reducers] ROUND %zu outputs_dev_ptr=%p; publishing to field_ptr=%p\n",
+            round_idx, outputs_dev_ptr, runtime_adstack_max_reducer_outputs_field_ptr_);
+    fflush(stderr);
     copy_h2d(runtime_adstack_max_reducer_outputs_field_ptr_, &outputs_dev_ptr, sizeof(void *));
 
     // Assign each ready spec's `output_slot` to its round-local index within `level_dispatch`, then h2d its params +
@@ -570,15 +631,31 @@ std::unordered_map<uint64_t, int64_t> LlvmRuntimeExecutor::dispatch_max_reducers
       void *bytecode_dev_ptr = get_device_alloc_info_ptr(*adstack_max_reducer_bytecode_alloc_);
       copy_h2d(bytecode_dev_ptr, pending[k].body_bytecode.data(), needed_bytecode_bytes);
 
+      fprintf(stderr,
+              "[trace dispatch_max_reducers] ROUND %zu spec_idx=%zu (k=%zu) calling "
+              "runtime_eval_adstack_max_reduce: llvm_runtime=%p ctx=%p params=%p bytecode=%p output_slot=%u "
+              "length=%u num_axes=%u body_node_count=%u\n",
+              round_idx, i, k, llvm_runtime_, runtime_context_ptr_for_reducer, params_dev_ptr, bytecode_dev_ptr,
+              pending[k].params.output_slot, pending[k].params.per_axis_length[0], pending[k].params.num_axes,
+              pending[k].params.body_node_count);
+      fflush(stderr);
       runtime_jit->call<void *, void *, void *, void *>("runtime_eval_adstack_max_reduce", llvm_runtime_,
                                                         runtime_context_ptr_for_reducer, params_dev_ptr,
                                                         bytecode_dev_ptr);
+      fprintf(stderr,
+              "[trace dispatch_max_reducers] ROUND %zu spec_idx=%zu (k=%zu) runtime_eval_adstack_max_reduce "
+              "returned\n",
+              round_idx, i, k);
+      fflush(stderr);
     }
 
     // Read back this round's output slots. The runtime function writes int64 values at `outputs[output_slot]`; each
     // spec's `output_slot` is its round-local index within `level_dispatch`, so the d2h covers exactly the round's
     // dispatched specs.
     std::vector<int64_t> outputs_host(level_dispatch.size(), 0);
+    fprintf(stderr, "[trace dispatch_max_reducers] ROUND %zu d2h outputs %zu bytes from %p\n", round_idx,
+            needed_output_bytes, outputs_dev_ptr);
+    fflush(stderr);
     copy_d2h(outputs_host.data(), outputs_dev_ptr, needed_output_bytes);
     for (std::size_t i = 0; i < level_dispatch.size(); ++i) {
       const std::size_t k = level_dispatch[i];
@@ -586,6 +663,9 @@ std::unordered_map<uint64_t, int64_t> LlvmRuntimeExecutor::dispatch_max_reducers
       if (v == std::numeric_limits<int64_t>::min()) {
         v = 0;
       }
+      fprintf(stderr, "[trace dispatch_max_reducers] ROUND %zu readback k=%zu reg=%u stack=%d mor=%d -> %lld\n",
+              round_idx, k, pending[k].registry_id, pending[k].stack_id, pending[k].mor_node_idx, (long long)v);
+      fflush(stderr);
       result[pending[k].cache_key] = v;
       if (cache != nullptr) {
         populate_max_reducer_body_observations(pending[k].reads, ctx, cache);
@@ -595,7 +675,11 @@ std::unordered_map<uint64_t, int64_t> LlvmRuntimeExecutor::dispatch_max_reducers
       pending[k].dispatched = true;
       ++dispatched_count;
     }
+    ++round_idx;
   }
+  fprintf(stderr, "[trace dispatch_max_reducers] EXIT dispatched=%zu dropped=%zu rounds=%zu result_size=%zu\n",
+          dispatched_count, dropped_count, round_idx, result.size());
+  fflush(stderr);
 
   // Stash the result map on the executor so `publish_adstack_metadata` reads it for substitution per task.
   current_max_reducer_results_ = result;
