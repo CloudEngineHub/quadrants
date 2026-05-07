@@ -1223,15 +1223,34 @@ void runtime_eval_adstack_max_reduce(LLVMRuntime *runtime, RuntimeContext *ctx, 
   const i32 var_id = params->var_id;
   const i32 root_idx = params->body_root_node_idx;
   const bool var_in_range = var_id >= 0 && var_id < kDeviceBoundVarCap;
+  // DEBUG-ONLY: per-spec entry-state print so we can correlate host params with device-side reads.
+  // Uses `quadrants_printf` (the runtime-module wrapper around the per-arch host/device printf machinery)
+  // so the lines surface in stderr regardless of backend.
+  quadrants_printf(runtime,
+                   "[device max-reducer] ENTRY arg_buffer=%p body_root=%d length=%d begin=%lld var_id=%d "
+                   "node0_kind=%d node0_arg_off=%d node0_indices_off=%d node0_indices_count=%d node0_prim_dt=%d\n",
+                   (uint64)arg_buffer, root_idx, (i32)length, begin, var_id, nodes[0].kind, nodes[0].arg_buffer_offset,
+                   nodes[0].indices_offset, nodes[0].indices_count, nodes[0].prim_dt);
+  if (nodes[0].arg_buffer_offset >= 0) {
+    const void *const *slot_ptr = (const void *const *)(arg_buffer + nodes[0].arg_buffer_offset);
+    quadrants_printf(runtime, "[device max-reducer]   arg_buffer[+%d] = data_ptr=%p\n", nodes[0].arg_buffer_offset,
+                     (uint64)*slot_ptr);
+  }
   for (u32 i = 0; i < length; ++i) {
     if (var_in_range) {
       scope.values[var_id] = begin + (i64)i;
     }
     i64 v = device_eval_node(nodes, indices, root_idx, &scope, arg_buffer);
+    if (i < 4 || v > running_max) {
+      quadrants_printf(runtime, "[device max-reducer]   iter i=%d scope[var_id]=%lld body_v=%lld\n", (i32)i,
+                       scope.values[var_id], v);
+    }
     if (v > running_max) {
       running_max = v;
     }
   }
+  quadrants_printf(runtime, "[device max-reducer] EXIT running_max=%lld output_slot=%d\n", running_max,
+                   (i32)params->output_slot);
   runtime->adstack_max_reducer_outputs[params->output_slot] = running_max;
 }
 

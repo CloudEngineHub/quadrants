@@ -576,6 +576,14 @@ int32_t encode_subtree(const SerializedSizeExpr &src,
           make_empty_device_node(static_cast<int32_t>(AdStackSizeExprDeviceKind::kExternalTensorRead));
       // Cast to i32 is safe: `arg_buffer` sizes in practice are kilobytes, well under INT32_MAX.
       dn.arg_buffer_offset = static_cast<int32_t>(data_ptr_offset);
+      {
+        fprintf(stderr, "[encode_sizer_bytecode] ExternalTensorRead arg_id_path=[");
+        for (size_t a = 0; a < arg_indices.size(); ++a)
+          fprintf(stderr, "%s%d", a ? "," : "", (int)arg_indices[a]);
+        fprintf(stderr, "] indices.size=%zu  -> arg_buffer_offset=%d  prim_dt=%d\n", node.indices.size(),
+                (int)dn.arg_buffer_offset, (int)node.const_value);
+        fflush(stderr);
+      }
       dn.prim_dt = static_cast<int32_t>(node.const_value);  // the pre-pass stashes `PrimitiveTypeID` in const_value
       dn.indices_offset = static_cast<int32_t>(out_indices.size());
       dn.indices_count = static_cast<int32_t>(node.indices.size());
@@ -1748,6 +1756,14 @@ EncodedMaxReducerBody encode_max_reducer_body_bytecode(
         // Resolve `arg_buffer_offset` from `arg_id_path` via the caller's resolver.
         std::vector<int32_t> path = src.arg_id_path;
         const int32_t arg_buf_off = arg_buffer_offset_resolver(path);
+        {
+          fprintf(stderr, "[encode_body_bytecode] ExternalTensorRead arg_id_path=[");
+          for (size_t a = 0; a < path.size(); ++a)
+            fprintf(stderr, "%s%d", a ? "," : "", (int)path[a]);
+          fprintf(stderr, "] indices.size=%zu  -> arg_buffer_offset=%d  prim_dt=%d\n", src.indices.size(),
+                  (int)arg_buf_off, (int)dst.prim_dt);
+          fflush(stderr);
+        }
         if (arg_buf_off < 0) {
           return EncodedMaxReducerBody{};  // resolver failed; signal empty result
         }

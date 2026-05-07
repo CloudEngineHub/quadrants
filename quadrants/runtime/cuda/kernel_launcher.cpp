@@ -349,7 +349,7 @@ void KernelLauncher::launch_llvm_kernel(Handle handle, LaunchContextBuilder &ctx
       break;
     }
   }
-  needs_sizer_device_ctx = needs_sizer_device_ctx && !CUDAContext::get_instance().supports_pageable_memory_access();
+  needs_sizer_device_ctx = needs_sizer_device_ctx && !CUDAContext::get_instance().uses_host_page_tables();
   void *device_context_ptr = nullptr;
   if (needs_sizer_device_ctx) {
     if (launcher_ctx.runtime_context_dev_ptr == nullptr) {

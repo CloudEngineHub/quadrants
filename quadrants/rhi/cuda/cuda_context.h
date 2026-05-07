@@ -31,6 +31,7 @@ class CUDAContext {
   bool debug_;
   bool supports_mem_pool_;
   bool supports_pageable_memory_access_;
+  bool uses_host_page_tables_;
   void *stream_;
 
  public:
@@ -93,6 +94,14 @@ class CUDAContext {
   // copy of `RuntimeContext` before each launch.
   bool supports_pageable_memory_access() const {
     return supports_pageable_memory_access_;
+  }
+
+  // CU_DEVICE_ATTRIBUTE_PAGEABLE_MEMORY_ACCESS_USES_HOST_PAGE_TABLES (= 100). 1 when the device accesses pageable
+  // memory via the host's page tables (Ampere and newer with HMM-equipped drivers, including Blackwell). 0 on
+  // pre-Ampere HMM, where pageable-memory access goes through the legacy fault-and-migrate path that is not safe
+  // for runtime-bitcode helper kernels under multi-process pressure.
+  bool uses_host_page_tables() const {
+    return uses_host_page_tables_;
   }
 
   ~CUDAContext();

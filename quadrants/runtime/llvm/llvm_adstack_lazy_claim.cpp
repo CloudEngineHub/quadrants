@@ -422,6 +422,11 @@ std::unordered_map<uint64_t, int64_t> LlvmRuntimeExecutor::dispatch_max_reducers
   if (ctx == nullptr || ctx->args_type == nullptr) {
     return result;
   }
+  fprintf(
+      stderr,
+      "[max-reducer dispatch] ENTRY ad_stacks=%zu ctx_arg_buffer=%p ctx_args_type=%p device_runtime_context_ptr=%p\n",
+      ad_stacks.size(), (void *)ctx->get_context().arg_buffer, (void *)ctx->args_type, device_runtime_context_ptr);
+  fflush(stderr);
   Program *prog = (program_impl_ != nullptr) ? program_impl_->program : nullptr;
   AdStackCache *cache = (prog != nullptr) ? &prog->adstack_cache() : nullptr;
 
@@ -481,6 +486,13 @@ std::unordered_map<uint64_t, int64_t> LlvmRuntimeExecutor::dispatch_max_reducers
       };
       EncodedMaxReducerBody encoded =
           encode_max_reducer_body_bytecode(expr, spec.body_node_idx, spec.var_id, arg_buffer_offset_resolver);
+      fprintf(stderr,
+              "[max-reducer dispatch] PENDING reg=%u stack=%d mor=%d  begin_node=%d end_node=%d  begin_val=%lld "
+              "end_val=%lld length=%lld body_node_idx=%d var_id=%d body_node_count=%u body_bytes=%zu\n",
+              registry_id, spec.stack_id, spec.mor_node_idx, spec.begin_node_idx, spec.end_node_idx,
+              (long long)begin_val, (long long)end_val, (long long)length_i64, spec.body_node_idx, spec.var_id,
+              encoded.body_node_count, encoded.bytes.size());
+      fflush(stderr);
       if (encoded.body_node_count == 0) {
         continue;
       }
@@ -616,6 +628,19 @@ std::unordered_map<uint64_t, int64_t> LlvmRuntimeExecutor::dispatch_max_reducers
     void *bytecode_dev_ptr = get_device_alloc_info_ptr(*adstack_max_reducer_bytecode_alloc_);
     copy_h2d(bytecode_dev_ptr, pending[k].body_bytecode.data(), needed_bytecode_bytes);
 
+    {
+      fprintf(stderr,
+              "[max-reducer dispatch] LAUNCH k=%zu  output_slot=%u  begin=%lld  length=%u  body_node_count=%u  "
+              "body_root=%d  var_id=%d  runtime_ctx=%p  params_dev=%p  bytecode_dev=%p  bytecode_bytes:",
+              k, pending[k].params.output_slot, (long long)pending[k].params.begin, pending[k].params.length,
+              pending[k].params.body_node_count, pending[k].params.body_root_node_idx, pending[k].params.var_id,
+              runtime_context_ptr_for_reducer, params_dev_ptr, bytecode_dev_ptr);
+      for (size_t b = 0; b < pending[k].body_bytecode.size(); ++b) {
+        fprintf(stderr, " %02x", (unsigned)pending[k].body_bytecode[b]);
+      }
+      fprintf(stderr, "\n");
+      fflush(stderr);
+    }
     runtime_jit->call<void *, void *, void *, void *>("runtime_eval_adstack_max_reduce", llvm_runtime_,
                                                       runtime_context_ptr_for_reducer, params_dev_ptr,
                                                       bytecode_dev_ptr);
@@ -625,10 +650,14 @@ std::unordered_map<uint64_t, int64_t> LlvmRuntimeExecutor::dispatch_max_reducers
   std::vector<int64_t> outputs_host(pending.size(), 0);
   copy_d2h(outputs_host.data(), outputs_dev_ptr, needed_output_bytes);
   for (std::size_t k = 0; k < pending.size(); ++k) {
-    int64_t v = outputs_host[k];
+    int64_t v_raw = outputs_host[k];
+    int64_t v = v_raw;
     if (v == std::numeric_limits<int64_t>::min()) {
       v = 0;  // empty-range sentinel from the runtime function; normalise to zero
     }
+    fprintf(stderr, "[max-reducer dispatch] RESULT k=%zu reg=%u stack=%d mor=%d  raw=%lld  normalised=%lld\n", k,
+            pending[k].registry_id, pending[k].stack_id, pending[k].mor_node_idx, (long long)v_raw, (long long)v);
+    fflush(stderr);
     result[pending[k].cache_key] = v;
     if (cache != nullptr) {
       cache->record_max_reducer_eval(pending[k].registry_id, pending[k].stack_id, pending[k].mor_node_idx, v,
@@ -923,6 +952,12 @@ std::size_t LlvmRuntimeExecutor::publish_adstack_metadata(const AdStackSizingInf
                                                           std::size_t num_threads,
                                                           LaunchContextBuilder *ctx,
                                                           void *device_runtime_context_ptr) {
+  fprintf(stderr,
+          "[publish_adstack_metadata] ENTRY n_stacks=%zu num_threads=%zu ctx_arg_buffer=%p ctx_args_type=%p "
+          "device_runtime_context_ptr=%p current_max_reducer_results=%zu\n",
+          ad_stack.allocas.size(), num_threads, (void *)ctx->get_context().arg_buffer, (void *)ctx->args_type,
+          device_runtime_context_ptr, current_max_reducer_results_.size());
+  fflush(stderr);
   const auto n_stacks = ad_stack.allocas.size();
   if (n_stacks == 0 || num_threads == 0) {
     return 0;
