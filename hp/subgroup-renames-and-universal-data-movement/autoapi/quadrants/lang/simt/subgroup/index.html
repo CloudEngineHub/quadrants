@@ -370,14 +370,14 @@
 <tr class="row-odd"><td><p><a class="reference internal" href="#quadrants.lang.simt.subgroup.elect" title="quadrants.lang.simt.subgroup.elect"><code class="xref py py-obj docutils literal notranslate"><span class="pre">elect</span></code></a>()</p></td>
 <td><p>Return <code class="docutils literal notranslate"><span class="pre">1</span></code> on lane <code class="docutils literal notranslate"><span class="pre">0</span></code> of every subgroup and <code class="docutils literal notranslate"><span class="pre">0</span></code> on every other lane.</p></td>
 </tr>
-<tr class="row-even"><td><p><a class="reference internal" href="#quadrants.lang.simt.subgroup.all_true" title="quadrants.lang.simt.subgroup.all_true"><code class="xref py py-obj docutils literal notranslate"><span class="pre">all_true</span></code></a>(cond)</p></td>
-<td><p></p></td>
+<tr class="row-even"><td><p><a class="reference internal" href="#quadrants.lang.simt.subgroup.all_true" title="quadrants.lang.simt.subgroup.all_true"><code class="xref py py-obj docutils literal notranslate"><span class="pre">all_true</span></code></a>(predicate, log2_size)</p></td>
+<td><p>AND-reduce <code class="docutils literal notranslate"><span class="pre">predicate</span> <span class="pre">!=</span> <span class="pre">0</span></code> across <code class="docutils literal notranslate"><span class="pre">2**log2_size</span></code> consecutive lanes.  Returns</p></td>
 </tr>
-<tr class="row-odd"><td><p><a class="reference internal" href="#quadrants.lang.simt.subgroup.any_true" title="quadrants.lang.simt.subgroup.any_true"><code class="xref py py-obj docutils literal notranslate"><span class="pre">any_true</span></code></a>(cond)</p></td>
-<td><p></p></td>
+<tr class="row-odd"><td><p><a class="reference internal" href="#quadrants.lang.simt.subgroup.any_true" title="quadrants.lang.simt.subgroup.any_true"><code class="xref py py-obj docutils literal notranslate"><span class="pre">any_true</span></code></a>(predicate, log2_size)</p></td>
+<td><p>OR-reduce <code class="docutils literal notranslate"><span class="pre">predicate</span> <span class="pre">!=</span> <span class="pre">0</span></code> across <code class="docutils literal notranslate"><span class="pre">2**log2_size</span></code> consecutive lanes.  Returns</p></td>
 </tr>
-<tr class="row-even"><td><p><a class="reference internal" href="#quadrants.lang.simt.subgroup.all_equal" title="quadrants.lang.simt.subgroup.all_equal"><code class="xref py py-obj docutils literal notranslate"><span class="pre">all_equal</span></code></a>(value)</p></td>
-<td><p></p></td>
+<tr class="row-even"><td><p><a class="reference internal" href="#quadrants.lang.simt.subgroup.all_equal" title="quadrants.lang.simt.subgroup.all_equal"><code class="xref py py-obj docutils literal notranslate"><span class="pre">all_equal</span></code></a>(value, log2_size)</p></td>
+<td><p>Return <code class="docutils literal notranslate"><span class="pre">1</span></code> (<code class="docutils literal notranslate"><span class="pre">i32</span></code>) on every lane in each <code class="docutils literal notranslate"><span class="pre">2**log2_size</span></code> group iff every lane</p></td>
 </tr>
 <tr class="row-odd"><td><p><a class="reference internal" href="#quadrants.lang.simt.subgroup.broadcast_first" title="quadrants.lang.simt.subgroup.broadcast_first"><code class="xref py py-obj docutils literal notranslate"><span class="pre">broadcast_first</span></code></a>(value)</p></td>
 <td><p>Broadcast lane 0's <code class="docutils literal notranslate"><span class="pre">value</span></code> to every lane in the subgroup.</p></td>
@@ -484,18 +484,38 @@ consistent across backends.</p>
 
 <dl class="py function">
 <dt class="sig sig-object py" id="quadrants.lang.simt.subgroup.all_true">
-<span class="sig-prename descclassname"><span class="pre">quadrants.lang.simt.subgroup.</span></span><span class="sig-name descname"><span class="pre">all_true</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">cond</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../../../../../_modules/quadrants/lang/simt/subgroup.html#all_true"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#quadrants.lang.simt.subgroup.all_true" title="Link to this definition">#</a></dt>
-<dd></dd></dl>
+<span class="sig-prename descclassname"><span class="pre">quadrants.lang.simt.subgroup.</span></span><span class="sig-name descname"><span class="pre">all_true</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">predicate</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">log2_size</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">template</span><span class="p"><span class="pre">(</span></span><span class="p"><span class="pre">)</span></span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../../../../../_modules/quadrants/lang/simt/subgroup.html#all_true"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#quadrants.lang.simt.subgroup.all_true" title="Link to this definition">#</a></dt>
+<dd><p>AND-reduce <code class="docutils literal notranslate"><span class="pre">predicate</span> <span class="pre">!=</span> <span class="pre">0</span></code> across <code class="docutils literal notranslate"><span class="pre">2**log2_size</span></code> consecutive lanes.  Returns
+<code class="docutils literal notranslate"><span class="pre">1</span></code> (<code class="docutils literal notranslate"><span class="pre">i32</span></code>) on every lane of the group iff every lane in the group has a non-zero
+<code class="docutils literal notranslate"><span class="pre">predicate</span></code>, else <code class="docutils literal notranslate"><span class="pre">0</span></code>.</p>
+<p>Caller must ensure <code class="docutils literal notranslate"><span class="pre">2**log2_size</span></code> does not exceed the active subgroup size on the
+target (32 on CUDA / Metal / RDNA, 64 on CDNA).  <code class="docutils literal notranslate"><span class="pre">log2_size</span></code> is a compile-time
+template; the body is fully unrolled.</p>
+</dd></dl>
 
 <dl class="py function">
 <dt class="sig sig-object py" id="quadrants.lang.simt.subgroup.any_true">
-<span class="sig-prename descclassname"><span class="pre">quadrants.lang.simt.subgroup.</span></span><span class="sig-name descname"><span class="pre">any_true</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">cond</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../../../../../_modules/quadrants/lang/simt/subgroup.html#any_true"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#quadrants.lang.simt.subgroup.any_true" title="Link to this definition">#</a></dt>
-<dd></dd></dl>
+<span class="sig-prename descclassname"><span class="pre">quadrants.lang.simt.subgroup.</span></span><span class="sig-name descname"><span class="pre">any_true</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">predicate</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">log2_size</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">template</span><span class="p"><span class="pre">(</span></span><span class="p"><span class="pre">)</span></span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../../../../../_modules/quadrants/lang/simt/subgroup.html#any_true"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#quadrants.lang.simt.subgroup.any_true" title="Link to this definition">#</a></dt>
+<dd><p>OR-reduce <code class="docutils literal notranslate"><span class="pre">predicate</span> <span class="pre">!=</span> <span class="pre">0</span></code> across <code class="docutils literal notranslate"><span class="pre">2**log2_size</span></code> consecutive lanes.  Returns
+<code class="docutils literal notranslate"><span class="pre">1</span></code> (<code class="docutils literal notranslate"><span class="pre">i32</span></code>) on every lane of the group iff at least one lane in the group has a
+non-zero <code class="docutils literal notranslate"><span class="pre">predicate</span></code>, else <code class="docutils literal notranslate"><span class="pre">0</span></code>.</p>
+<p>See <cite>all_true</cite> for the size contract.</p>
+</dd></dl>
 
 <dl class="py function">
 <dt class="sig sig-object py" id="quadrants.lang.simt.subgroup.all_equal">
-<span class="sig-prename descclassname"><span class="pre">quadrants.lang.simt.subgroup.</span></span><span class="sig-name descname"><span class="pre">all_equal</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">value</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../../../../../_modules/quadrants/lang/simt/subgroup.html#all_equal"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#quadrants.lang.simt.subgroup.all_equal" title="Link to this definition">#</a></dt>
-<dd></dd></dl>
+<span class="sig-prename descclassname"><span class="pre">quadrants.lang.simt.subgroup.</span></span><span class="sig-name descname"><span class="pre">all_equal</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">value</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">log2_size</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">template</span><span class="p"><span class="pre">(</span></span><span class="p"><span class="pre">)</span></span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../../../../../_modules/quadrants/lang/simt/subgroup.html#all_equal"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#quadrants.lang.simt.subgroup.all_equal" title="Link to this definition">#</a></dt>
+<dd><p>Return <code class="docutils literal notranslate"><span class="pre">1</span></code> (<code class="docutils literal notranslate"><span class="pre">i32</span></code>) on every lane in each <code class="docutils literal notranslate"><span class="pre">2**log2_size</span></code> group iff every lane
+in the group has the same <code class="docutils literal notranslate"><span class="pre">value</span></code>, else <code class="docutils literal notranslate"><span class="pre">0</span></code>.</p>
+<p>Equality is the backend’s native <code class="docutils literal notranslate"><span class="pre">==</span></code> on <code class="docutils literal notranslate"><span class="pre">value</span></code>’s dtype: for floats this means
+<code class="docutils literal notranslate"><span class="pre">NaN</span> <span class="pre">!=</span> <span class="pre">NaN</span></code> (a group with any <code class="docutils literal notranslate"><span class="pre">NaN</span></code> returns <code class="docutils literal notranslate"><span class="pre">0</span></code>) and <code class="docutils literal notranslate"><span class="pre">+0.0</span> <span class="pre">==</span> <span class="pre">-0.0</span></code>,
+matching SPIR-V <code class="docutils literal notranslate"><span class="pre">OpGroupNonUniformAllEqual</span></code>.  Callers wanting bit-equality on
+floats should bit-cast to the same-width integer dtype before calling.</p>
+<p>Implementation: each lane reads the value at the start of its group via <code class="docutils literal notranslate"><span class="pre">shuffle</span></code>,
+then <code class="docutils literal notranslate"><span class="pre">all_true</span></code> AND-reduces the per-lane equality bit.  Cost: one <code class="docutils literal notranslate"><span class="pre">shuffle</span></code> plus
+one <code class="docutils literal notranslate"><span class="pre">all_true</span></code> (one <code class="docutils literal notranslate"><span class="pre">vote.all</span></code> on CUDA at <code class="docutils literal notranslate"><span class="pre">log2_size</span> <span class="pre">==</span> <span class="pre">5</span></code>, otherwise a
+<code class="docutils literal notranslate"><span class="pre">log2_size</span></code>-deep <code class="docutils literal notranslate"><span class="pre">shuffle_xor</span></code> butterfly).</p>
+</dd></dl>
 
 <dl class="py function">
 <dt class="sig sig-object py" id="quadrants.lang.simt.subgroup.broadcast_first">
