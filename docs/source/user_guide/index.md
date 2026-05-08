@@ -50,6 +50,7 @@ autodiff
 
 atomics
 block
+grid
 math
 subgroup
 tile16
