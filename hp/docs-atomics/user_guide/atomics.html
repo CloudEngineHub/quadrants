@@ -59,7 +59,7 @@
     <script>DOCUMENTATION_OPTIONS.search_as_you_type = false;</script>
     <link rel="index" title="Index" href="../genindex.html" />
     <link rel="search" title="Search" href="../search.html" />
-    <link rel="next" title="Math" href="math.html" />
+    <link rel="next" title="Block primitives" href="block.html" />
     <link rel="prev" title="Automatic differentiation" href="autodiff.html" />
   <meta name="viewport" content="width=device-width, initial-scale=1"/>
   <meta name="docsearch:language" content="en"/>
@@ -288,6 +288,7 @@
 <li class="toctree-l1"><a class="reference internal" href="tensor_types.html">Tensor types</a></li>
 <li class="toctree-l1"><a class="reference internal" href="scalar_tensors.html">Scalar tensors</a></li>
 <li class="toctree-l1"><a class="reference internal" href="matrix_vector.html">Matrix and Vector</a></li>
+<li class="toctree-l1"><a class="reference internal" href="decompositions.html">Matrix decompositions and solvers</a></li>
 <li class="toctree-l1"><a class="reference internal" href="tensor.html">Tensors</a></li>
 <li class="toctree-l1"><a class="reference internal" href="compound_types.html">Compound types</a></li>
 <li class="toctree-l1"><a class="reference internal" href="buffer_view.html">BufferView</a></li>
@@ -307,6 +308,7 @@
 <p aria-level="2" class="caption" role="heading"><span class="caption-text">SIMT primitives</span></p>
 <ul class="current nav bd-sidenav">
 <li class="toctree-l1 current active"><a class="current reference internal" href="#">Atomics</a></li>
+<li class="toctree-l1"><a class="reference internal" href="block.html">Block primitives</a></li>
 <li class="toctree-l1"><a class="reference internal" href="math.html">Math</a></li>
 <li class="toctree-l1"><a class="reference internal" href="subgroup.html">Subgroup primitives</a></li>
 <li class="toctree-l1"><a class="reference internal" href="tile16.html">Tile16x16: register-resident 16x16 tiles</a></li>
@@ -494,6 +496,12 @@
 <p>* <code class="docutils literal notranslate"><span class="pre">f64</span></code> atomic add / sub / mul / min / max is hardware-dependent: supported on CUDA sm_60+ for <code class="docutils literal notranslate"><span class="pre">add</span></code>, falls back to a CAS loop elsewhere or raises at codegen time on older targets and on backends that do not lower a CAS loop. Prefer <code class="docutils literal notranslate"><span class="pre">f32</span></code> on hot paths if portability matters.</p>
 <p>There is no <code class="docutils literal notranslate"><span class="pre">atomic_cas</span></code> (compare-and-swap) exposed in Python today. The C++ runtime uses CmpXchg internally; surfacing it requires extending <code class="docutils literal notranslate"><span class="pre">AtomicOpType</span></code>.</p>
 <p>All atomic ops can be called on either global memory (fields, ndarrays) or block-shared memory (<code class="docutils literal notranslate"><span class="pre">qd.simt.block.SharedArray</span></code>). They are sequentially consistent on the location they touch; they are <strong>not</strong> memory fences for the rest of the address space — to publish other writes alongside an atomic, pair the atomic with <code class="docutils literal notranslate"><span class="pre">qd.simt.block.mem_sync()</span></code> (block scope) or <code class="docutils literal notranslate"><span class="pre">qd.simt.grid.memfence()</span></code> (device scope).</p>
+<p><strong>Backend caveat for the fence-pair pattern.</strong> Both fence helpers have current portability gaps that affect the patterns recommended on this page:</p>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">qd.simt.block.mem_sync()</span></code> is supported on CUDA and SPIR-V; on AMDGPU it raises <code class="docutils literal notranslate"><span class="pre">ValueError(&quot;qd.block.mem_sync</span> <span class="pre">is</span> <span class="pre">not</span> <span class="pre">supported</span> <span class="pre">for</span> <span class="pre">arch</span> <span class="pre">...&quot;)</span></code> at trace time.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">qd.simt.grid.memfence()</span></code> is fully implemented only on CUDA. On AMDGPU it currently links as a silent no-op (cross-block ordering will fail without any diagnostic); on SPIR-V it fails at codegen.</p></li>
+</ul>
+<p>On AMDGPU specifically, neither fence-pair recipe works as documented yet; cross-platform code that needs an atomic plus a fence must restructure around the kernel-launch boundary or be CUDA-bound until the AMDGPU lowerings land.</p>
 </section>
 <section id="semantics">
 <h2>Semantics<a class="headerlink" href="#semantics" title="Link to this heading">#</a></h2>
@@ -516,7 +524,7 @@
 </section>
 <section id="qd-atomic-min-x-y-qd-atomic-max-x-y">
 <h3><code class="docutils literal notranslate"><span class="pre">qd.atomic_min(x,</span> <span class="pre">y)</span></code> / <code class="docutils literal notranslate"><span class="pre">qd.atomic_max(x,</span> <span class="pre">y)</span></code><a class="headerlink" href="#qd-atomic-min-x-y-qd-atomic-max-x-y" title="Link to this heading">#</a></h3>
-<p>Atomically writes back <code class="docutils literal notranslate"><span class="pre">min(x,</span> <span class="pre">y)</span></code> (resp. <code class="docutils literal notranslate"><span class="pre">max(x,</span> <span class="pre">y)</span></code>). Returns the old value of <code class="docutils literal notranslate"><span class="pre">x</span></code>. Floating-point min/max follow IEEE rules — <code class="docutils literal notranslate"><span class="pre">NaN</span></code> propagates: if either input is <code class="docutils literal notranslate"><span class="pre">NaN</span></code>, the result is <code class="docutils literal notranslate"><span class="pre">NaN</span></code>.</p>
+<p>Atomically writes back <code class="docutils literal notranslate"><span class="pre">min(x,</span> <span class="pre">y)</span></code> (resp. <code class="docutils literal notranslate"><span class="pre">max(x,</span> <span class="pre">y)</span></code>). Returns the old value of <code class="docutils literal notranslate"><span class="pre">x</span></code>. Floating-point min/max use <strong><code class="docutils literal notranslate"><span class="pre">minNum</span></code> / <code class="docutils literal notranslate"><span class="pre">maxNum</span></code>-style</strong> semantics: if exactly one input is <code class="docutils literal notranslate"><span class="pre">NaN</span></code>, the <strong>non-<code class="docutils literal notranslate"><span class="pre">NaN</span></code></strong> value is written back. This matches the f16 path’s use of LLVM <code class="docutils literal notranslate"><span class="pre">llvm.minnum</span></code> / <code class="docutils literal notranslate"><span class="pre">llvm.maxnum</span></code> intrinsics (<code class="docutils literal notranslate"><span class="pre">quadrants/codegen/llvm/codegen_llvm.cpp:1337-1342</span></code>) and the GPU-native paths (CUDA sm_80+ <code class="docutils literal notranslate"><span class="pre">atomicMin</span></code>/<code class="docutils literal notranslate"><span class="pre">atomicMax</span></code> for floats, SPIR-V <code class="docutils literal notranslate"><span class="pre">FMin</span></code> / <code class="docutils literal notranslate"><span class="pre">FMax</span></code>). The f32 / f64 CPU CAS-loop path (<code class="docutils literal notranslate"><span class="pre">quadrants/runtime/llvm/runtime_module/atomic.h::min_f32</span></code> / <code class="docutils literal notranslate"><span class="pre">max_f32</span></code>) uses naive <code class="docutils literal notranslate"><span class="pre">&lt;</span></code> / <code class="docutils literal notranslate"><span class="pre">&gt;</span></code> comparisons, which give asymmetric NaN behaviour depending on operand order — do not rely on a particular result when either input is <code class="docutils literal notranslate"><span class="pre">NaN</span></code> on the CPU backend. Behaviour when <em>both</em> inputs are <code class="docutils literal notranslate"><span class="pre">NaN</span></code> is backend-dependent across the board.</p>
 </section>
 <section id="qd-atomic-and-x-y-qd-atomic-or-x-y-qd-atomic-xor-x-y">
 <h3><code class="docutils literal notranslate"><span class="pre">qd.atomic_and(x,</span> <span class="pre">y)</span></code> / <code class="docutils literal notranslate"><span class="pre">qd.atomic_or(x,</span> <span class="pre">y)</span></code> / <code class="docutils literal notranslate"><span class="pre">qd.atomic_xor(x,</span> <span class="pre">y)</span></code><a class="headerlink" href="#qd-atomic-and-x-y-qd-atomic-or-x-y-qd-atomic-xor-x-y" title="Link to this heading">#</a></h3>
@@ -568,11 +576,11 @@
       </div>
     </a>
     <a class="right-next"
-       href="math.html"
+       href="block.html"
        title="next page">
       <div class="prev-next-info">
         <p class="prev-next-subtitle">next</p>
-        <p class="prev-next-title">Math</p>
+        <p class="prev-next-title">Block primitives</p>
       </div>
       <i class="fa-solid fa-angle-right"></i>
     </a>
