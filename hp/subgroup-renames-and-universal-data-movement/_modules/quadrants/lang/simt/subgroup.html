@@ -322,6 +322,7 @@
 <span class="kn">import</span><span class="w"> </span><span class="nn">warnings</span>
 
 <span class="kn">from</span><span class="w"> </span><span class="nn">quadrants.lang</span><span class="w"> </span><span class="kn">import</span> <span class="n">impl</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">quadrants.lang</span><span class="w"> </span><span class="kn">import</span> <span class="n">ops</span> <span class="k">as</span> <span class="n">qd_ops</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">quadrants.lang.kernel_impl</span><span class="w"> </span><span class="kn">import</span> <span class="n">func</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">quadrants.types.annotations</span><span class="w"> </span><span class="kn">import</span> <span class="n">template</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">quadrants.types.primitive_types</span><span class="w"> </span><span class="kn">import</span> <span class="n">i32</span><span class="p">,</span> <span class="n">u32</span>
@@ -546,13 +547,21 @@
 <span class="sd">    is conditional, matching the contract for ``shuffle_up``.  Cross-group ``shuffle_up``</span>
 <span class="sd">    partners are masked out by ``lane_in_group &gt;= offset``, so groups smaller than the</span>
 <span class="sd">    full subgroup compose correctly when ``log2_size &lt; log2(group_size)``.</span>
+
+<span class="sd">    The conditional update uses ``qd.select`` (which lowers to ``OpSelect``) rather</span>
+<span class="sd">    than an ``if`` statement.  An ``if``-introduced control-flow split over a</span>
+<span class="sd">    subgroup-derived predicate, followed by a downstream subgroup op (the next</span>
+<span class="sd">    ``shuffle_up`` either inside this loop or in `_exclusive_scan`), miscompiles on</span>
+<span class="sd">    MoltenVK / Metal: lanes that took the false branch reconverge with stale</span>
+<span class="sd">    register state, so the next ``shuffle_up`` reads garbage.  ``OpSelect`` keeps</span>
+<span class="sd">    every lane in straight-line code and sidesteps the issue.  ``op(value, partner)``</span>
+<span class="sd">    has no side effects, so unconditionally evaluating it is fine.</span>
 <span class="sd">    &quot;&quot;&quot;</span>
     <span class="n">lane_in_group</span> <span class="o">=</span> <span class="n">invocation_id</span><span class="p">()</span> <span class="o">&amp;</span> <span class="n">impl</span><span class="o">.</span><span class="n">static</span><span class="p">((</span><span class="mi">1</span> <span class="o">&lt;&lt;</span> <span class="n">log2_size</span><span class="p">)</span> <span class="o">-</span> <span class="mi">1</span><span class="p">)</span>
     <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="n">impl</span><span class="o">.</span><span class="n">static</span><span class="p">(</span><span class="nb">range</span><span class="p">(</span><span class="n">log2_size</span><span class="p">)):</span>
         <span class="n">offset</span> <span class="o">=</span> <span class="n">impl</span><span class="o">.</span><span class="n">static</span><span class="p">(</span><span class="mi">1</span> <span class="o">&lt;&lt;</span> <span class="n">i</span><span class="p">)</span>
         <span class="n">partner</span> <span class="o">=</span> <span class="n">shuffle_up</span><span class="p">(</span><span class="n">value</span><span class="p">,</span> <span class="n">u32</span><span class="p">(</span><span class="n">offset</span><span class="p">))</span>
-        <span class="k">if</span> <span class="n">lane_in_group</span> <span class="o">&gt;=</span> <span class="n">offset</span><span class="p">:</span>
-            <span class="n">value</span> <span class="o">=</span> <span class="n">op</span><span class="p">(</span><span class="n">value</span><span class="p">,</span> <span class="n">partner</span><span class="p">)</span>
+        <span class="n">value</span> <span class="o">=</span> <span class="n">qd_ops</span><span class="o">.</span><span class="n">select</span><span class="p">(</span><span class="n">lane_in_group</span> <span class="o">&gt;=</span> <span class="n">offset</span><span class="p">,</span> <span class="n">op</span><span class="p">(</span><span class="n">value</span><span class="p">,</span> <span class="n">partner</span><span class="p">),</span> <span class="n">value</span><span class="p">)</span>
     <span class="k">return</span> <span class="n">value</span>
 
 
@@ -658,14 +667,17 @@
 <span class="k">def</span><span class="w"> </span><span class="nf">_exclusive_scan</span><span class="p">(</span><span class="n">value</span><span class="p">,</span> <span class="n">op</span><span class="p">:</span> <span class="n">template</span><span class="p">(),</span> <span class="n">identity</span><span class="p">,</span> <span class="n">log2_size</span><span class="p">:</span> <span class="n">template</span><span class="p">()):</span>
 <span class="w">    </span><span class="sd">&quot;&quot;&quot;Generic exclusive scan: run the inclusive scan under ``op`` over ``2**log2_size``</span>
 <span class="sd">    consecutive lanes, then shift up by one lane and substitute ``identity`` at lane 0</span>
-<span class="sd">    of each group.&quot;&quot;&quot;</span>
+<span class="sd">    of each group.</span>
+
+<span class="sd">    The lane-0 substitution uses ``qd.select`` rather than an ``if`` for the same</span>
+<span class="sd">    reason as `_inclusive_scan`: an ``if``-then-assignment guarded by a</span>
+<span class="sd">    subgroup-derived predicate miscompiles on MoltenVK / Metal when the surrounding</span>
+<span class="sd">    function also issues subgroup ops (this whole helper is one such call site).</span>
+<span class="sd">    &quot;&quot;&quot;</span>
     <span class="n">inc</span> <span class="o">=</span> <span class="n">_inclusive_scan</span><span class="p">(</span><span class="n">value</span><span class="p">,</span> <span class="n">op</span><span class="p">,</span> <span class="n">log2_size</span><span class="p">)</span>
     <span class="n">shifted</span> <span class="o">=</span> <span class="n">shuffle_up</span><span class="p">(</span><span class="n">inc</span><span class="p">,</span> <span class="n">u32</span><span class="p">(</span><span class="mi">1</span><span class="p">))</span>
     <span class="n">lane_in_group</span> <span class="o">=</span> <span class="n">invocation_id</span><span class="p">()</span> <span class="o">&amp;</span> <span class="n">impl</span><span class="o">.</span><span class="n">static</span><span class="p">((</span><span class="mi">1</span> <span class="o">&lt;&lt;</span> <span class="n">log2_size</span><span class="p">)</span> <span class="o">-</span> <span class="mi">1</span><span class="p">)</span>
-    <span class="n">result</span> <span class="o">=</span> <span class="n">shifted</span>
-    <span class="k">if</span> <span class="n">lane_in_group</span> <span class="o">==</span> <span class="mi">0</span><span class="p">:</span>
-        <span class="n">result</span> <span class="o">=</span> <span class="n">identity</span>
-    <span class="k">return</span> <span class="n">result</span>
+    <span class="k">return</span> <span class="n">qd_ops</span><span class="o">.</span><span class="n">select</span><span class="p">(</span><span class="n">lane_in_group</span> <span class="o">==</span> <span class="mi">0</span><span class="p">,</span> <span class="n">identity</span><span class="p">,</span> <span class="n">shifted</span><span class="p">)</span>
 
 
 <span class="nd">@func</span>
