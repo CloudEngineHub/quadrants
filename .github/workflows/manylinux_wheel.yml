@@ -14,7 +14,26 @@ on:
 permissions:
   contents: write
 jobs:
+  changes:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: read
+    outputs:
+      src: ${{ steps.filter.outputs.src || 'true' }}
+    steps:
+      - uses: dorny/paths-filter@fbd0ab8f3e69293af611ebaee6363fc25e6d187d  # v4.0.1
+        id: filter
+        if: github.event_name == 'pull_request'
+        with:
+          predicate-quantifier: 'every'
+          filters: |
+            src:
+              - '!docs/**'
+              - '!.github/**'
   build_wheel:
+    needs: changes
+    if: needs.changes.outputs.src == 'true'
     name: Manylinux wheel Build
     runs-on: ${{ matrix.os }}
     container: ${{ matrix.os == 'ubuntu-22.04' && 'quay.io/pypa/manylinux_2_28_x86_64:latest' || matrix.os == 'ubuntu-22.04-arm' && 'quay.io/pypa/manylinux_2_34_aarch64:2025.11.11-1' }}

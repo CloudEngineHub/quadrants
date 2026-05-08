@@ -14,7 +14,26 @@ permissions:
   pull-requests: write
   checks: write
 jobs:
+  changes:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: read
+    outputs:
+      src: ${{ steps.filter.outputs.src || 'true' }}
+    steps:
+      - uses: dorny/paths-filter@fbd0ab8f3e69293af611ebaee6363fc25e6d187d  # v4.0.1
+        id: filter
+        if: github.event_name == 'pull_request'
+        with:
+          predicate-quantifier: 'every'
+          filters: |
+            src:
+              - '!docs/**'
+              - '!.github/**'
   pr-change-report:
+    needs: changes
+    if: needs.changes.outputs.src == 'true'
     name: PR change report
     runs-on: ubuntu-latest
     steps:
