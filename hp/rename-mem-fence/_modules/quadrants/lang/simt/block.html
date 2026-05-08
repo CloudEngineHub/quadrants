@@ -487,25 +487,22 @@
 <span class="c1"># Slower than the CUDA path but functionally equivalent and portable. Each call-site allocates</span>
 <span class="c1"># a fresh `SharedArray` so multiple calls in the same kernel do not alias each other.</span>
 <span class="c1">#</span>
-<span class="c1"># All three emulations use `atomic_add` rather than `atomic_or` / `atomic_and`. We originally</span>
-<span class="c1"># used the bitwise atomics on the `any` / `all` paths because the contributions are 0 / 1 and</span>
-<span class="c1"># OR is conceptually cleaner, but Metal (via MoltenVK / SPIRV-Cross) silently no-ops</span>
-<span class="c1"># `OpAtomicOr` on threadgroup memory in some configurations -- the SPIR-V op translates to MSL</span>
-<span class="c1"># `atomic_fetch_or_explicit` on a `threadgroup atomic_int` and the resulting shader does not</span>
-<span class="c1"># update the slot, so every thread reads back the initialiser value. `OpAtomicIAdd` does not</span>
-<span class="c1"># hit the same issue, so we route every reduction through `atomic_add`. Correctness sketch for</span>
-<span class="c1"># the new variants: `count` = number of threads contributing 1; `any_nonzero` = 1 iff `count &gt; 0`;</span>
-<span class="c1"># `all_nonzero` = 1 iff no thread contributed a zero indicator (i.e. `count == 0` over the</span>
-<span class="c1"># zero-indicator predicate). The bool returns are implicitly cast to i32 by Quadrants&#39; AST</span>
-<span class="c1"># transformer (`ast_transformer.py::qd_ops.cast(..., return_type)`).</span>
+<span class="c1"># IMPORTANT: every thread must participate in the `atomic_add` call unconditionally (guarding</span>
+<span class="c1"># with `if predicate: atomic_add(...)` is NOT safe). On Metal, `workgroupBarrier` does not</span>
+<span class="c1"># propagate atomic writes from divergent branches to threads that did not enter the branch --</span>
+<span class="c1"># non-participating SIMD groups never see the updated slot. By having every thread call</span>
+<span class="c1"># `atomic_add(counter, select(...))` the control flow stays uniform, the barrier synchronises</span>
+<span class="c1"># correctly, and all threads read the final count.</span>
+<span class="c1">#</span>
+<span class="c1"># We also use `atomic_add` rather than `atomic_or` because Metal / MoltenVK silently no-ops</span>
+<span class="c1"># `OpAtomicOr` on threadgroup memory in some configurations.</span>
 <span class="nd">@_func</span>
 <span class="k">def</span><span class="w"> </span><span class="nf">_block_reduce_count_nonzero_emulated</span><span class="p">(</span><span class="n">predicate</span><span class="p">:</span> <span class="n">_i32</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">_i32</span><span class="p">:</span>
     <span class="n">counter</span> <span class="o">=</span> <span class="n">SharedArray</span><span class="p">((</span><span class="mi">1</span><span class="p">,),</span> <span class="n">_i32</span><span class="p">)</span>
     <span class="k">if</span> <span class="n">thread_idx</span><span class="p">()</span> <span class="o">==</span> <span class="mi">0</span><span class="p">:</span>
         <span class="n">counter</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="o">=</span> <span class="mi">0</span>
     <span class="n">sync</span><span class="p">()</span>
-    <span class="k">if</span> <span class="n">predicate</span> <span class="o">!=</span> <span class="mi">0</span><span class="p">:</span>
-        <span class="n">_ops</span><span class="o">.</span><span class="n">atomic_add</span><span class="p">(</span><span class="n">counter</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span> <span class="mi">1</span><span class="p">)</span>
+    <span class="n">_ops</span><span class="o">.</span><span class="n">atomic_add</span><span class="p">(</span><span class="n">counter</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span> <span class="n">_ops</span><span class="o">.</span><span class="n">select</span><span class="p">(</span><span class="n">predicate</span> <span class="o">!=</span> <span class="mi">0</span><span class="p">,</span> <span class="mi">1</span><span class="p">,</span> <span class="mi">0</span><span class="p">))</span>
     <span class="n">sync</span><span class="p">()</span>
     <span class="k">return</span> <span class="n">counter</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span>
 
@@ -516,10 +513,9 @@
     <span class="k">if</span> <span class="n">thread_idx</span><span class="p">()</span> <span class="o">==</span> <span class="mi">0</span><span class="p">:</span>
         <span class="n">counter</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="o">=</span> <span class="mi">0</span>
     <span class="n">sync</span><span class="p">()</span>
-    <span class="k">if</span> <span class="n">predicate</span> <span class="o">!=</span> <span class="mi">0</span><span class="p">:</span>
-        <span class="n">_ops</span><span class="o">.</span><span class="n">atomic_add</span><span class="p">(</span><span class="n">counter</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span> <span class="mi">1</span><span class="p">)</span>
+    <span class="n">_ops</span><span class="o">.</span><span class="n">atomic_add</span><span class="p">(</span><span class="n">counter</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span> <span class="n">_ops</span><span class="o">.</span><span class="n">select</span><span class="p">(</span><span class="n">predicate</span> <span class="o">!=</span> <span class="mi">0</span><span class="p">,</span> <span class="mi">1</span><span class="p">,</span> <span class="mi">0</span><span class="p">))</span>
     <span class="n">sync</span><span class="p">()</span>
-    <span class="k">return</span> <span class="n">counter</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="o">!=</span> <span class="mi">0</span>
+    <span class="k">return</span> <span class="n">_ops</span><span class="o">.</span><span class="n">min</span><span class="p">(</span><span class="n">counter</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span> <span class="mi">1</span><span class="p">)</span>
 
 
 <span class="nd">@_func</span>
@@ -528,10 +524,9 @@
     <span class="k">if</span> <span class="n">thread_idx</span><span class="p">()</span> <span class="o">==</span> <span class="mi">0</span><span class="p">:</span>
         <span class="n">counter</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="o">=</span> <span class="mi">0</span>
     <span class="n">sync</span><span class="p">()</span>
-    <span class="k">if</span> <span class="n">predicate</span> <span class="o">==</span> <span class="mi">0</span><span class="p">:</span>
-        <span class="n">_ops</span><span class="o">.</span><span class="n">atomic_add</span><span class="p">(</span><span class="n">counter</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span> <span class="mi">1</span><span class="p">)</span>
+    <span class="n">_ops</span><span class="o">.</span><span class="n">atomic_add</span><span class="p">(</span><span class="n">counter</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span> <span class="n">_ops</span><span class="o">.</span><span class="n">select</span><span class="p">(</span><span class="n">predicate</span> <span class="o">==</span> <span class="mi">0</span><span class="p">,</span> <span class="mi">1</span><span class="p">,</span> <span class="mi">0</span><span class="p">))</span>
     <span class="n">sync</span><span class="p">()</span>
-    <span class="k">return</span> <span class="n">counter</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="o">==</span> <span class="mi">0</span>
+    <span class="k">return</span> <span class="mi">1</span> <span class="o">-</span> <span class="n">_ops</span><span class="o">.</span><span class="n">min</span><span class="p">(</span><span class="n">counter</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span> <span class="mi">1</span><span class="p">)</span>
 </pre></div>
 
                 </article>
