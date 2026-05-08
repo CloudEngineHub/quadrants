@@ -388,47 +388,47 @@
 <tr class="row-odd"><td><p><a class="reference internal" href="#quadrants.lang.simt.subgroup.reduce_all_add" title="quadrants.lang.simt.subgroup.reduce_all_add"><code class="xref py py-obj docutils literal notranslate"><span class="pre">reduce_all_add</span></code></a>(value, log2_size)</p></td>
 <td><p>Sum <code class="docutils literal notranslate"><span class="pre">value</span></code> across <code class="docutils literal notranslate"><span class="pre">2**log2_size</span></code> consecutive lanes via a butterfly XOR.</p></td>
 </tr>
-<tr class="row-even"><td><p><a class="reference internal" href="#quadrants.lang.simt.subgroup.inclusive_add" title="quadrants.lang.simt.subgroup.inclusive_add"><code class="xref py py-obj docutils literal notranslate"><span class="pre">inclusive_add</span></code></a>(value)</p></td>
-<td><p></p></td>
+<tr class="row-even"><td><p><a class="reference internal" href="#quadrants.lang.simt.subgroup.inclusive_add" title="quadrants.lang.simt.subgroup.inclusive_add"><code class="xref py py-obj docutils literal notranslate"><span class="pre">inclusive_add</span></code></a>(value, log2_size)</p></td>
+<td><p>Inclusive prefix sum across <code class="docutils literal notranslate"><span class="pre">2**log2_size</span></code> consecutive lanes.</p></td>
 </tr>
-<tr class="row-odd"><td><p><a class="reference internal" href="#quadrants.lang.simt.subgroup.inclusive_mul" title="quadrants.lang.simt.subgroup.inclusive_mul"><code class="xref py py-obj docutils literal notranslate"><span class="pre">inclusive_mul</span></code></a>(value)</p></td>
-<td><p></p></td>
+<tr class="row-odd"><td><p><a class="reference internal" href="#quadrants.lang.simt.subgroup.inclusive_mul" title="quadrants.lang.simt.subgroup.inclusive_mul"><code class="xref py py-obj docutils literal notranslate"><span class="pre">inclusive_mul</span></code></a>(value, log2_size)</p></td>
+<td><p>Inclusive prefix product across <code class="docutils literal notranslate"><span class="pre">2**log2_size</span></code> consecutive lanes.  See</p></td>
 </tr>
-<tr class="row-even"><td><p><a class="reference internal" href="#quadrants.lang.simt.subgroup.inclusive_min" title="quadrants.lang.simt.subgroup.inclusive_min"><code class="xref py py-obj docutils literal notranslate"><span class="pre">inclusive_min</span></code></a>(value)</p></td>
-<td><p></p></td>
+<tr class="row-even"><td><p><a class="reference internal" href="#quadrants.lang.simt.subgroup.inclusive_min" title="quadrants.lang.simt.subgroup.inclusive_min"><code class="xref py py-obj docutils literal notranslate"><span class="pre">inclusive_min</span></code></a>(value, log2_size)</p></td>
+<td><p>Inclusive prefix min across <code class="docutils literal notranslate"><span class="pre">2**log2_size</span></code> consecutive lanes.  See</p></td>
 </tr>
-<tr class="row-odd"><td><p><a class="reference internal" href="#quadrants.lang.simt.subgroup.inclusive_max" title="quadrants.lang.simt.subgroup.inclusive_max"><code class="xref py py-obj docutils literal notranslate"><span class="pre">inclusive_max</span></code></a>(value)</p></td>
-<td><p></p></td>
+<tr class="row-odd"><td><p><a class="reference internal" href="#quadrants.lang.simt.subgroup.inclusive_max" title="quadrants.lang.simt.subgroup.inclusive_max"><code class="xref py py-obj docutils literal notranslate"><span class="pre">inclusive_max</span></code></a>(value, log2_size)</p></td>
+<td><p>Inclusive prefix max across <code class="docutils literal notranslate"><span class="pre">2**log2_size</span></code> consecutive lanes.  See</p></td>
 </tr>
-<tr class="row-even"><td><p><a class="reference internal" href="#quadrants.lang.simt.subgroup.inclusive_and" title="quadrants.lang.simt.subgroup.inclusive_and"><code class="xref py py-obj docutils literal notranslate"><span class="pre">inclusive_and</span></code></a>(value)</p></td>
-<td><p></p></td>
+<tr class="row-even"><td><p><a class="reference internal" href="#quadrants.lang.simt.subgroup.inclusive_and" title="quadrants.lang.simt.subgroup.inclusive_and"><code class="xref py py-obj docutils literal notranslate"><span class="pre">inclusive_and</span></code></a>(value, log2_size)</p></td>
+<td><p>Inclusive prefix bitwise-AND across <code class="docutils literal notranslate"><span class="pre">2**log2_size</span></code> consecutive lanes.  Integer</p></td>
 </tr>
-<tr class="row-odd"><td><p><a class="reference internal" href="#quadrants.lang.simt.subgroup.inclusive_or" title="quadrants.lang.simt.subgroup.inclusive_or"><code class="xref py py-obj docutils literal notranslate"><span class="pre">inclusive_or</span></code></a>(value)</p></td>
-<td><p></p></td>
+<tr class="row-odd"><td><p><a class="reference internal" href="#quadrants.lang.simt.subgroup.inclusive_or" title="quadrants.lang.simt.subgroup.inclusive_or"><code class="xref py py-obj docutils literal notranslate"><span class="pre">inclusive_or</span></code></a>(value, log2_size)</p></td>
+<td><p>Inclusive prefix bitwise-OR across <code class="docutils literal notranslate"><span class="pre">2**log2_size</span></code> consecutive lanes.  Integer</p></td>
 </tr>
-<tr class="row-even"><td><p><a class="reference internal" href="#quadrants.lang.simt.subgroup.inclusive_xor" title="quadrants.lang.simt.subgroup.inclusive_xor"><code class="xref py py-obj docutils literal notranslate"><span class="pre">inclusive_xor</span></code></a>(value)</p></td>
-<td><p></p></td>
+<tr class="row-even"><td><p><a class="reference internal" href="#quadrants.lang.simt.subgroup.inclusive_xor" title="quadrants.lang.simt.subgroup.inclusive_xor"><code class="xref py py-obj docutils literal notranslate"><span class="pre">inclusive_xor</span></code></a>(value, log2_size)</p></td>
+<td><p>Inclusive prefix bitwise-XOR across <code class="docutils literal notranslate"><span class="pre">2**log2_size</span></code> consecutive lanes.  Integer</p></td>
 </tr>
-<tr class="row-odd"><td><p><a class="reference internal" href="#quadrants.lang.simt.subgroup.exclusive_add" title="quadrants.lang.simt.subgroup.exclusive_add"><code class="xref py py-obj docutils literal notranslate"><span class="pre">exclusive_add</span></code></a>(value)</p></td>
-<td><p></p></td>
+<tr class="row-odd"><td><p><a class="reference internal" href="#quadrants.lang.simt.subgroup.exclusive_add" title="quadrants.lang.simt.subgroup.exclusive_add"><code class="xref py py-obj docutils literal notranslate"><span class="pre">exclusive_add</span></code></a>(value, log2_size)</p></td>
+<td><p>Exclusive prefix sum across <code class="docutils literal notranslate"><span class="pre">2**log2_size</span></code> consecutive lanes.</p></td>
 </tr>
-<tr class="row-even"><td><p><a class="reference internal" href="#quadrants.lang.simt.subgroup.exclusive_mul" title="quadrants.lang.simt.subgroup.exclusive_mul"><code class="xref py py-obj docutils literal notranslate"><span class="pre">exclusive_mul</span></code></a>(value)</p></td>
-<td><p></p></td>
+<tr class="row-even"><td><p><a class="reference internal" href="#quadrants.lang.simt.subgroup.exclusive_mul" title="quadrants.lang.simt.subgroup.exclusive_mul"><code class="xref py py-obj docutils literal notranslate"><span class="pre">exclusive_mul</span></code></a>(value, log2_size)</p></td>
+<td><p>Exclusive prefix product across <code class="docutils literal notranslate"><span class="pre">2**log2_size</span></code> consecutive lanes.  Lane 0 of</p></td>
 </tr>
-<tr class="row-odd"><td><p><a class="reference internal" href="#quadrants.lang.simt.subgroup.exclusive_min" title="quadrants.lang.simt.subgroup.exclusive_min"><code class="xref py py-obj docutils literal notranslate"><span class="pre">exclusive_min</span></code></a>(value)</p></td>
-<td><p></p></td>
+<tr class="row-odd"><td><p><a class="reference internal" href="#quadrants.lang.simt.subgroup.exclusive_min" title="quadrants.lang.simt.subgroup.exclusive_min"><code class="xref py py-obj docutils literal notranslate"><span class="pre">exclusive_min</span></code></a>(value, log2_size, identity)</p></td>
+<td><p>Exclusive prefix min across <code class="docutils literal notranslate"><span class="pre">2**log2_size</span></code> consecutive lanes.</p></td>
 </tr>
-<tr class="row-even"><td><p><a class="reference internal" href="#quadrants.lang.simt.subgroup.exclusive_max" title="quadrants.lang.simt.subgroup.exclusive_max"><code class="xref py py-obj docutils literal notranslate"><span class="pre">exclusive_max</span></code></a>(value)</p></td>
-<td><p></p></td>
+<tr class="row-even"><td><p><a class="reference internal" href="#quadrants.lang.simt.subgroup.exclusive_max" title="quadrants.lang.simt.subgroup.exclusive_max"><code class="xref py py-obj docutils literal notranslate"><span class="pre">exclusive_max</span></code></a>(value, log2_size, identity)</p></td>
+<td><p>Exclusive prefix max across <code class="docutils literal notranslate"><span class="pre">2**log2_size</span></code> consecutive lanes.</p></td>
 </tr>
-<tr class="row-odd"><td><p><a class="reference internal" href="#quadrants.lang.simt.subgroup.exclusive_and" title="quadrants.lang.simt.subgroup.exclusive_and"><code class="xref py py-obj docutils literal notranslate"><span class="pre">exclusive_and</span></code></a>(value)</p></td>
-<td><p></p></td>
+<tr class="row-odd"><td><p><a class="reference internal" href="#quadrants.lang.simt.subgroup.exclusive_and" title="quadrants.lang.simt.subgroup.exclusive_and"><code class="xref py py-obj docutils literal notranslate"><span class="pre">exclusive_and</span></code></a>(value, log2_size)</p></td>
+<td><p>Exclusive prefix bitwise-AND.  Integer dtypes only.  Lane 0 of each group returns</p></td>
 </tr>
-<tr class="row-even"><td><p><a class="reference internal" href="#quadrants.lang.simt.subgroup.exclusive_or" title="quadrants.lang.simt.subgroup.exclusive_or"><code class="xref py py-obj docutils literal notranslate"><span class="pre">exclusive_or</span></code></a>(value)</p></td>
-<td><p></p></td>
+<tr class="row-even"><td><p><a class="reference internal" href="#quadrants.lang.simt.subgroup.exclusive_or" title="quadrants.lang.simt.subgroup.exclusive_or"><code class="xref py py-obj docutils literal notranslate"><span class="pre">exclusive_or</span></code></a>(value, log2_size)</p></td>
+<td><p>Exclusive prefix bitwise-OR.  Integer dtypes only.  Lane 0 of each group returns</p></td>
 </tr>
-<tr class="row-odd"><td><p><a class="reference internal" href="#quadrants.lang.simt.subgroup.exclusive_xor" title="quadrants.lang.simt.subgroup.exclusive_xor"><code class="xref py py-obj docutils literal notranslate"><span class="pre">exclusive_xor</span></code></a>(value)</p></td>
-<td><p></p></td>
+<tr class="row-odd"><td><p><a class="reference internal" href="#quadrants.lang.simt.subgroup.exclusive_xor" title="quadrants.lang.simt.subgroup.exclusive_xor"><code class="xref py py-obj docutils literal notranslate"><span class="pre">exclusive_xor</span></code></a>(value, log2_size)</p></td>
+<td><p>Exclusive prefix bitwise-XOR.  Integer dtypes only.  Lane 0 of each group returns</p></td>
 </tr>
 <tr class="row-even"><td><p><a class="reference internal" href="#quadrants.lang.simt.subgroup.shuffle" title="quadrants.lang.simt.subgroup.shuffle"><code class="xref py py-obj docutils literal notranslate"><span class="pre">shuffle</span></code></a>(value, index)</p></td>
 <td><p></p></td>
@@ -529,73 +529,112 @@ shuffle+add operations in the calling kernel’s IR.</p>
 
 <dl class="py function">
 <dt class="sig sig-object py" id="quadrants.lang.simt.subgroup.inclusive_add">
-<span class="sig-prename descclassname"><span class="pre">quadrants.lang.simt.subgroup.</span></span><span class="sig-name descname"><span class="pre">inclusive_add</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">value</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../../../../../_modules/quadrants/lang/simt/subgroup.html#inclusive_add"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#quadrants.lang.simt.subgroup.inclusive_add" title="Link to this definition">#</a></dt>
-<dd></dd></dl>
+<span class="sig-prename descclassname"><span class="pre">quadrants.lang.simt.subgroup.</span></span><span class="sig-name descname"><span class="pre">inclusive_add</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">value</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">log2_size</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">template</span><span class="p"><span class="pre">(</span></span><span class="p"><span class="pre">)</span></span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../../../../../_modules/quadrants/lang/simt/subgroup.html#inclusive_add"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#quadrants.lang.simt.subgroup.inclusive_add" title="Link to this definition">#</a></dt>
+<dd><p>Inclusive prefix sum across <code class="docutils literal notranslate"><span class="pre">2**log2_size</span></code> consecutive lanes.</p>
+<p>Lane <code class="docutils literal notranslate"><span class="pre">i</span></code> within each group of <code class="docutils literal notranslate"><span class="pre">2**log2_size</span></code> lanes returns
+<code class="docutils literal notranslate"><span class="pre">v[group_start]</span> <span class="pre">+</span> <span class="pre">v[group_start</span> <span class="pre">+</span> <span class="pre">1]</span> <span class="pre">+</span> <span class="pre">...</span> <span class="pre">+</span> <span class="pre">v[i]</span></code>.  Caller must ensure
+<code class="docutils literal notranslate"><span class="pre">2**log2_size</span></code> does not exceed the active subgroup size on the target
+(32 on CUDA / Metal / RDNA, 64 on CDNA).</p>
+</dd></dl>
 
 <dl class="py function">
 <dt class="sig sig-object py" id="quadrants.lang.simt.subgroup.inclusive_mul">
-<span class="sig-prename descclassname"><span class="pre">quadrants.lang.simt.subgroup.</span></span><span class="sig-name descname"><span class="pre">inclusive_mul</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">value</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../../../../../_modules/quadrants/lang/simt/subgroup.html#inclusive_mul"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#quadrants.lang.simt.subgroup.inclusive_mul" title="Link to this definition">#</a></dt>
-<dd></dd></dl>
+<span class="sig-prename descclassname"><span class="pre">quadrants.lang.simt.subgroup.</span></span><span class="sig-name descname"><span class="pre">inclusive_mul</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">value</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">log2_size</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">template</span><span class="p"><span class="pre">(</span></span><span class="p"><span class="pre">)</span></span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../../../../../_modules/quadrants/lang/simt/subgroup.html#inclusive_mul"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#quadrants.lang.simt.subgroup.inclusive_mul" title="Link to this definition">#</a></dt>
+<dd><p>Inclusive prefix product across <code class="docutils literal notranslate"><span class="pre">2**log2_size</span></code> consecutive lanes.  See
+<cite>inclusive_add</cite> for the size contract.</p>
+</dd></dl>
 
 <dl class="py function">
 <dt class="sig sig-object py" id="quadrants.lang.simt.subgroup.inclusive_min">
-<span class="sig-prename descclassname"><span class="pre">quadrants.lang.simt.subgroup.</span></span><span class="sig-name descname"><span class="pre">inclusive_min</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">value</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../../../../../_modules/quadrants/lang/simt/subgroup.html#inclusive_min"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#quadrants.lang.simt.subgroup.inclusive_min" title="Link to this definition">#</a></dt>
-<dd></dd></dl>
+<span class="sig-prename descclassname"><span class="pre">quadrants.lang.simt.subgroup.</span></span><span class="sig-name descname"><span class="pre">inclusive_min</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">value</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">log2_size</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">template</span><span class="p"><span class="pre">(</span></span><span class="p"><span class="pre">)</span></span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../../../../../_modules/quadrants/lang/simt/subgroup.html#inclusive_min"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#quadrants.lang.simt.subgroup.inclusive_min" title="Link to this definition">#</a></dt>
+<dd><p>Inclusive prefix min across <code class="docutils literal notranslate"><span class="pre">2**log2_size</span></code> consecutive lanes.  See
+<cite>inclusive_add</cite> for the size contract.</p>
+</dd></dl>
 
 <dl class="py function">
 <dt class="sig sig-object py" id="quadrants.lang.simt.subgroup.inclusive_max">
-<span class="sig-prename descclassname"><span class="pre">quadrants.lang.simt.subgroup.</span></span><span class="sig-name descname"><span class="pre">inclusive_max</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">value</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../../../../../_modules/quadrants/lang/simt/subgroup.html#inclusive_max"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#quadrants.lang.simt.subgroup.inclusive_max" title="Link to this definition">#</a></dt>
-<dd></dd></dl>
+<span class="sig-prename descclassname"><span class="pre">quadrants.lang.simt.subgroup.</span></span><span class="sig-name descname"><span class="pre">inclusive_max</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">value</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">log2_size</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">template</span><span class="p"><span class="pre">(</span></span><span class="p"><span class="pre">)</span></span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../../../../../_modules/quadrants/lang/simt/subgroup.html#inclusive_max"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#quadrants.lang.simt.subgroup.inclusive_max" title="Link to this definition">#</a></dt>
+<dd><p>Inclusive prefix max across <code class="docutils literal notranslate"><span class="pre">2**log2_size</span></code> consecutive lanes.  See
+<cite>inclusive_add</cite> for the size contract.</p>
+</dd></dl>
 
 <dl class="py function">
 <dt class="sig sig-object py" id="quadrants.lang.simt.subgroup.inclusive_and">
-<span class="sig-prename descclassname"><span class="pre">quadrants.lang.simt.subgroup.</span></span><span class="sig-name descname"><span class="pre">inclusive_and</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">value</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../../../../../_modules/quadrants/lang/simt/subgroup.html#inclusive_and"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#quadrants.lang.simt.subgroup.inclusive_and" title="Link to this definition">#</a></dt>
-<dd></dd></dl>
+<span class="sig-prename descclassname"><span class="pre">quadrants.lang.simt.subgroup.</span></span><span class="sig-name descname"><span class="pre">inclusive_and</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">value</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">log2_size</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">template</span><span class="p"><span class="pre">(</span></span><span class="p"><span class="pre">)</span></span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../../../../../_modules/quadrants/lang/simt/subgroup.html#inclusive_and"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#quadrants.lang.simt.subgroup.inclusive_and" title="Link to this definition">#</a></dt>
+<dd><p>Inclusive prefix bitwise-AND across <code class="docutils literal notranslate"><span class="pre">2**log2_size</span></code> consecutive lanes.  Integer
+dtypes only.  See <cite>inclusive_add</cite> for the size contract.</p>
+</dd></dl>
 
 <dl class="py function">
 <dt class="sig sig-object py" id="quadrants.lang.simt.subgroup.inclusive_or">
-<span class="sig-prename descclassname"><span class="pre">quadrants.lang.simt.subgroup.</span></span><span class="sig-name descname"><span class="pre">inclusive_or</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">value</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../../../../../_modules/quadrants/lang/simt/subgroup.html#inclusive_or"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#quadrants.lang.simt.subgroup.inclusive_or" title="Link to this definition">#</a></dt>
-<dd></dd></dl>
+<span class="sig-prename descclassname"><span class="pre">quadrants.lang.simt.subgroup.</span></span><span class="sig-name descname"><span class="pre">inclusive_or</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">value</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">log2_size</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">template</span><span class="p"><span class="pre">(</span></span><span class="p"><span class="pre">)</span></span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../../../../../_modules/quadrants/lang/simt/subgroup.html#inclusive_or"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#quadrants.lang.simt.subgroup.inclusive_or" title="Link to this definition">#</a></dt>
+<dd><p>Inclusive prefix bitwise-OR across <code class="docutils literal notranslate"><span class="pre">2**log2_size</span></code> consecutive lanes.  Integer
+dtypes only.  See <cite>inclusive_add</cite> for the size contract.</p>
+</dd></dl>
 
 <dl class="py function">
 <dt class="sig sig-object py" id="quadrants.lang.simt.subgroup.inclusive_xor">
-<span class="sig-prename descclassname"><span class="pre">quadrants.lang.simt.subgroup.</span></span><span class="sig-name descname"><span class="pre">inclusive_xor</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">value</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../../../../../_modules/quadrants/lang/simt/subgroup.html#inclusive_xor"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#quadrants.lang.simt.subgroup.inclusive_xor" title="Link to this definition">#</a></dt>
-<dd></dd></dl>
+<span class="sig-prename descclassname"><span class="pre">quadrants.lang.simt.subgroup.</span></span><span class="sig-name descname"><span class="pre">inclusive_xor</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">value</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">log2_size</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">template</span><span class="p"><span class="pre">(</span></span><span class="p"><span class="pre">)</span></span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../../../../../_modules/quadrants/lang/simt/subgroup.html#inclusive_xor"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#quadrants.lang.simt.subgroup.inclusive_xor" title="Link to this definition">#</a></dt>
+<dd><p>Inclusive prefix bitwise-XOR across <code class="docutils literal notranslate"><span class="pre">2**log2_size</span></code> consecutive lanes.  Integer
+dtypes only.  See <cite>inclusive_add</cite> for the size contract.</p>
+</dd></dl>
 
 <dl class="py function">
 <dt class="sig sig-object py" id="quadrants.lang.simt.subgroup.exclusive_add">
-<span class="sig-prename descclassname"><span class="pre">quadrants.lang.simt.subgroup.</span></span><span class="sig-name descname"><span class="pre">exclusive_add</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">value</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../../../../../_modules/quadrants/lang/simt/subgroup.html#exclusive_add"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#quadrants.lang.simt.subgroup.exclusive_add" title="Link to this definition">#</a></dt>
-<dd></dd></dl>
+<span class="sig-prename descclassname"><span class="pre">quadrants.lang.simt.subgroup.</span></span><span class="sig-name descname"><span class="pre">exclusive_add</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">value</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">log2_size</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">template</span><span class="p"><span class="pre">(</span></span><span class="p"><span class="pre">)</span></span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../../../../../_modules/quadrants/lang/simt/subgroup.html#exclusive_add"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#quadrants.lang.simt.subgroup.exclusive_add" title="Link to this definition">#</a></dt>
+<dd><p>Exclusive prefix sum across <code class="docutils literal notranslate"><span class="pre">2**log2_size</span></code> consecutive lanes.</p>
+<p>Lane <code class="docutils literal notranslate"><span class="pre">i</span></code> (with <code class="docutils literal notranslate"><span class="pre">i</span> <span class="pre">&gt;</span> <span class="pre">0</span></code>) within each group of <code class="docutils literal notranslate"><span class="pre">2**log2_size</span></code> lanes returns
+<code class="docutils literal notranslate"><span class="pre">v[group_start]</span> <span class="pre">+</span> <span class="pre">v[group_start</span> <span class="pre">+</span> <span class="pre">1]</span> <span class="pre">+</span> <span class="pre">...</span> <span class="pre">+</span> <span class="pre">v[i</span> <span class="pre">-</span> <span class="pre">1]</span></code>.  Lane 0 of each group
+returns the additive identity (zero, in <code class="docutils literal notranslate"><span class="pre">value</span></code>’s dtype).</p>
+</dd></dl>
 
 <dl class="py function">
 <dt class="sig sig-object py" id="quadrants.lang.simt.subgroup.exclusive_mul">
-<span class="sig-prename descclassname"><span class="pre">quadrants.lang.simt.subgroup.</span></span><span class="sig-name descname"><span class="pre">exclusive_mul</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">value</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../../../../../_modules/quadrants/lang/simt/subgroup.html#exclusive_mul"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#quadrants.lang.simt.subgroup.exclusive_mul" title="Link to this definition">#</a></dt>
-<dd></dd></dl>
+<span class="sig-prename descclassname"><span class="pre">quadrants.lang.simt.subgroup.</span></span><span class="sig-name descname"><span class="pre">exclusive_mul</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">value</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">log2_size</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">template</span><span class="p"><span class="pre">(</span></span><span class="p"><span class="pre">)</span></span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../../../../../_modules/quadrants/lang/simt/subgroup.html#exclusive_mul"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#quadrants.lang.simt.subgroup.exclusive_mul" title="Link to this definition">#</a></dt>
+<dd><p>Exclusive prefix product across <code class="docutils literal notranslate"><span class="pre">2**log2_size</span></code> consecutive lanes.  Lane 0 of
+each group returns the multiplicative identity (one, in <code class="docutils literal notranslate"><span class="pre">value</span></code>’s dtype).</p>
+</dd></dl>
 
 <dl class="py function">
 <dt class="sig sig-object py" id="quadrants.lang.simt.subgroup.exclusive_min">
-<span class="sig-prename descclassname"><span class="pre">quadrants.lang.simt.subgroup.</span></span><span class="sig-name descname"><span class="pre">exclusive_min</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">value</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../../../../../_modules/quadrants/lang/simt/subgroup.html#exclusive_min"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#quadrants.lang.simt.subgroup.exclusive_min" title="Link to this definition">#</a></dt>
-<dd></dd></dl>
+<span class="sig-prename descclassname"><span class="pre">quadrants.lang.simt.subgroup.</span></span><span class="sig-name descname"><span class="pre">exclusive_min</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">value</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">log2_size</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">template</span><span class="p"><span class="pre">(</span></span><span class="p"><span class="pre">)</span></span></span></em>, <em class="sig-param"><span class="n"><span class="pre">identity</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../../../../../_modules/quadrants/lang/simt/subgroup.html#exclusive_min"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#quadrants.lang.simt.subgroup.exclusive_min" title="Link to this definition">#</a></dt>
+<dd><p>Exclusive prefix min across <code class="docutils literal notranslate"><span class="pre">2**log2_size</span></code> consecutive lanes.</p>
+<p>Lane 0 of each group returns <code class="docutils literal notranslate"><span class="pre">identity</span></code>: the caller must supply a value that is
+<code class="docutils literal notranslate"><span class="pre">&gt;=</span></code> every legal element of the input (typically <code class="docutils literal notranslate"><span class="pre">+∞</span></code> for floats, the dtype’s
+maximum for integers).  See the module-level note for why this op alone takes an
+explicit identity.</p>
+</dd></dl>
 
 <dl class="py function">
 <dt class="sig sig-object py" id="quadrants.lang.simt.subgroup.exclusive_max">
-<span class="sig-prename descclassname"><span class="pre">quadrants.lang.simt.subgroup.</span></span><span class="sig-name descname"><span class="pre">exclusive_max</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">value</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../../../../../_modules/quadrants/lang/simt/subgroup.html#exclusive_max"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#quadrants.lang.simt.subgroup.exclusive_max" title="Link to this definition">#</a></dt>
-<dd></dd></dl>
+<span class="sig-prename descclassname"><span class="pre">quadrants.lang.simt.subgroup.</span></span><span class="sig-name descname"><span class="pre">exclusive_max</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">value</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">log2_size</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">template</span><span class="p"><span class="pre">(</span></span><span class="p"><span class="pre">)</span></span></span></em>, <em class="sig-param"><span class="n"><span class="pre">identity</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../../../../../_modules/quadrants/lang/simt/subgroup.html#exclusive_max"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#quadrants.lang.simt.subgroup.exclusive_max" title="Link to this definition">#</a></dt>
+<dd><p>Exclusive prefix max across <code class="docutils literal notranslate"><span class="pre">2**log2_size</span></code> consecutive lanes.</p>
+<p>Lane 0 of each group returns <code class="docutils literal notranslate"><span class="pre">identity</span></code>: the caller must supply a value that is
+<code class="docutils literal notranslate"><span class="pre">&lt;=</span></code> every legal element of the input (typically <code class="docutils literal notranslate"><span class="pre">-∞</span></code> for floats, the dtype’s
+minimum for integers).  See the module-level note for why this op alone takes an
+explicit identity.</p>
+</dd></dl>
 
 <dl class="py function">
 <dt class="sig sig-object py" id="quadrants.lang.simt.subgroup.exclusive_and">
-<span class="sig-prename descclassname"><span class="pre">quadrants.lang.simt.subgroup.</span></span><span class="sig-name descname"><span class="pre">exclusive_and</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">value</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../../../../../_modules/quadrants/lang/simt/subgroup.html#exclusive_and"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#quadrants.lang.simt.subgroup.exclusive_and" title="Link to this definition">#</a></dt>
-<dd></dd></dl>
+<span class="sig-prename descclassname"><span class="pre">quadrants.lang.simt.subgroup.</span></span><span class="sig-name descname"><span class="pre">exclusive_and</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">value</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">log2_size</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">template</span><span class="p"><span class="pre">(</span></span><span class="p"><span class="pre">)</span></span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../../../../../_modules/quadrants/lang/simt/subgroup.html#exclusive_and"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#quadrants.lang.simt.subgroup.exclusive_and" title="Link to this definition">#</a></dt>
+<dd><p>Exclusive prefix bitwise-AND.  Integer dtypes only.  Lane 0 of each group returns
+all-bits-set in <code class="docutils literal notranslate"><span class="pre">value</span></code>’s dtype.</p>
+</dd></dl>
 
 <dl class="py function">
 <dt class="sig sig-object py" id="quadrants.lang.simt.subgroup.exclusive_or">
-<span class="sig-prename descclassname"><span class="pre">quadrants.lang.simt.subgroup.</span></span><span class="sig-name descname"><span class="pre">exclusive_or</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">value</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../../../../../_modules/quadrants/lang/simt/subgroup.html#exclusive_or"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#quadrants.lang.simt.subgroup.exclusive_or" title="Link to this definition">#</a></dt>
-<dd></dd></dl>
+<span class="sig-prename descclassname"><span class="pre">quadrants.lang.simt.subgroup.</span></span><span class="sig-name descname"><span class="pre">exclusive_or</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">value</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">log2_size</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">template</span><span class="p"><span class="pre">(</span></span><span class="p"><span class="pre">)</span></span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../../../../../_modules/quadrants/lang/simt/subgroup.html#exclusive_or"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#quadrants.lang.simt.subgroup.exclusive_or" title="Link to this definition">#</a></dt>
+<dd><p>Exclusive prefix bitwise-OR.  Integer dtypes only.  Lane 0 of each group returns
+zero in <code class="docutils literal notranslate"><span class="pre">value</span></code>’s dtype.</p>
+</dd></dl>
 
 <dl class="py function">
 <dt class="sig sig-object py" id="quadrants.lang.simt.subgroup.exclusive_xor">
-<span class="sig-prename descclassname"><span class="pre">quadrants.lang.simt.subgroup.</span></span><span class="sig-name descname"><span class="pre">exclusive_xor</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">value</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../../../../../_modules/quadrants/lang/simt/subgroup.html#exclusive_xor"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#quadrants.lang.simt.subgroup.exclusive_xor" title="Link to this definition">#</a></dt>
-<dd></dd></dl>
+<span class="sig-prename descclassname"><span class="pre">quadrants.lang.simt.subgroup.</span></span><span class="sig-name descname"><span class="pre">exclusive_xor</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">value</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">log2_size</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">template</span><span class="p"><span class="pre">(</span></span><span class="p"><span class="pre">)</span></span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../../../../../_modules/quadrants/lang/simt/subgroup.html#exclusive_xor"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#quadrants.lang.simt.subgroup.exclusive_xor" title="Link to this definition">#</a></dt>
+<dd><p>Exclusive prefix bitwise-XOR.  Integer dtypes only.  Lane 0 of each group returns
+zero in <code class="docutils literal notranslate"><span class="pre">value</span></code>’s dtype.</p>
+</dd></dl>
 
 <dl class="py function">
 <dt class="sig sig-object py" id="quadrants.lang.simt.subgroup.shuffle">

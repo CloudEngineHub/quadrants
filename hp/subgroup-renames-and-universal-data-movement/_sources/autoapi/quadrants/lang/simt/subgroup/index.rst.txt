@@ -104,33 +104,104 @@ Module Contents
    shuffle+add operations in the calling kernel's IR.
 
 
-.. py:function:: inclusive_add(value)
+.. py:function:: inclusive_add(value, log2_size: template())
 
-.. py:function:: inclusive_mul(value)
+   Inclusive prefix sum across ``2**log2_size`` consecutive lanes.
 
-.. py:function:: inclusive_min(value)
+   Lane ``i`` within each group of ``2**log2_size`` lanes returns
+   ``v[group_start] + v[group_start + 1] + ... + v[i]``.  Caller must ensure
+   ``2**log2_size`` does not exceed the active subgroup size on the target
+   (32 on CUDA / Metal / RDNA, 64 on CDNA).
 
-.. py:function:: inclusive_max(value)
 
-.. py:function:: inclusive_and(value)
+.. py:function:: inclusive_mul(value, log2_size: template())
 
-.. py:function:: inclusive_or(value)
+   Inclusive prefix product across ``2**log2_size`` consecutive lanes.  See
+   `inclusive_add` for the size contract.
 
-.. py:function:: inclusive_xor(value)
 
-.. py:function:: exclusive_add(value)
+.. py:function:: inclusive_min(value, log2_size: template())
 
-.. py:function:: exclusive_mul(value)
+   Inclusive prefix min across ``2**log2_size`` consecutive lanes.  See
+   `inclusive_add` for the size contract.
 
-.. py:function:: exclusive_min(value)
 
-.. py:function:: exclusive_max(value)
+.. py:function:: inclusive_max(value, log2_size: template())
 
-.. py:function:: exclusive_and(value)
+   Inclusive prefix max across ``2**log2_size`` consecutive lanes.  See
+   `inclusive_add` for the size contract.
 
-.. py:function:: exclusive_or(value)
 
-.. py:function:: exclusive_xor(value)
+.. py:function:: inclusive_and(value, log2_size: template())
+
+   Inclusive prefix bitwise-AND across ``2**log2_size`` consecutive lanes.  Integer
+   dtypes only.  See `inclusive_add` for the size contract.
+
+
+.. py:function:: inclusive_or(value, log2_size: template())
+
+   Inclusive prefix bitwise-OR across ``2**log2_size`` consecutive lanes.  Integer
+   dtypes only.  See `inclusive_add` for the size contract.
+
+
+.. py:function:: inclusive_xor(value, log2_size: template())
+
+   Inclusive prefix bitwise-XOR across ``2**log2_size`` consecutive lanes.  Integer
+   dtypes only.  See `inclusive_add` for the size contract.
+
+
+.. py:function:: exclusive_add(value, log2_size: template())
+
+   Exclusive prefix sum across ``2**log2_size`` consecutive lanes.
+
+   Lane ``i`` (with ``i > 0``) within each group of ``2**log2_size`` lanes returns
+   ``v[group_start] + v[group_start + 1] + ... + v[i - 1]``.  Lane 0 of each group
+   returns the additive identity (zero, in ``value``'s dtype).
+
+
+.. py:function:: exclusive_mul(value, log2_size: template())
+
+   Exclusive prefix product across ``2**log2_size`` consecutive lanes.  Lane 0 of
+   each group returns the multiplicative identity (one, in ``value``'s dtype).
+
+
+.. py:function:: exclusive_min(value, log2_size: template(), identity)
+
+   Exclusive prefix min across ``2**log2_size`` consecutive lanes.
+
+   Lane 0 of each group returns ``identity``: the caller must supply a value that is
+   ``>=`` every legal element of the input (typically ``+∞`` for floats, the dtype's
+   maximum for integers).  See the module-level note for why this op alone takes an
+   explicit identity.
+
+
+.. py:function:: exclusive_max(value, log2_size: template(), identity)
+
+   Exclusive prefix max across ``2**log2_size`` consecutive lanes.
+
+   Lane 0 of each group returns ``identity``: the caller must supply a value that is
+   ``<=`` every legal element of the input (typically ``-∞`` for floats, the dtype's
+   minimum for integers).  See the module-level note for why this op alone takes an
+   explicit identity.
+
+
+.. py:function:: exclusive_and(value, log2_size: template())
+
+   Exclusive prefix bitwise-AND.  Integer dtypes only.  Lane 0 of each group returns
+   all-bits-set in ``value``'s dtype.
+
+
+.. py:function:: exclusive_or(value, log2_size: template())
+
+   Exclusive prefix bitwise-OR.  Integer dtypes only.  Lane 0 of each group returns
+   zero in ``value``'s dtype.
+
+
+.. py:function:: exclusive_xor(value, log2_size: template())
+
+   Exclusive prefix bitwise-XOR.  Integer dtypes only.  Lane 0 of each group returns
+   zero in ``value``'s dtype.
+
 
 .. py:function:: shuffle(value, index)
 
