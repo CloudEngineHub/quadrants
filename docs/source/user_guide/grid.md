@@ -2,13 +2,15 @@
 
 Grid-level primitives operate across **all blocks of a single kernel launch** — i.e. the entire device for the duration of one kernel. They sit one tier above block-scope primitives and one tier below "finish the kernel and launch a new one" (the only fully cross-block thread synchronization Quadrants offers).
 
-Grid ops live under `qd.simt.grid`. The namespace currently contains a single op, the device-scope memory fence:
+Grid ops live under `qd.simt.grid`.
 
 ## What's available
 
 | Op                        | CUDA | AMDGPU | Vulkan | Metal |
 |---------------------------|------|--------|--------|-------|
 | `qd.simt.grid.mem_fence()`| yes  | yes    | yes    | yes\* |
+| `qd.simt.grid.publish(target, value)` | yes | yes | yes | yes |
+| `qd.simt.grid.observe(target)` | yes | yes | yes | yes |
 
 \* On Metal, `grid.mem_fence()` lowers (via MoltenVK / SPIRV-Cross → MSL) to `atomic_thread_fence(metal::memory_scope_device)`. Per the Metal Shading Language specification, that builtin only synchronizes *atomic* and *relaxed-atomic* memory accesses across the device, not plain (non-atomic) loads / stores. So a Metal-portable cross-workgroup producer-consumer pattern needs the produced value itself to be published through an atomic op (e.g. `qd.atomic_or(a[i], 1)`); CUDA, AMDGPU, and native Vulkan (Linux / Windows) order non-atomic stores around `grid.mem_fence()` strictly. The same caveat applies to **Vulkan on macOS**, since on macOS Vulkan is really MoltenVK lowering SPIR-V to MSL — treat `qd.vulkan` on Darwin the same as `qd.metal` for `grid.mem_fence()` purposes. Empirically validate any other pattern, or split into two kernel launches.
 
@@ -71,7 +73,44 @@ The three `grid.mem_fence()` calls are doing different jobs:
 
 The fence does not require thread convergence, which is why it appears inside `if tid == 0` without deadlocking — `qd.simt.block.sync()` would deadlock there; `grid.mem_fence()` is safe.
 
-> **Metal / Vulkan-on-macOS portability:** the example as written above relies on the producer's plain (non-atomic) store `flags[bid] = STATE_AGGREGATE` becoming visible to other workgroups once `grid.mem_fence()` retires. CUDA, AMDGPU, and native Vulkan honor this strictly; Metal (and therefore Vulkan-on-macOS) does **not** — `atomic_thread_fence(memory_scope_device)` only orders atomic accesses across the device. To make this idiom Metal-portable, publish through an atomic store (`qd.atomic_or(flags[bid], STATE_AGGREGATE)`) or split the producer and consumer phases into separate kernel launches.
+> **Metal / Vulkan-on-macOS portability:** the example as written above relies on the producer's plain (non-atomic) store `flags[bid] = STATE_AGGREGATE` becoming visible to other workgroups once `grid.mem_fence()` retires. CUDA, AMDGPU, and native Vulkan honor this strictly; Metal (and therefore Vulkan-on-macOS) does **not** — `atomic_thread_fence(memory_scope_device)` only orders atomic accesses across the device. Use `publish` / `observe` (below) for Metal-portable cross-workgroup signalling, or split the producer and consumer phases into separate kernel launches.
+
+### `qd.simt.grid.publish(target, value)` / `qd.simt.grid.observe(target)`
+
+A **Metal-portable** pair for cross-workgroup producer-consumer handshakes. They wrap `mem_fence()` plus the right atomic operations so that the same user code works on every GPU backend.
+
+- **`publish(target, value)`** — ensures all prior plain stores by the calling thread are visible to other workgroups, then stores *value* into *target*.
+- **`observe(target)`** — atomically reads *target* (returning its current value) and ensures that subsequent plain loads see the stores that preceded the matching `publish`. *target* must be an integer dtype.
+
+Per-backend lowering:
+
+- **CUDA / AMDGPU / native Vulkan:** `publish` = `mem_fence()` + plain store. `observe` = `atomic_or(target, 0)` + `mem_fence()`.
+- **Metal / Vulkan-on-macOS:** `publish` = `mem_fence()` + `atomic_exchange(target, value)`. `observe` = same as above. The atomic exchange satisfies Metal's requirement that cross-workgroup ordering go through atomic operations; the preceding fence provides belt-and-suspenders ordering of the non-atomic data stores (empirically effective on Apple Silicon, per the MSL `atomic_thread_fence` device-scope behaviour).
+
+The decoupled-look-back example rewritten with `publish` / `observe`:
+
+```python
+@qd.kernel
+def lookback_scan(...) -> None:
+    bid = qd.simt.block.global_thread_idx() // BLOCK_SIZE
+    tid = qd.simt.block.global_thread_idx() %  BLOCK_SIZE
+
+    block_sum = ...
+
+    if tid == 0:
+        partials[bid] = block_sum
+        qd.simt.grid.publish(flags[bid], STATE_AGGREGATE)
+
+    if tid == 0:
+        prev = bid - 1
+        while prev >= 0:
+            while qd.simt.grid.observe(flags[prev]) == STATE_INVALID:
+                pass
+            block_sum += partials[prev]
+            ...
+```
+
+Compared with the raw `mem_fence()` version: three explicit fences collapse into one `publish` and one `observe`, the spin-wait LICM issue is handled automatically (observe uses an atomic read internally), and the code runs on Metal without modification.
 
 #### Spin-wait gotcha
 
@@ -82,7 +121,7 @@ while flags[prev] == STATE_INVALID:
     pass
 ```
 
-is therefore unsafe: LLVM's loop-invariant-code-motion will hoist the load out of the loop (the loop body has no aliasing writes), so once the first read sees `STATE_INVALID` the loop never observes the producer's update — it spins forever. Two correct spellings:
+is therefore unsafe: LLVM's loop-invariant-code-motion will hoist the load out of the loop (the loop body has no aliasing writes), so once the first read sees `STATE_INVALID` the loop never observes the producer's update — it spins forever. **The recommended spelling is `qd.simt.grid.observe()`** (see above), which handles this automatically on all backends. For reference, the two lower-level alternatives:
 
 - **Fence inside the loop body** (used in the example above):
 
@@ -104,7 +143,7 @@ is therefore unsafe: LLVM's loop-invariant-code-motion will hoist the load out o
 
 ## Performance and portability notes
 
-- **GPU-portable.** All four GPU backends implement `grid.mem_fence()` natively (see "Per-backend lowering"). The one residual portability gap is Metal / Vulkan-on-macOS only ordering *atomic* memory accesses across the device — patterns relying on plain stores becoming visible across workgroups must publish through atomics on those targets.
+- **GPU-portable.** All four GPU backends implement `grid.mem_fence()` natively (see "Per-backend lowering"). The one residual portability gap is Metal / Vulkan-on-macOS only ordering *atomic* memory accesses across the device — patterns relying on plain stores becoming visible across workgroups must publish through atomics on those targets. **`publish` / `observe` handle this automatically** and are the recommended way to write Metal-portable cross-workgroup signalling.
 - **Cost scales with the global-cache invalidation domain.** A grid fence drains the L2 (and on some GPUs the L1) caches of all SMs / CUs touching the address. On A100 / H100 the cost is on the order of tens to low hundreds of nanoseconds per call; AMDGPU `acq_rel` agent fences and Vulkan `OpMemoryBarrier(ScopeDevice)` are in the same ballpark on contemporary hardware. In tight loops, prefer batching multiple cross-block updates per fence.
 - **Pair with the right ordering of memory ops.** The fence orders the *calling thread*'s memory ops; readers in other blocks need their own fence (or an atomic load) to refresh their view. The producer-fence + consumer-fence pattern is the canonical idiom.
 - **Not a substitute for atomics on contended locations.** A fence orders writes but does not serialize them. If multiple blocks write to the same location, you need an atomic regardless of how the fence is placed.

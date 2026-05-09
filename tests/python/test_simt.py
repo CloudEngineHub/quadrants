@@ -542,6 +542,72 @@ def test_grid_memfence_deprecated_alias():
 
     assert a[0] == 11
 
+
+# publish/observe: same ordering test as test_grid_mem_fence but using
+# qd.simt.grid.publish (for the flag store) and qd.simt.grid.observe (for reading
+# the flags in the last block). Unlike the raw mem_fence test this runs on ALL GPU
+# backends including Metal and Vulkan-on-macOS, because publish routes the flag
+# through atomic_exchange on Metal-like targets and observe uses atomic_or everywhere.
+@test_utils.test(arch=qd.gpu)
+def test_publish_observe_ordering():
+    N = 512
+    BLOCK_SIZE = 1
+    data = qd.field(dtype=qd.u32, shape=N)
+    flags = qd.field(dtype=qd.u32, shape=N)
+
+    @qd.kernel
+    def kern():
+        block_counter = 0
+        qd.loop_config(block_dim=BLOCK_SIZE)
+        for i in range(N):
+            data[i] = qd.cast(i + 1, qd.u32)
+            qd.simt.grid.publish(flags[i], qd.cast(1, qd.u32))
+
+            actual_order = qd.atomic_add(block_counter, 1)
+            if actual_order == N - 1:
+                for j in range(N):
+                    f = qd.simt.grid.observe(flags[j])
+                    data[j] = data[j] + f
+
+    kern()
+
+    for i in range(N):
+        assert data[i] == i + 2
+
+
+# Verifies that observe() returns the correct value (the current contents of
+# the target location) without modifying it.
+@test_utils.test(arch=qd.gpu)
+def test_observe_returns_value():
+    f = qd.field(dtype=qd.u32, shape=1)
+    out = qd.field(dtype=qd.u32, shape=1)
+    f[None] = 42
+
+    @qd.kernel
+    def kern():
+        out[None] = qd.simt.grid.observe(f[None])
+
+    kern()
+
+    assert f[None] == 42
+    assert out[None] == 42
+
+
+# Verifies that publish() stores the value correctly (single-thread sanity).
+@test_utils.test(arch=qd.gpu)
+def test_publish_stores_value():
+    f = qd.field(dtype=qd.u32, shape=1)
+    f[None] = 0
+
+    @qd.kernel
+    def kern():
+        qd.simt.grid.publish(f[None], qd.cast(99, qd.u32))
+
+    kern()
+
+    assert f[None] == 99
+
+
 # The old SPIR-V-only no-arg subgroup reductions (`subgroup.reduce_add` / `reduce_mul` / `reduce_min`
 # / `reduce_max` / `reduce_and` / `reduce_or` / `reduce_xor`) and their Vulkan-specific tests have
 # been removed.  See `test_subgroup_reduce_add` / `test_subgroup_reduce_all_add` below for the
