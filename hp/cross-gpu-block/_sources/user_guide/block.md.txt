@@ -4,7 +4,7 @@ Block-level primitives operate on the threads of a single CUDA thread block (CTA
 
 Block ops live under `qd.simt.block`. They are written so the same Python source compiles to the right vendor primitive on each backend. As of this writing every op on this page is portable across CUDA, AMDGPU, Vulkan, and Metal; the only remaining caveat (called out in the support-table footnote below) is a perf trade-off for the emulated `block.sync_*_nonzero` ops on non-CUDA backends, not a correctness gap. If a future op is added that is not yet portable, the Python layer will raise `ValueError` at trace time on the unsupported backend.
 
-The closely-related device-scope memory fence `qd.simt.grid.mem_fence()` is documented separately in [grid](grid.md). Users picking between a block-scope and a device-scope fence should read that page for the device-scope side.
+The closely-related device-scope memory fence is documented separately in [grid](grid.md). Users picking between a block-scope and a device-scope fence should read that page for the device-scope side.
 
 ## What's available
 
@@ -19,13 +19,11 @@ The closely-related device-scope memory fence `qd.simt.grid.mem_fence()` is docu
 | `block.global_thread_idx()`                     | yes  | yes    | yes    | yes   |
 | `block.thread_idx()`                            | yes  | yes    | yes    | yes   |
 
-The device-scope memory fence `qd.simt.grid.mem_fence()` is portable across the same four backends, with its own Metal / Vulkan-on-macOS atomic-only-ordering caveat. Full table, per-backend lowering, and the producer-consumer caveat live in [grid](grid.md).
-
 Vulkan and Metal share a SPIR-V codegen path (Metal goes through MoltenVK → MSL); they are listed as separate columns because a couple of ops have Metal-specific caveats called out below. Footnoted entries are still functional, just with the limitations the footnote describes.
 
 \* On AMDGPU, Vulkan, and Metal the `block.sync_{all,any,count}_nonzero(p)` ops are *emulated* via shared memory (one shared `i32` slot + 2 block barriers + a single `atomic_add` per contributing thread) rather than a single hardware-fused barrier-with-reduction. CUDA has the fused NVPTX `barrier.cta.red.{and,or,popc}.aligned.all.sync` family of intrinsics so it stays on the fast path; the other backends do not have a direct analog (in particular, SPIR-V `OpGroupNonUniform*` only operates at subgroup scope reliably across Vulkan + Metal). All three reductions are routed through `atomic_add` rather than `atomic_or` / `atomic_and`: the latter trip a Metal-specific bug where `OpAtomicOr` on threadgroup memory silently no-ops via MoltenVK / SPIRV-Cross. The emulation is correct and portable but costs two `block.sync()`s plus one shared-memory atomic per call instead of a single barrier instruction; if you have an inner loop calling these ops millions of times, consider whether you can batch the predicate before reducing it.
 
-Naming note: `block.mem_sync()` was recently renamed to `block.mem_fence()` for consistency with the project's "fence vs barrier" terminology. The old name is still available as a deprecated alias that emits `DeprecationWarning` on first use; new code should use `block.mem_fence()`. (`qd.simt.grid.memfence()` was renamed to `qd.simt.grid.mem_fence()` in the same change — see [grid](grid.md) for that side.)
+Naming note: `block.mem_sync()` was recently renamed to `block.mem_fence()` for consistency with the project's "fence vs barrier" terminology. The old name is still available as a deprecated alias that emits `DeprecationWarning` on first use; new code should use `block.mem_fence()`.
 
 ## Barrier vs fence: the distinction that matters
 
@@ -42,7 +40,7 @@ Concretely:
 
 Calling `sync()` from a path that not all threads reach (a divergent `if`, an early `return`, etc.) is a classic GPU deadlock and applies to all backends.
 
-The corresponding distinction at device scope is `qd.simt.grid.mem_fence()` (memory fence across the entire grid, no thread synchronization), documented in [grid](grid.md). There is no block-style "device barrier" — to synchronize threads across blocks, finish the kernel and launch a new one.
+The corresponding distinction at device scope is the grid-scope memory fence (memory fence across the entire grid, no thread synchronization), documented in [grid](grid.md).
 
 ## Semantics
 
@@ -71,17 +69,20 @@ Each call performs both the synchronization (same convergence requirement as `sy
 A block-scope memory fence. Orders memory operations issued by the calling thread so that prior writes are visible to other threads in the block before any subsequent read by the calling thread can be reordered ahead of the fence. It does **not** synchronize threads — no convergence requirement, so it is safe to call from divergent control flow (e.g. inside `if tid == 0`) on every backend.
 
 - Lowers to `__threadfence_block()` (`nvvm_membar_cta`) — the intended target — on CUDA, to an LLVM IR `fence acquire_release syncscope("workgroup")` on AMDGPU (which the AMDGCN backend lowers to the appropriate `s_waitcnt` / cache-flush sequence; emitted via a body-replacement in `llvm_context.cpp` rather than `__builtin_amdgcn_fence`, since the `runtime.cpp` is built with a host-targeted clang that doesn't know AMDGCN builtins), and to `workgroupMemoryBarrier` on SPIR-V (Vulkan / Metal).
-- Use this when one thread in the block (e.g. lane 0) needs to publish data to shared memory and have the publication be visible to the rest of the block without forcing the publishing thread to wait at a barrier. The pattern is typically:
+- Use this when one thread in the block needs to publish data to shared memory and have other threads observe it via polling, without going through a thread-converging barrier. The canonical pattern is a flag-published producer + spin-waiting consumers:
 
   ```python
   if tid == 0:
       shared[...] = computed_value
-      qd.simt.block.mem_fence()
+      qd.simt.block.mem_fence()  # order the data write before the flag store
       shared_flag[0] = 1
-  qd.simt.block.sync()
+  else:
+      while shared_flag[0] == 0:
+          pass
+      use(shared[...])  # without the fence above, may observe stale shared[...]
   ```
 
-  The `mem_fence()` here orders the data write before the flag write; the `sync()` is what converges the other threads so they observe the published flag.
+  `block.sync()` does not work here — it deadlocks, because `tid == 0` and the other threads take divergent paths and never converge at a single call site. `block.sync()` would also be sufficient by itself (it implies a block-scope fence) when the producer and consumers *can* converge; reach for `block.mem_fence()` specifically when they cannot.
 
 The deprecated alias `block.mem_sync()` calls `block.mem_fence()` and emits a `DeprecationWarning` on first use.
 
@@ -119,7 +120,7 @@ Today only the X dimension is exposed (1-D blocks). For 2-D / 3-D blocks the cal
 
 ## Related
 
-- [grid](grid.md) — `qd.simt.grid.mem_fence()`, the device-scope counterpart of `block.mem_fence()`, with its own per-backend lowering and Metal / Vulkan-on-macOS portability caveat. For coordination within a single block, prefer `block.mem_fence()` — it is cheaper.
+- [grid](grid.md) — the device-scope counterpart of `block.mem_fence()`. For coordination within a single block, prefer `block.mem_fence()` — it is cheaper.
 - [parallelization](parallelization.md) — kernel-launch and grid-stride patterns.
 - [subgroup](subgroup.md) — primitives that operate within a single subgroup (warp / wavefront), one tier below block scope.
 - [tile16](tile16.md) — `Tile16x16` register-resident tiles, built on `subgroup.shuffle`.
