@@ -175,9 +175,9 @@ Module Contents
 
    Exclusive prefix sum across ``2**log2_size`` consecutive lanes.
 
-   Lane ``i`` (with ``i > 0``) within each group of ``2**log2_size`` lanes returns
-   ``v[group_start] + v[group_start + 1] + ... + v[i - 1]``.  Lane 0 of each group returns the additive identity
-   (zero, in ``value``'s dtype).
+   Lane ``i`` (with ``i > 0``) within each group of ``2**log2_size`` lanes returns ``v[group_start] +
+   v[group_start + 1] + ... + v[i - 1]``.  Lane 0 of each group returns the additive identity (zero, in ``value``'s
+   dtype).
 
 
 .. py:function:: exclusive_mul(value, log2_size: template())
