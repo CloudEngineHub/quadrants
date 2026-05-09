@@ -680,3 +680,78 @@ def test_atomic_add_matrix_field_fanout():
         for j in range(3):
             expected = N * (i * 3 + j + 1)
             assert m[None][i, j] == test_utils.approx(expected, rel=1e-5)
+
+
+# Pins the documented semantics of qd.atomic_exchange: unconditionally write `val` into `dest` and return the
+# old value of `dest`. Single-thread sanity, all primitive dtypes that the codegen path supports today (i32,
+# u32, i64, u64, f32, f64). f16 xchg falls through the f16 CAS path in codegen_llvm.cpp's real_type_atomic
+# and is deferred (see TODO in real_type_atomic / shared_float_atomic).
+@pytest.mark.parametrize("dtype", [qd.i32, qd.u32, qd.i64, qd.u64, qd.f32, qd.f64])
+@test_utils.test(arch=qd.gpu)
+def test_atomic_exchange_returns_old_value(dtype):
+    test_utils.skip_if_f64_unsupported(dtype)
+    _skip_if_no_int64_atomic_rmw(dtype)
+    f = qd.field(dtype, shape=())
+    old_out = qd.field(dtype, shape=())
+    f[None] = 7
+
+    @qd.kernel
+    def kern():
+        old_out[None] = qd.atomic_exchange(f[None], qd.cast(42, dtype))
+
+    kern()
+    if dtype in (qd.f32, qd.f64, qd.f16):
+        assert float(f[None]) == 42.0
+        assert float(old_out[None]) == 7.0
+    else:
+        assert int(f[None]) == 42
+        assert int(old_out[None]) == 7
+
+
+# Stress test: N threads each xchg a unique nonzero value into a single shared slot, capturing the returned
+# old value into a per-thread record. Atomicity guarantees that the multiset {final slot value} U {captured
+# old values} == {initial value} U {all contributed values}, i.e. no value is lost or duplicated. This is the
+# canonical "no values lost" check for a swap primitive and is what distinguishes a correct atomic exchange
+# from a racy load+store pair.
+@pytest.mark.parametrize("dtype", [qd.i32, qd.u32, qd.i64, qd.u64])
+@test_utils.test(arch=qd.gpu)
+def test_atomic_exchange_swap_under_contention(dtype):
+    _skip_if_no_int64_atomic_rmw(dtype)
+    N = 256
+    INIT = 1_000_000
+    slot = qd.field(dtype, shape=())
+    olds = qd.field(dtype, shape=(N,))
+    slot[None] = INIT
+
+    @qd.kernel
+    def kern():
+        for i in range(N):
+            olds[i] = qd.atomic_exchange(slot[None], qd.cast(i + 1, dtype))
+
+    kern()
+
+    contributed = set(range(1, N + 1)) | {INIT}
+    seen = {int(olds[i]) for i in range(N)} | {int(slot[None])}
+    assert (
+        seen == contributed
+    ), f"atomic_exchange lost or duplicated values: missing={contributed - seen}, extra={seen - contributed}"
+
+
+# Pins that vector-typed atomic_exchange fans out to one scalar OpAtomicExchange per component, mirroring
+# the existing fan-out semantics for atomic_add (test_atomic_add_vector_field_fanout). After N exchanges
+# each writing the same vector, the slot must equal that vector exactly (last writer wins per component).
+@test_utils.test(arch=qd.gpu)
+def test_atomic_exchange_vector_field_fanout():
+    N = 64
+    f = qd.Vector.field(3, qd.f32, shape=())
+    f[None] = qd.Vector([0.0, 0.0, 0.0])
+
+    @qd.kernel
+    def kern():
+        for _ in range(N):
+            qd.atomic_exchange(f[None], qd.Vector([1.5, 2.5, 3.5]))
+
+    kern()
+    assert f[None][0] == test_utils.approx(1.5, rel=1e-5)
+    assert f[None][1] == test_utils.approx(2.5, rel=1e-5)
+    assert f[None][2] == test_utils.approx(3.5, rel=1e-5)

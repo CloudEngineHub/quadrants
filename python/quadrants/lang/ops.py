@@ -1431,6 +1431,42 @@ def atomic_xor(x, y):
 
 
 @writeback_binary
+def atomic_exchange(x, y):
+    """Atomically swap the value of `x` with `y`, and return the old value of `x`.
+
+    Unlike the other `qd.atomic_*` ops, the new value of `x` does not depend on its old value: `x` is
+    unconditionally overwritten with `y`. Useful for lock-free hand-off / claim-a-slot patterns where you
+    want to atomically grab whatever was at a location while leaving a fresh value behind.
+
+    `x` must be a writable target, constant expressions or scalars are not allowed.
+
+    Args:
+        x, y (Union[:mod:`~quadrants.types.primitive_types`, :class:`~quadrants.Matrix`]): \
+            The input. When both are matrices they must have the same shape.
+
+    Returns:
+        The old value of `x`.
+
+    Example::
+
+        >>> @qd.kernel
+        >>> def test():
+        >>>     x = 7
+        >>>     z = qd.atomic_exchange(x, 42)
+        >>>     print(x)  # 42, the new value of x
+        >>>     print(z)  # 7,  the old value of x
+        >>>
+        >>>     qd.atomic_exchange(1, x)  # will raise QuadrantsSyntaxError
+    """
+    if impl.is_python_backend():
+        old = x.item()
+        x[()] = y
+        return old
+
+    return impl.expr_init(expr.Expr(_qd_core.expr_atomic_xchg(x.ptr, y.ptr), dbg_info=_qd_core.DebugInfo(stack_info())))
+
+
+@writeback_binary
 def assign(a, b):
     impl.get_runtime().compiling_callable.ast_builder().expr_assign(a.ptr, b.ptr, _qd_core.DebugInfo(stack_info()))
     return a
@@ -1512,6 +1548,7 @@ __all__ = [
     "atomic_min",
     "atomic_add",
     "atomic_mul",
+    "atomic_exchange",
     "bit_cast",
     "bit_shr",
     "cast",

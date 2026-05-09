@@ -98,6 +98,7 @@ std::string atomic_op_type_name(AtomicOpType type) {
     REGISTER_TYPE(bit_and);
     REGISTER_TYPE(bit_or);
     REGISTER_TYPE(bit_xor);
+    REGISTER_TYPE(xchg);
 
 #undef REGISTER_TYPE
     default:

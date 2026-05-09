@@ -148,21 +148,33 @@ class DemoteAtomics : public BasicStmtVisitor {
     }
 
     if (demote) {
-      // replace atomics with load, add, store
-      auto bin_type = atomic_to_binary_op_type(stmt->op_type);
+      // replace atomics with load, op, store
       auto ptr = stmt->dest;
       auto val = stmt->val;
 
       auto new_stmts = VecStatement();
       Stmt *load;
-      if (is_local) {
-        load = new_stmts.push_back<LocalLoadStmt>(ptr);
-        auto bin = new_stmts.push_back<BinaryOpStmt>(bin_type, load, val);
-        new_stmts.push_back<LocalStoreStmt>(ptr, bin);
+      if (stmt->op_type == AtomicOpType::xchg) {
+        // atomic_exchange has no binary equivalent: the new value is just `val`,
+        // independent of the old value. Demoted form is load + store(val).
+        if (is_local) {
+          load = new_stmts.push_back<LocalLoadStmt>(ptr);
+          new_stmts.push_back<LocalStoreStmt>(ptr, val);
+        } else {
+          load = new_stmts.push_back<GlobalLoadStmt>(ptr);
+          new_stmts.push_back<GlobalStoreStmt>(ptr, val);
+        }
       } else {
-        load = new_stmts.push_back<GlobalLoadStmt>(ptr);
-        auto bin = new_stmts.push_back<BinaryOpStmt>(bin_type, load, val);
-        new_stmts.push_back<GlobalStoreStmt>(ptr, bin);
+        auto bin_type = atomic_to_binary_op_type(stmt->op_type);
+        if (is_local) {
+          load = new_stmts.push_back<LocalLoadStmt>(ptr);
+          auto bin = new_stmts.push_back<BinaryOpStmt>(bin_type, load, val);
+          new_stmts.push_back<LocalStoreStmt>(ptr, bin);
+        } else {
+          load = new_stmts.push_back<GlobalLoadStmt>(ptr);
+          auto bin = new_stmts.push_back<BinaryOpStmt>(bin_type, load, val);
+          new_stmts.push_back<GlobalStoreStmt>(ptr, bin);
+        }
       }
       // For a quadrants program like `c = ti.atomic_add(a, b)`, the IR looks
       // like the following

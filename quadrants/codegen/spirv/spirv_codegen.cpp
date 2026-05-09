@@ -1665,7 +1665,21 @@ void TaskCodegen::visit(AtomicOpStmt *stmt) {
       use_native_atomics = false;
     }
 
-    if (use_native_atomics) {
+    if (stmt->op_type == AtomicOpType::xchg && !dest_is_ptr && !dt->is_primitive(PrimitiveTypeID::f16)) {
+      // Float xchg: route through OpAtomicExchange on the uint-backed buffer pointer (already established by
+      // the addr_ptr block above when no native float-atomic-add cap is in play). OpAtomicExchange supports
+      // float operands per the SPIR-V spec, but going through uint avoids any spirv_has_atomic_float_* cap
+      // dependency and works on every backend (including MoltenVK / spirv-cross-msl on Apple Silicon).
+      // Shared (workgroup) float xchg and f16 xchg are not yet covered -- they would need uint-backing
+      // analogous to the add CAS path; out of scope for the initial xchg landing.
+      auto uint_dt = ir_->get_quadrants_uint_type(dt);
+      auto uint_ret_type = ir_->get_primitive_type(uint_dt);
+      auto uint_data = ir_->make_value(spv::OpBitcast, uint_ret_type, data);
+      val = ir_->make_value(spv::OpAtomicExchange, uint_ret_type, addr_ptr,
+                            /*scope=*/ir_->const_i32_one_,
+                            /*semantics=*/ir_->const_i32_zero_, uint_data);
+      val = ir_->make_value(spv::OpBitcast, ret_type, val);
+    } else if (use_native_atomics) {
       val = ir_->make_value(atomic_fp_op, ir_->get_primitive_type(dt), addr_ptr,
                             /*scope=*/ir_->const_i32_one_,
                             /*semantics=*/ir_->const_i32_zero_, data);
@@ -1706,6 +1720,9 @@ void TaskCodegen::visit(AtomicOpStmt *stmt) {
       use_native_atomics = true;
     } else if (stmt->op_type == AtomicOpType::bit_xor) {
       op = spv::OpAtomicXor;
+      use_native_atomics = true;
+    } else if (stmt->op_type == AtomicOpType::xchg) {
+      op = spv::OpAtomicExchange;
       use_native_atomics = true;
     } else {
       QD_NOT_IMPLEMENTED
