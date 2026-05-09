@@ -633,7 +633,10 @@
 <div class="viewcode-block" id="inclusive_mul">
 <a class="viewcode-back" href="../../../../autoapi/quadrants/lang/simt/subgroup/index.html#quadrants.lang.simt.subgroup.inclusive_mul">[docs]</a>
 <span class="k">def</span><span class="w"> </span><span class="nf">inclusive_mul</span><span class="p">(</span><span class="n">value</span><span class="p">,</span> <span class="n">log2_size</span><span class="p">:</span> <span class="n">template</span><span class="p">()):</span>
-<span class="w">    </span><span class="sd">&quot;&quot;&quot;Inclusive prefix product across ``2**log2_size`` consecutive lanes.  See `inclusive_add` for the size contract.&quot;&quot;&quot;</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Inclusive prefix product across ``2**log2_size`` consecutive lanes.</span>
+
+<span class="sd">    See `inclusive_add` for the size contract.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
     <span class="k">return</span> <span class="n">_inclusive_scan</span><span class="p">(</span><span class="n">value</span><span class="p">,</span> <span class="n">_bin_mul</span><span class="p">,</span> <span class="n">log2_size</span><span class="p">)</span></div>
 
 

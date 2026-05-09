@@ -138,7 +138,9 @@ Module Contents
 
 .. py:function:: inclusive_mul(value, log2_size: template())
 
-   Inclusive prefix product across ``2**log2_size`` consecutive lanes.  See `inclusive_add` for the size contract.
+   Inclusive prefix product across ``2**log2_size`` consecutive lanes.
+
+   See `inclusive_add` for the size contract.
 
 
 .. py:function:: inclusive_min(value, log2_size: template())
