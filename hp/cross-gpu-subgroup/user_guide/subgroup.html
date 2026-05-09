@@ -407,7 +407,7 @@
 <p>Subgroup ops live under <code class="docutils literal notranslate"><span class="pre">qd.simt.subgroup</span></code> and are written so the same Python source compiles to the right vendor primitive on each backend. Calling a backend that has not implemented an op fails at trace or codegen time.</p>
 <section id="what-s-available">
 <h2>What’s available<a class="headerlink" href="#what-s-available" title="Link to this heading">#</a></h2>
-<p>The full Python API is grouped here by category. The first column lists each op, the next three columns indicate which backend currently lowers it. Cells marked “no” either raise from the Python wrapper, fail to link in the runtime, or return <code class="docutils literal notranslate"><span class="pre">None</span></code> from a <code class="docutils literal notranslate"><span class="pre">#</span> <span class="pre">TODO</span></code> stub — in every case the op is unusable on that backend today.</p>
+<p>The full Python API is grouped here by category. The first column lists each op, the next three columns indicate which backend currently lowers it.</p>
 <section id="data-movement">
 <h3>Data movement<a class="headerlink" href="#data-movement" title="Link to this heading">#</a></h3>
 <div class="pst-scrollable-table-container"><table class="table">
