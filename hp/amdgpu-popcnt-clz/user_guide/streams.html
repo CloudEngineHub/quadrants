@@ -8,7 +8,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="viewport" content="width=device-width, initial-scale=1" />
 
-    <title>Math &#8212; Quadrants 0.7.6 documentation</title>
+    <title>Streams &#8212; Quadrants 0.7.6 documentation</title>
   
   
   
@@ -55,12 +55,12 @@
     <script>var togglebuttonSelector = '.toggle, .admonition.dropdown';</script>
     <script src="../_static/design-tabs.js?v=f930bc37"></script>
     <script>var togglebuttonSelector = '.toggle, .admonition.dropdown';</script>
-    <script>DOCUMENTATION_OPTIONS.pagename = 'user_guide/math';</script>
+    <script>DOCUMENTATION_OPTIONS.pagename = 'user_guide/streams';</script>
     <script>DOCUMENTATION_OPTIONS.search_as_you_type = false;</script>
     <link rel="index" title="Index" href="../genindex.html" />
     <link rel="search" title="Search" href="../search.html" />
-    <link rel="next" title="Subgroup primitives" href="subgroup.html" />
-    <link rel="prev" title="Grid primitives" href="grid.html" />
+    <link rel="next" title="Performance Dispatch" href="perf_dispatch.html" />
+    <link rel="prev" title="CUDA Graph" href="graph.html" />
   <meta name="viewport" content="width=device-width, initial-scale=1"/>
   <meta name="docsearch:language" content="en"/>
   <meta name="docsearch:version" content="0.7.6" />
@@ -306,19 +306,19 @@
 <li class="toctree-l1"><a class="reference internal" href="autodiff.html">Automatic differentiation</a></li>
 </ul>
 <p aria-level="2" class="caption" role="heading"><span class="caption-text">SIMT primitives</span></p>
-<ul class="current nav bd-sidenav">
+<ul class="nav bd-sidenav">
 <li class="toctree-l1"><a class="reference internal" href="atomics.html">Atomics</a></li>
 <li class="toctree-l1"><a class="reference internal" href="block.html">Block primitives</a></li>
 <li class="toctree-l1"><a class="reference internal" href="grid.html">Grid primitives</a></li>
-<li class="toctree-l1 current active"><a class="current reference internal" href="#">Math</a></li>
+<li class="toctree-l1"><a class="reference internal" href="math.html">Math</a></li>
 <li class="toctree-l1"><a class="reference internal" href="subgroup.html">Subgroup primitives</a></li>
 <li class="toctree-l1"><a class="reference internal" href="tile16.html">Tile16x16: register-resident 16x16 tiles</a></li>
 </ul>
 <p aria-level="2" class="caption" role="heading"><span class="caption-text">Performance</span></p>
-<ul class="nav bd-sidenav">
+<ul class="current nav bd-sidenav">
 <li class="toctree-l1"><a class="reference internal" href="fastcache.html">Fastcache</a></li>
 <li class="toctree-l1"><a class="reference internal" href="graph.html">CUDA Graph</a></li>
-<li class="toctree-l1"><a class="reference internal" href="streams.html">Streams</a></li>
+<li class="toctree-l1 current active"><a class="current reference internal" href="#">Streams</a></li>
 <li class="toctree-l1"><a class="reference internal" href="perf_dispatch.html">Performance Dispatch</a></li>
 <li class="toctree-l1"><a class="reference internal" href="init_options.html">qd.init options</a></li>
 </ul>
@@ -384,7 +384,7 @@
     
     <li class="breadcrumb-item"><a href="index.html" class="nav-link">User guide</a></li>
     
-    <li class="breadcrumb-item active" aria-current="page"><span class="ellipsis">Math</span></li>
+    <li class="breadcrumb-item active" aria-current="page"><span class="ellipsis">Streams</span></li>
   </ul>
 </nav>
 </div>
@@ -401,83 +401,157 @@
 <div id="searchbox"></div>
                 <article class="bd-article">
                   
-  <section class="tex2jax_ignore mathjax_ignore" id="math">
-<h1>Math<a class="headerlink" href="#math" title="Link to this heading">#</a></h1>
-<p><code class="docutils literal notranslate"><span class="pre">qd.math</span></code> is the quadrants standard library of math helpers.</p>
-<p>This page currently documents only the bit-counting helpers. The broader <code class="docutils literal notranslate"><span class="pre">qd.math</span></code> surface is exported and usable today but is not yet documented here.</p>
-<section id="bit-operations">
-<h2>Bit operations<a class="headerlink" href="#bit-operations" title="Link to this heading">#</a></h2>
-<p>Single-thread integer-register operations. They do not access memory and do not synchronize threads — each thread independently transforms a value in its own register.</p>
+  <section class="tex2jax_ignore mathjax_ignore" id="streams">
+<h1>Streams<a class="headerlink" href="#streams" title="Link to this heading">#</a></h1>
+<p>Streams allow concurrent execution of GPU operations. By default, all Quadrants kernels launch on the default stream, which serializes everything. With streams, you can run multiple top-level for loops in parallel.</p>
+<section id="supported-platforms">
+<h2>Supported platforms<a class="headerlink" href="#supported-platforms" title="Link to this heading">#</a></h2>
 <div class="pst-scrollable-table-container"><table class="table">
 <thead>
-<tr class="row-odd"><th class="head"><p>Op</p></th>
-<th class="head"><p>CUDA</p></th>
-<th class="head"><p>AMDGPU</p></th>
-<th class="head"><p>SPIR-V (Vulkan / Metal)</p></th>
+<tr class="row-odd"><th class="head"><p>Backend</p></th>
+<th class="head"><p>Supported</p></th>
 </tr>
 </thead>
 <tbody>
-<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">qd.math.popcnt(x)</span></code></p></td>
-<td><p>i32, u32, i64, u64</p></td>
-<td><p>i32, u32, i64, u64</p></td>
-<td><p>any int (<code class="docutils literal notranslate"><span class="pre">OpBitCount</span></code>)</p></td>
+<tr class="row-even"><td><p>CUDA</p></td>
+<td><p>Yes</p></td>
 </tr>
-<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">qd.math.clz(x)</span></code></p></td>
-<td><p>i32, i64 only *</p></td>
-<td><p>i32, i64 only *</p></td>
-<td><p>i32, i64 (<code class="docutils literal notranslate"><span class="pre">FindUMsb</span></code>-based) **</p></td>
+<tr class="row-odd"><td><p>AMDGPU</p></td>
+<td><p>Yes</p></td>
+</tr>
+<tr class="row-even"><td><p>CPU</p></td>
+<td><p>No-op</p></td>
+</tr>
+<tr class="row-odd"><td><p>Metal</p></td>
+<td><p>No-op</p></td>
+</tr>
+<tr class="row-even"><td><p>Vulkan</p></td>
+<td><p>No-op</p></td>
 </tr>
 </tbody>
 </table>
 </div>
-<p>* On CUDA and AMDGPU, <code class="docutils literal notranslate"><span class="pre">qd.math.clz</span></code> rejects unsigned 32- and 64-bit inputs (<code class="docutils literal notranslate"><span class="pre">QD_NOT_IMPLEMENTED</span></code> in <code class="docutils literal notranslate"><span class="pre">quadrants/codegen/cuda/codegen_cuda.cpp</span></code> and <code class="docutils literal notranslate"><span class="pre">quadrants/codegen/amdgpu/codegen_amdgpu.cpp</span></code>); <code class="docutils literal notranslate"><span class="pre">bit_cast</span></code> through the matching signed type as a workaround: <code class="docutils literal notranslate"><span class="pre">qd.math.clz(qd.bit_cast(x,</span> <span class="pre">qd.i32))</span></code>. <code class="docutils literal notranslate"><span class="pre">popcnt</span></code> accepts u32 / u64 directly on both backends; only <code class="docutils literal notranslate"><span class="pre">clz</span></code> has the signed-only restriction. On unsupported integer widths (e.g. <code class="docutils literal notranslate"><span class="pre">i8</span></code>, <code class="docutils literal notranslate"><span class="pre">i16</span></code>, <code class="docutils literal notranslate"><span class="pre">u16</span></code>) both ops also hit <code class="docutils literal notranslate"><span class="pre">QD_NOT_IMPLEMENTED</span></code>.</p>
-<p>** On SPIR-V the i64 path is synthesised from two <code class="docutils literal notranslate"><span class="pre">FindUMsb</span></code> calls on the 32-bit halves plus an <code class="docutils literal notranslate"><span class="pre">OpSelect</span></code>, since <code class="docutils literal notranslate"><span class="pre">GLSL.std.450</span> <span class="pre">FindUMsb</span></code> itself is 32-bit-only. The runtime device must advertise the <code class="docutils literal notranslate"><span class="pre">Int64</span></code> SPIR-V capability (Vulkan: <code class="docutils literal notranslate"><span class="pre">shaderInt64</span></code>); this is the same precondition any other 64-bit op would impose.</p>
-<p>The classic CUDA bit-tricks <code class="docutils literal notranslate"><span class="pre">__ffs</span></code> (find first set bit) and <code class="docutils literal notranslate"><span class="pre">__fns</span></code> (find n-th set bit in a mask) are not exposed; for a leading-zero count of a u32 on CUDA or AMDGPU, the <code class="docutils literal notranslate"><span class="pre">bit_cast</span></code> workaround above is the canonical approach.</p>
-<section id="qd-math-popcnt-x">
-<h3><code class="docutils literal notranslate"><span class="pre">qd.math.popcnt(x)</span></code><a class="headerlink" href="#qd-math-popcnt-x" title="Link to this heading">#</a></h3>
-<p>Counts set bits in <code class="docutils literal notranslate"><span class="pre">x</span></code> and returns an <code class="docutils literal notranslate"><span class="pre">i32</span></code>. On CUDA, lowers to <code class="docutils literal notranslate"><span class="pre">__nv_popc</span></code> for 32-bit inputs and <code class="docutils literal notranslate"><span class="pre">__nv_popcll</span></code> for 64-bit inputs (i32 / u32 / i64 / u64; narrower widths are unsupported). On AMDGPU, lowers to the portable <code class="docutils literal notranslate"><span class="pre">llvm.ctpop</span></code> intrinsic (same dtype set as CUDA), which the AMDGPU LLVM backend further lowers to a native bit-count instruction. On SPIR-V, lowers to <code class="docutils literal notranslate"><span class="pre">OpBitCount</span></code>. The 64-bit lowerings on CUDA and AMDGPU truncate the result to i32 to match the documented <code class="docutils literal notranslate"><span class="pre">i32</span></code> return type.</p>
+<p>On backends without native stream support, stream operations are no-ops and for loops run serially. Code using streams is portable across all backends — it will run without modifications, but serially.</p>
 </section>
-<section id="qd-math-clz-x">
-<h3><code class="docutils literal notranslate"><span class="pre">qd.math.clz(x)</span></code><a class="headerlink" href="#qd-math-clz-x" title="Link to this heading">#</a></h3>
-<p>Counts leading zero bits in <code class="docutils literal notranslate"><span class="pre">x</span></code> and returns an <code class="docutils literal notranslate"><span class="pre">i32</span></code>. For a 32-bit input, <code class="docutils literal notranslate"><span class="pre">clz(0)</span> <span class="pre">=</span> <span class="pre">32</span></code>; otherwise the result is in <code class="docutils literal notranslate"><span class="pre">[0,</span> <span class="pre">31]</span></code>. The count is over the unsigned bit pattern, so <code class="docutils literal notranslate"><span class="pre">clz(-1)</span> <span class="pre">==</span> <span class="pre">0</span></code> and <code class="docutils literal notranslate"><span class="pre">clz(0x7FFFFFFF)</span> <span class="pre">==</span> <span class="pre">1</span></code>. On CUDA, lowers to <code class="docutils literal notranslate"><span class="pre">__nv_clz</span></code> (i32 only) and <code class="docutils literal notranslate"><span class="pre">__nv_clzll</span></code> (i64 only); u32 / u64 must be <code class="docutils literal notranslate"><span class="pre">bit_cast</span></code> to the matching signed type. On AMDGPU, lowers to the portable <code class="docutils literal notranslate"><span class="pre">llvm.ctlz</span></code> intrinsic with <code class="docutils literal notranslate"><span class="pre">is_zero_undef</span> <span class="pre">=</span> <span class="pre">false</span></code> (matching <code class="docutils literal notranslate"><span class="pre">clz(0)</span> <span class="pre">=</span> <span class="pre">bitwidth</span></code>); the same i32 / i64-only restriction as CUDA applies. On SPIR-V, the 32-bit case lowers to <code class="docutils literal notranslate"><span class="pre">GLSL.std.450</span> <span class="pre">FindUMsb</span></code> followed by <code class="docutils literal notranslate"><span class="pre">31</span> <span class="pre">-</span> <span class="pre">FindUMsb</span></code>. The 64-bit case is synthesised from a hi/lo decomposition: shift the operand right by 32 to get the high i32 half, truncate for the low half, run <code class="docutils literal notranslate"><span class="pre">FindUMsb</span></code> on each, and select <code class="docutils literal notranslate"><span class="pre">31</span> <span class="pre">-</span> <span class="pre">FindUMsb(hi)</span></code> if the high half is non-zero or <code class="docutils literal notranslate"><span class="pre">63</span> <span class="pre">-</span> <span class="pre">FindUMsb(lo)</span></code> otherwise. <code class="docutils literal notranslate"><span class="pre">FindUMsb</span></code> returns <code class="docutils literal notranslate"><span class="pre">-1</span></code> on a zero input, so <code class="docutils literal notranslate"><span class="pre">clz(0)</span> <span class="pre">==</span> <span class="pre">64</span></code> falls out naturally. See the cross-backend caveats in the support table.</p>
-</section>
-</section>
-<section id="examples">
-<h2>Examples<a class="headerlink" href="#examples" title="Link to this heading">#</a></h2>
-<section id="bitset-population-count">
-<h3>Bitset population count<a class="headerlink" href="#bitset-population-count" title="Link to this heading">#</a></h3>
-<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="nd">@qd</span><span class="o">.</span><span class="n">kernel</span>
-<span class="k">def</span><span class="w"> </span><span class="nf">count_bits</span><span class="p">(</span><span class="n">masks</span><span class="p">:</span> <span class="n">qd</span><span class="o">.</span><span class="n">types</span><span class="o">.</span><span class="n">NDArray</span><span class="p">[</span><span class="n">qd</span><span class="o">.</span><span class="n">u32</span><span class="p">,</span> <span class="mi">1</span><span class="p">],</span> <span class="n">total</span><span class="p">:</span> <span class="n">qd</span><span class="o">.</span><span class="n">types</span><span class="o">.</span><span class="n">NDArray</span><span class="p">[</span><span class="n">qd</span><span class="o">.</span><span class="n">i32</span><span class="p">,</span> <span class="mi">1</span><span class="p">])</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
-    <span class="n">n</span> <span class="o">=</span> <span class="mi">0</span>
-    <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">masks</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">0</span><span class="p">]):</span>
-        <span class="n">n</span> <span class="o">+=</span> <span class="n">qd</span><span class="o">.</span><span class="n">math</span><span class="o">.</span><span class="n">popcnt</span><span class="p">(</span><span class="n">masks</span><span class="p">[</span><span class="n">i</span><span class="p">])</span>
-    <span class="n">qd</span><span class="o">.</span><span class="n">atomic_add</span><span class="p">(</span><span class="n">total</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span> <span class="n">n</span><span class="p">)</span>
+<section id="stream-parallelism">
+<h2>Stream parallelism<a class="headerlink" href="#stream-parallelism" title="Link to this heading">#</a></h2>
+<p>Inside a <code class="docutils literal notranslate"><span class="pre">&#64;qd.kernel</span></code>, each <code class="docutils literal notranslate"><span class="pre">with</span> <span class="pre">qd.stream_parallel():</span></code> block runs on its own GPU stream.</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">import</span><span class="w"> </span><span class="nn">quadrants</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">qd</span>
+
+<span class="n">qd</span><span class="o">.</span><span class="n">init</span><span class="p">(</span><span class="n">arch</span><span class="o">=</span><span class="n">qd</span><span class="o">.</span><span class="n">cuda</span><span class="p">)</span>
+
+<span class="n">N</span> <span class="o">=</span> <span class="mi">1024</span>
+<span class="n">a</span> <span class="o">=</span> <span class="n">qd</span><span class="o">.</span><span class="n">field</span><span class="p">(</span><span class="n">qd</span><span class="o">.</span><span class="n">f32</span><span class="p">,</span> <span class="n">shape</span><span class="o">=</span><span class="p">(</span><span class="n">N</span><span class="p">,))</span>
+<span class="n">b</span> <span class="o">=</span> <span class="n">qd</span><span class="o">.</span><span class="n">field</span><span class="p">(</span><span class="n">qd</span><span class="o">.</span><span class="n">f32</span><span class="p">,</span> <span class="n">shape</span><span class="o">=</span><span class="p">(</span><span class="n">N</span><span class="p">,))</span>
+<span class="n">c</span> <span class="o">=</span> <span class="n">qd</span><span class="o">.</span><span class="n">field</span><span class="p">(</span><span class="n">qd</span><span class="o">.</span><span class="n">f32</span><span class="p">,</span> <span class="n">shape</span><span class="o">=</span><span class="p">(</span><span class="n">N</span><span class="p">,))</span>
+
+<span class="nd">@qd</span><span class="o">.</span><span class="n">kernel</span>
+<span class="k">def</span><span class="w"> </span><span class="nf">compute_ab</span><span class="p">():</span>
+    <span class="k">with</span> <span class="n">qd</span><span class="o">.</span><span class="n">stream_parallel</span><span class="p">():</span>
+        <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">N</span><span class="p">):</span>
+            <span class="n">a</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="o">=</span> <span class="n">compute_a</span><span class="p">(</span><span class="n">i</span><span class="p">)</span>
+    <span class="k">with</span> <span class="n">qd</span><span class="o">.</span><span class="n">stream_parallel</span><span class="p">():</span>
+        <span class="k">for</span> <span class="n">j</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">N</span><span class="p">):</span>
+            <span class="n">b</span><span class="p">[</span><span class="n">j</span><span class="p">]</span> <span class="o">=</span> <span class="n">compute_b</span><span class="p">(</span><span class="n">j</span><span class="p">)</span>
+
+<span class="nd">@qd</span><span class="o">.</span><span class="n">kernel</span>
+<span class="k">def</span><span class="w"> </span><span class="nf">combine</span><span class="p">():</span>
+    <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">N</span><span class="p">):</span>
+        <span class="n">c</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="o">=</span> <span class="n">a</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="o">+</span> <span class="n">b</span><span class="p">[</span><span class="n">i</span><span class="p">]</span>
+
+<span class="n">compute_ab</span><span class="p">()</span>  <span class="c1"># the two stream_parallel blocks run concurrently</span>
+<span class="n">combine</span><span class="p">()</span>     <span class="c1"># runs after compute_ab() returns — a[] and b[] are ready</span>
 </pre></div>
 </div>
-</section>
-<section id="highest-set-bit-morton-code-depth">
-<h3>Highest set bit (Morton-code depth)<a class="headerlink" href="#highest-set-bit-morton-code-depth" title="Link to this heading">#</a></h3>
-<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="nd">@qd</span><span class="o">.</span><span class="n">func</span>
-<span class="k">def</span><span class="w"> </span><span class="nf">msb</span><span class="p">(</span><span class="n">x</span><span class="p">:</span> <span class="n">qd</span><span class="o">.</span><span class="n">i32</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">qd</span><span class="o">.</span><span class="n">i32</span><span class="p">:</span>
-    <span class="k">return</span> <span class="mi">31</span> <span class="o">-</span> <span class="n">qd</span><span class="o">.</span><span class="n">math</span><span class="o">.</span><span class="n">clz</span><span class="p">(</span><span class="n">x</span><span class="p">)</span>
-</pre></div>
-</div>
-<p>For <code class="docutils literal notranslate"><span class="pre">qd.u32</span></code> input on CUDA or AMDGPU, cast first: <code class="docutils literal notranslate"><span class="pre">qd.math.clz(qd.bit_cast(x,</span> <span class="pre">qd.i32))</span></code>.</p>
-</section>
-</section>
-<section id="performance-and-portability-notes">
-<h2>Performance and portability notes<a class="headerlink" href="#performance-and-portability-notes" title="Link to this heading">#</a></h2>
+<p>Consecutive <code class="docutils literal notranslate"><span class="pre">with</span> <span class="pre">qd.stream_parallel():</span></code> blocks run concurrently. Multiple for loops within a single block share a stream and run serially on it. All streams are synchronized before the kernel returns.</p>
+<section id="restrictions">
+<h3>Restrictions<a class="headerlink" href="#restrictions" title="Link to this heading">#</a></h3>
 <ul class="simple">
-<li><p><code class="docutils literal notranslate"><span class="pre">qd.math.popcnt</span></code> is supported on CUDA and AMDGPU (i32 / u32 / i64 / u64) and SPIR-V (any integer width).</p></li>
-<li><p><code class="docutils literal notranslate"><span class="pre">qd.math.clz</span></code> has the dtype and backend caveats noted above. Tests that depend on <code class="docutils literal notranslate"><span class="pre">qd.math.clz</span></code> over u32 or u64 should <code class="docutils literal notranslate"><span class="pre">bit_cast</span></code> to the matching signed type for portability on CUDA / AMDGPU.</p></li>
-<li><p>The SPIR-V 64-bit <code class="docutils literal notranslate"><span class="pre">clz</span></code> lowering costs roughly two <code class="docutils literal notranslate"><span class="pre">FindUMsb</span></code> ext-inst calls plus a select; on hot paths where bit-counting drives throughput, prefer reducing to 32-bit values first (e.g. work over the high and low halves explicitly) so the codegen emits a single <code class="docutils literal notranslate"><span class="pre">FindUMsb</span></code>.</p></li>
+<li><p>All top-level statements in a kernel must be either all <code class="docutils literal notranslate"><span class="pre">stream_parallel</span></code> blocks or all regular statements. Mixing the two at the top level is a compile-time error.</p></li>
+<li><p>Nesting <code class="docutils literal notranslate"><span class="pre">stream_parallel</span></code> blocks is not supported.</p></li>
 </ul>
 </section>
-<section id="related">
-<h2>Related<a class="headerlink" href="#related" title="Link to this heading">#</a></h2>
+</section>
+<section id="explicit-streams">
+<h2>Explicit streams<a class="headerlink" href="#explicit-streams" title="Link to this heading">#</a></h2>
+<p>For cases that require manual control — such as launching separate kernels on different streams or interoperating with PyTorch — you can create and manage streams directly.</p>
+<section id="creating-and-using-streams">
+<h3>Creating and using streams<a class="headerlink" href="#creating-and-using-streams" title="Link to this heading">#</a></h3>
+<p>Any <code class="docutils literal notranslate"><span class="pre">&#64;qd.kernel</span></code> function accepts a special <code class="docutils literal notranslate"><span class="pre">qd_stream</span></code> keyword argument — you do not need to declare it in the kernel signature. The <code class="docutils literal notranslate"><span class="pre">&#64;qd.kernel</span></code> decorator handles it automatically.</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="nd">@qd</span><span class="o">.</span><span class="n">kernel</span>
+<span class="k">def</span><span class="w"> </span><span class="nf">my_kernel</span><span class="p">():</span>
+    <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">N</span><span class="p">):</span>
+        <span class="n">a</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="o">=</span> <span class="n">i</span>
+
+<span class="n">s1</span> <span class="o">=</span> <span class="n">qd</span><span class="o">.</span><span class="n">create_stream</span><span class="p">()</span>
+<span class="n">s2</span> <span class="o">=</span> <span class="n">qd</span><span class="o">.</span><span class="n">create_stream</span><span class="p">()</span>
+
+<span class="n">my_kernel</span><span class="p">(</span><span class="n">qd_stream</span><span class="o">=</span><span class="n">s1</span><span class="p">)</span>
+<span class="n">my_kernel</span><span class="p">(</span><span class="n">qd_stream</span><span class="o">=</span><span class="n">s2</span><span class="p">)</span>
+
+<span class="n">s1</span><span class="o">.</span><span class="n">synchronize</span><span class="p">()</span>
+<span class="n">s2</span><span class="o">.</span><span class="n">synchronize</span><span class="p">()</span>
+
+<span class="n">s1</span><span class="o">.</span><span class="n">destroy</span><span class="p">()</span>
+<span class="n">s2</span><span class="o">.</span><span class="n">destroy</span><span class="p">()</span>
+</pre></div>
+</div>
+<p>Kernels on different streams may execute concurrently. Call <code class="docutils literal notranslate"><span class="pre">synchronize()</span></code> to block until all work on a stream completes.</p>
+</section>
+<section id="events">
+<h3>Events<a class="headerlink" href="#events" title="Link to this heading">#</a></h3>
+<p>Events let you express dependencies between streams without full synchronization.</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">s1</span> <span class="o">=</span> <span class="n">qd</span><span class="o">.</span><span class="n">create_stream</span><span class="p">()</span>
+<span class="n">s2</span> <span class="o">=</span> <span class="n">qd</span><span class="o">.</span><span class="n">create_stream</span><span class="p">()</span>
+
+<span class="nd">@qd</span><span class="o">.</span><span class="n">kernel</span>
+<span class="k">def</span><span class="w"> </span><span class="nf">produce</span><span class="p">():</span>
+    <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">N</span><span class="p">):</span>
+        <span class="n">a</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="o">=</span> <span class="mf">10.0</span>
+
+<span class="nd">@qd</span><span class="o">.</span><span class="n">kernel</span>
+<span class="k">def</span><span class="w"> </span><span class="nf">consume</span><span class="p">():</span>
+    <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">N</span><span class="p">):</span>
+        <span class="n">b</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="o">=</span> <span class="n">a</span><span class="p">[</span><span class="n">i</span><span class="p">]</span>
+
+<span class="n">produce</span><span class="p">(</span><span class="n">qd_stream</span><span class="o">=</span><span class="n">s1</span><span class="p">)</span>
+
+<span class="n">e</span> <span class="o">=</span> <span class="n">qd</span><span class="o">.</span><span class="n">create_event</span><span class="p">()</span>
+<span class="n">e</span><span class="o">.</span><span class="n">record</span><span class="p">(</span><span class="n">s1</span><span class="p">)</span>       <span class="c1"># record when s1 finishes produce()</span>
+<span class="n">e</span><span class="o">.</span><span class="n">wait</span><span class="p">(</span><span class="n">qd_stream</span><span class="o">=</span><span class="n">s2</span><span class="p">)</span>  <span class="c1"># s2 waits for that event before proceeding</span>
+
+<span class="n">consume</span><span class="p">(</span><span class="n">qd_stream</span><span class="o">=</span><span class="n">s2</span><span class="p">)</span>  <span class="c1"># safe to read a[] — produce() is guaranteed complete</span>
+<span class="n">s2</span><span class="o">.</span><span class="n">synchronize</span><span class="p">()</span>
+
+<span class="n">e</span><span class="o">.</span><span class="n">destroy</span><span class="p">()</span>
+<span class="n">s1</span><span class="o">.</span><span class="n">destroy</span><span class="p">()</span>
+<span class="n">s2</span><span class="o">.</span><span class="n">destroy</span><span class="p">()</span>
+</pre></div>
+</div>
+<p><code class="docutils literal notranslate"><span class="pre">e.record(stream)</span></code> captures the point in <code class="docutils literal notranslate"><span class="pre">stream</span></code>’s execution. <code class="docutils literal notranslate"><span class="pre">e.wait(qd_stream=stream)</span></code> makes <code class="docutils literal notranslate"><span class="pre">stream</span></code> wait until the recorded point is reached. If <code class="docutils literal notranslate"><span class="pre">qd_stream</span></code> is omitted, the default stream waits.</p>
+</section>
+<section id="context-managers">
+<h3>Context managers<a class="headerlink" href="#context-managers" title="Link to this heading">#</a></h3>
+<p>Streams and events support <code class="docutils literal notranslate"><span class="pre">with</span></code> blocks for automatic cleanup:</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="k">with</span> <span class="n">qd</span><span class="o">.</span><span class="n">create_stream</span><span class="p">()</span> <span class="k">as</span> <span class="n">s</span><span class="p">:</span>
+    <span class="n">some_func1</span><span class="p">(</span><span class="n">qd_stream</span><span class="o">=</span><span class="n">s</span><span class="p">)</span>
+<span class="c1"># s.destroy() called automatically — waits for in-flight work</span>
+</pre></div>
+</div>
+</section>
+</section>
+<section id="synchronization-notes">
+<h2>Synchronization notes<a class="headerlink" href="#synchronization-notes" title="Link to this heading">#</a></h2>
 <ul class="simple">
-<li><p><a class="reference internal" href="atomics.html"><span class="std std-doc">atomics</span></a> — atomic read-modify-write operations on global / shared memory; commonly paired with bit-counting in select / compact patterns.</p></li>
-<li><p><code class="docutils literal notranslate"><span class="pre">qd.bit_cast</span></code> — reinterprets a value’s bit pattern as another dtype, used as a workaround for the <code class="docutils literal notranslate"><span class="pre">clz</span></code> u32 / u64 caveats above.</p></li>
+<li><p><strong><code class="docutils literal notranslate"><span class="pre">qd.sync()</span></code> only waits on the default stream.</strong> It does not drain explicit streams. Call <code class="docutils literal notranslate"><span class="pre">stream.synchronize()</span></code> on each stream you need to wait for.</p></li>
+<li><p><strong>No automatic synchronization with explicit streams.</strong> When using explicit streams, you are responsible for inserting events or <code class="docutils literal notranslate"><span class="pre">synchronize()</span></code> calls when one stream’s output is another stream’s input. <code class="docutils literal notranslate"><span class="pre">stream_parallel</span></code> handles this automatically.</p></li>
+</ul>
+</section>
+<section id="limitations">
+<h2>Limitations<a class="headerlink" href="#limitations" title="Link to this heading">#</a></h2>
+<ul class="simple">
+<li><p><strong>Not compatible with graphs.</strong> Do not pass <code class="docutils literal notranslate"><span class="pre">qd_stream</span></code> to a kernel decorated with <code class="docutils literal notranslate"><span class="pre">graph=True</span></code> (if you do, a <code class="docutils literal notranslate"><span class="pre">RuntimeError</span></code> will be raised).</p></li>
+<li><p><strong>Not compatible with autodiff.</strong> Do not pass <code class="docutils literal notranslate"><span class="pre">qd_stream</span></code> to a kernel that uses reverse-mode or forward-mode differentiation, or inside a <code class="docutils literal notranslate"><span class="pre">qd.ad.Tape</span></code> context (if you do, a <code class="docutils literal notranslate"><span class="pre">RuntimeError</span></code> will be raised).</p></li>
 </ul>
 </section>
 </section>
@@ -493,20 +567,20 @@
                   
 <div class="prev-next-area">
     <a class="left-prev"
-       href="grid.html"
+       href="graph.html"
        title="previous page">
       <i class="fa-solid fa-angle-left"></i>
       <div class="prev-next-info">
         <p class="prev-next-subtitle">previous</p>
-        <p class="prev-next-title">Grid primitives</p>
+        <p class="prev-next-title">CUDA Graph</p>
       </div>
     </a>
     <a class="right-next"
-       href="subgroup.html"
+       href="perf_dispatch.html"
        title="next page">
       <div class="prev-next-info">
         <p class="prev-next-subtitle">next</p>
-        <p class="prev-next-title">Subgroup primitives</p>
+        <p class="prev-next-title">Performance Dispatch</p>
       </div>
       <i class="fa-solid fa-angle-right"></i>
     </a>
@@ -529,25 +603,26 @@
   </div>
   <nav id="pst-page-toc-nav" class="page-toc" aria-labelledby="pst-page-navigation-heading-2">
     <ul class="pst-show_toc_level nav section-nav flex-column">
-<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#bit-operations">Bit operations</a><ul class="nav section-nav flex-column">
-<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#qd-math-popcnt-x"><code class="docutils literal notranslate"><span class="pre">qd.math.popcnt(x)</span></code></a></li>
-<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#qd-math-clz-x"><code class="docutils literal notranslate"><span class="pre">qd.math.clz(x)</span></code></a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#supported-platforms">Supported platforms</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#stream-parallelism">Stream parallelism</a><ul class="nav section-nav flex-column">
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#restrictions">Restrictions</a></li>
 </ul>
 </li>
-<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#examples">Examples</a><ul class="nav section-nav flex-column">
-<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#bitset-population-count">Bitset population count</a></li>
-<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#highest-set-bit-morton-code-depth">Highest set bit (Morton-code depth)</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#explicit-streams">Explicit streams</a><ul class="nav section-nav flex-column">
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#creating-and-using-streams">Creating and using streams</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#events">Events</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#context-managers">Context managers</a></li>
 </ul>
 </li>
-<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#performance-and-portability-notes">Performance and portability notes</a></li>
-<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#related">Related</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#synchronization-notes">Synchronization notes</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#limitations">Limitations</a></li>
 </ul>
   </nav></div>
 
   <div class="sidebar-secondary-item">
 
   <div class="tocsection sourcelink">
-    <a href="../_sources/user_guide/math.md.txt">
+    <a href="../_sources/user_guide/streams.md.txt">
       <i class="fa-solid fa-file-lines"></i> Show Source
     </a>
   </div>
