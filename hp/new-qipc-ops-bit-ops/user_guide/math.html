@@ -414,36 +414,42 @@
 <th class="head"><p>CUDA</p></th>
 <th class="head"><p>AMDGPU</p></th>
 <th class="head"><p>SPIR-V (Vulkan / Metal)</p></th>
+<th class="head"><p>x64 (CPU)</p></th>
 </tr>
 </thead>
 <tbody>
 <tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">qd.math.popcnt(x)</span></code></p></td>
 <td><p>i32, u32, i64, u64</p></td>
 <td><p>i32, u32, i64, u64</p></td>
-<td><p>any int (<code class="docutils literal notranslate"><span class="pre">OpBitCount</span></code>)</p></td>
+<td><p>i32, u32, i64, u64 (<code class="docutils literal notranslate"><span class="pre">OpBitCount</span></code>)</p></td>
+<td><p>i32, u32, i64, u64</p></td>
 </tr>
 <tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">qd.math.clz(x)</span></code></p></td>
 <td><p>i32, u32, i64, u64</p></td>
 <td><p>i32, u32, i64, u64</p></td>
 <td><p>i32, u32, i64, u64 (<code class="docutils literal notranslate"><span class="pre">FindUMsb</span></code>-based) *</p></td>
+<td><p>i32, u32, i64, u64</p></td>
 </tr>
 <tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">qd.math.ffs(x)</span></code></p></td>
 <td><p>i32, u32, i64, u64</p></td>
 <td><p>i32, u32, i64, u64</p></td>
 <td><p>i32, u32, i64, u64 (<code class="docutils literal notranslate"><span class="pre">FindILsb</span></code>-based) *</p></td>
+<td><p>i32, u32, i64, u64</p></td>
 </tr>
 <tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">qd.math.fns(mask,</span> <span class="pre">base,</span> <span class="pre">offset)</span></code></p></td>
 <td><p>u32 (PTX <code class="docutils literal notranslate"><span class="pre">fns</span></code> instruction)</p></td>
+<td><p>u32 (portable &#64;qd.func)</p></td>
 <td><p>u32 (portable &#64;qd.func)</p></td>
 <td><p>u32 (portable &#64;qd.func)</p></td>
 </tr>
 </tbody>
 </table>
 </div>
+<p>All four ops <strong>return <code class="docutils literal notranslate"><span class="pre">i32</span></code> on every backend</strong>, regardless of input width. This matches CUDA libdevice (<code class="docutils literal notranslate"><span class="pre">__nv_popc</span></code> / <code class="docutils literal notranslate"><span class="pre">__nv_clz</span></code> / <code class="docutils literal notranslate"><span class="pre">__nv_ffs</span></code> all return <code class="docutils literal notranslate"><span class="pre">int</span></code>) and the natural width of the AMDGPU SALU bit-count / leading-zero instructions (<code class="docutils literal notranslate"><span class="pre">s_bcnt1_i32_b64</span></code>, <code class="docutils literal notranslate"><span class="pre">s_flbit_i32_b64</span></code>); SPIR-V and x64 truncate down to <code class="docutils literal notranslate"><span class="pre">i32</span></code> so the same kernel source has the same return type everywhere. The result is always non-negative and fits in 7 bits (<code class="docutils literal notranslate"><span class="pre">popcnt</span></code> ≤ 64, <code class="docutils literal notranslate"><span class="pre">clz</span></code> ≤ 64, <code class="docutils literal notranslate"><span class="pre">ffs</span></code> ≤ 64, <code class="docutils literal notranslate"><span class="pre">fns</span></code> ≤ 31 plus the <code class="docutils literal notranslate"><span class="pre">0xFFFFFFFF</span></code> not-found sentinel for the <code class="docutils literal notranslate"><span class="pre">u32</span></code> case).</p>
 <p>* On SPIR-V the 64-bit path (i64 / u64) for <code class="docutils literal notranslate"><span class="pre">clz</span></code> and <code class="docutils literal notranslate"><span class="pre">ffs</span></code> is synthesised from two ext-inst calls on the 32-bit halves plus an <code class="docutils literal notranslate"><span class="pre">OpSelect</span></code>, since <code class="docutils literal notranslate"><span class="pre">GLSL.std.450</span> <span class="pre">FindUMsb</span></code> and <code class="docutils literal notranslate"><span class="pre">FindILsb</span></code> are both 32-bit-only. The runtime device must advertise the <code class="docutils literal notranslate"><span class="pre">Int64</span></code> SPIR-V capability (Vulkan: <code class="docutils literal notranslate"><span class="pre">shaderInt64</span></code>); this is the same precondition any other 64-bit op would impose. On unsupported integer widths (e.g. <code class="docutils literal notranslate"><span class="pre">i8</span></code>, <code class="docutils literal notranslate"><span class="pre">i16</span></code>, <code class="docutils literal notranslate"><span class="pre">u16</span></code>) <code class="docutils literal notranslate"><span class="pre">clz</span></code>, <code class="docutils literal notranslate"><span class="pre">popcnt</span></code> and <code class="docutils literal notranslate"><span class="pre">ffs</span></code> hit <code class="docutils literal notranslate"><span class="pre">QD_NOT_IMPLEMENTED</span></code> on every backend.</p>
 <section id="qd-math-popcnt-x">
 <h3><code class="docutils literal notranslate"><span class="pre">qd.math.popcnt(x)</span></code><a class="headerlink" href="#qd-math-popcnt-x" title="Link to this heading">#</a></h3>
-<p>Counts set bits in <code class="docutils literal notranslate"><span class="pre">x</span></code> and returns an <code class="docutils literal notranslate"><span class="pre">i32</span></code>. On CUDA, lowers to <code class="docutils literal notranslate"><span class="pre">__nv_popc</span></code> for 32-bit inputs and <code class="docutils literal notranslate"><span class="pre">__nv_popcll</span></code> for 64-bit inputs (i32 / u32 / i64 / u64; narrower widths are unsupported). On AMDGPU, lowers to the portable <code class="docutils literal notranslate"><span class="pre">llvm.ctpop</span></code> intrinsic (same dtype set as CUDA), which the AMDGPU LLVM backend further lowers to a native bit-count instruction. On SPIR-V, lowers to <code class="docutils literal notranslate"><span class="pre">OpBitCount</span></code>. The 64-bit lowerings on CUDA and AMDGPU truncate the result to i32 to match the documented <code class="docutils literal notranslate"><span class="pre">i32</span></code> return type.</p>
+<p>Counts set bits in <code class="docutils literal notranslate"><span class="pre">x</span></code> and returns an <code class="docutils literal notranslate"><span class="pre">i32</span></code>. On CUDA, lowers to <code class="docutils literal notranslate"><span class="pre">__nv_popc</span></code> for 32-bit inputs and <code class="docutils literal notranslate"><span class="pre">__nv_popcll</span></code> for 64-bit inputs (i32 / u32 / i64 / u64; narrower widths are unsupported). On AMDGPU, lowers to the portable <code class="docutils literal notranslate"><span class="pre">llvm.ctpop</span></code> intrinsic (same dtype set as CUDA), which the AMDGPU LLVM backend further lowers to a native bit-count instruction (e.g. <code class="docutils literal notranslate"><span class="pre">s_bcnt1_i32_b64</span></code> for the 64-bit SALU path). On SPIR-V, lowers to <code class="docutils literal notranslate"><span class="pre">OpBitCount</span></code>. On x64, lowers to <code class="docutils literal notranslate"><span class="pre">llvm.ctpop</span></code>. Every backend truncates to <code class="docutils literal notranslate"><span class="pre">i32</span></code> to match the unified return type; the truncation is free since 64-bit <code class="docutils literal notranslate"><span class="pre">popcnt</span></code> results never exceed 64.</p>
 </section>
 <section id="qd-math-clz-x">
 <h3><code class="docutils literal notranslate"><span class="pre">qd.math.clz(x)</span></code><a class="headerlink" href="#qd-math-clz-x" title="Link to this heading">#</a></h3>
