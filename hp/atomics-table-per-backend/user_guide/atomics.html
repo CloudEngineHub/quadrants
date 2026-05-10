@@ -8,7 +8,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="viewport" content="width=device-width, initial-scale=1" />
 
-    <title>Atomics &#8212; Quadrants 0.7.6 documentation</title>
+    <title>Atomics &#8212; Quadrants 0.7.8 documentation</title>
   
   
   
@@ -43,7 +43,7 @@
   <link rel="preload" as="script" href="../_static/scripts/bootstrap.js?digest=55c26ed414f5f8a31ebb" />
 <link rel="preload" as="script" href="../_static/scripts/pydata-sphinx-theme.js?digest=55c26ed414f5f8a31ebb" />
 
-    <script src="../_static/documentation_options.js?v=918ced64"></script>
+    <script src="../_static/documentation_options.js?v=ddeecabf"></script>
     <script src="../_static/doctools.js?v=9bcbadda"></script>
     <script src="../_static/sphinx_highlight.js?v=dc90522c"></script>
     <script src="../_static/clipboard.min.js?v=a7894cd8"></script>
@@ -63,7 +63,7 @@
     <link rel="prev" title="Automatic differentiation" href="autodiff.html" />
   <meta name="viewport" content="width=device-width, initial-scale=1"/>
   <meta name="docsearch:language" content="en"/>
-  <meta name="docsearch:version" content="0.7.6" />
+  <meta name="docsearch:version" content="0.7.8" />
   
     
     <script src="../_static/searchtools.js"></script>
@@ -131,7 +131,7 @@
   
   
   
-    <p class="title logo__title">Quadrants 0.7.6 documentation</p>
+    <p class="title logo__title">Quadrants 0.7.8 documentation</p>
   
 </a></div>
     
@@ -314,10 +314,15 @@
 <li class="toctree-l1"><a class="reference internal" href="subgroup.html">Subgroup primitives</a></li>
 <li class="toctree-l1"><a class="reference internal" href="tile16.html">Tile16x16: register-resident 16x16 tiles</a></li>
 </ul>
+<p aria-level="2" class="caption" role="heading"><span class="caption-text">Algorithms</span></p>
+<ul class="nav bd-sidenav">
+<li class="toctree-l1"><a class="reference internal" href="algorithms.html">Algorithms</a></li>
+</ul>
 <p aria-level="2" class="caption" role="heading"><span class="caption-text">Performance</span></p>
 <ul class="nav bd-sidenav">
 <li class="toctree-l1"><a class="reference internal" href="fastcache.html">Fastcache</a></li>
 <li class="toctree-l1"><a class="reference internal" href="graph.html">CUDA Graph</a></li>
+<li class="toctree-l1"><a class="reference internal" href="streams.html">Streams</a></li>
 <li class="toctree-l1"><a class="reference internal" href="perf_dispatch.html">Performance Dispatch</a></li>
 <li class="toctree-l1"><a class="reference internal" href="init_options.html">qd.init options</a></li>
 </ul>
@@ -421,7 +426,7 @@
 <td><p>int / f32 native; f64 native (sm_60+)</p></td>
 <td><p>int / f32 native; f64 hardware-dependent</p></td>
 <td><p>int native; f16 / f32 / f64 capability-gated, else CAS</p></td>
-<td><p>int native; floats via CAS</p></td>
+<td><p>int / f32 / f64 native; f16 via CAS</p></td>
 </tr>
 <tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">atomic_sub</span></code></p></td>
 <td><p>rewritten to <code class="docutils literal notranslate"><span class="pre">atomic_add(x,</span> <span class="pre">-y)</span></code> at IR-construction time — see note below</p></td>
@@ -455,6 +460,7 @@
 <li><p><strong><code class="docutils literal notranslate"><span class="pre">atomic_sub</span></code> is not a separate op in the IR.</strong> <code class="docutils literal notranslate"><span class="pre">quadrants/ir/frontend_ir.cpp::AtomicOpExpression::flatten</span></code> rewrites every <code class="docutils literal notranslate"><span class="pre">atomic_sub(x,</span> <span class="pre">y)</span></code> into <code class="docutils literal notranslate"><span class="pre">atomic_add(x,</span> <span class="pre">-y)</span></code> before codegen sees it, so per-backend support and per-dtype behaviour are exactly those of <code class="docutils literal notranslate"><span class="pre">atomic_add</span></code>.</p></li>
 <li><p><strong>CAS-loop ops are noticeably slower than native atomics</strong>, especially under contention — every contending thread retries the load + compare-exchange until it wins. Prefer pre-aggregating into a register or shared array and issuing a single atomic at the end of the block where possible.</p></li>
 <li><p><strong>f16 floats always use a CAS loop</strong> (no native f16 atomic on any backend except SPIR-V with the right capability bit).</p></li>
+<li><p><strong>On CPU, “native” does not guarantee a single machine instruction.</strong> On x86 and other architectures without hardware float atomics, the compiler backend lowers native float <code class="docutils literal notranslate"><span class="pre">atomic_add</span></code> (and integer <code class="docutils literal notranslate"><span class="pre">min</span></code> / <code class="docutils literal notranslate"><span class="pre">max</span></code>) to a CAS loop in machine code. Under high contention the performance is similar to the explicit “CAS” entries; the difference is that “native” ops benefit from hardware acceleration where available.</p></li>
 <li><p><strong>SPIR-V capability bits</strong> (<code class="docutils literal notranslate"><span class="pre">spirv_has_atomic_float_add</span></code>, <code class="docutils literal notranslate"><span class="pre">spirv_has_atomic_float64_add</span></code>, <code class="docutils literal notranslate"><span class="pre">spirv_has_atomic_float16_add</span></code>) decide whether <code class="docutils literal notranslate"><span class="pre">atomic_add</span></code> lowers to native <code class="docutils literal notranslate"><span class="pre">OpAtomicFAddEXT</span></code> or a uint-backed CAS — the dispatch happens per-call inside <code class="docutils literal notranslate"><span class="pre">quadrants/codegen/spirv/spirv_codegen.cpp</span></code>.</p></li>
 </ul>
 <p>There is no <code class="docutils literal notranslate"><span class="pre">atomic_cas</span></code> (compare-and-swap) exposed in Python today. The C++ runtime uses CmpXchg internally; surfacing it requires extending <code class="docutils literal notranslate"><span class="pre">AtomicOpType</span></code>.</p>
