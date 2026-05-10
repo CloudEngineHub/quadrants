@@ -410,11 +410,11 @@
 
 <span class="sd">    * CUDA: ``__ballot_sync(0xFFFFFFFF, predicate)`` — the warp is always 32 lanes, so the ``u32`` result naturally</span>
 <span class="sd">      packs every lane.</span>
-<span class="sd">    * AMDGPU: ``llvm.amdgcn.ballot.i32`` — packs lanes 0..31 into the result; on wave64 lanes 32..63&#39;s predicates</span>
-<span class="sd">      simply do not appear in the ``i32`` result, which matches the ``ballot_first_n(p, n &lt;= 32)`` contract.  The</span>
-<span class="sd">      width-mismatch case is documented LLVM AMDGPU behaviour (SETCC at wavefront width, then zext/trunc to the</span>
-<span class="sd">      requested type), see https://github.com/llvm/llvm-project/pull/71556 and the longer comment in</span>
-<span class="sd">      ``codegen_amdgpu.cpp``.</span>
+<span class="sd">    * AMDGPU: ``llvm.amdgcn.ballot.i64`` followed by ``trunc to i32``; bits ``[32, 64)`` of the i64 (lanes 32..63 on</span>
+<span class="sd">      wave64) are always discarded, matching the ``ballot_first_n(p, n &lt;= 32)`` contract.  This is a workaround for</span>
+<span class="sd">      an LLVM AMDGPU isel bug — ``ballot.i32`` is documented as well-defined on wave64 (PR</span>
+<span class="sd">      https://github.com/llvm/llvm-project/pull/71556) but in practice still fails ``Cannot select`` on gfx942 in</span>
+<span class="sd">      LLVM 20 / 22 for non-constant predicates.  See ``codegen_amdgpu.cpp`` for the full bug + workaround comment.</span>
 <span class="sd">    * SPIR-V: ``OpGroupNonUniformBallot`` (returns a uvec4); we extract component 0 = lanes 0..31&#39;s ballot.</span>
 
 <span class="sd">    For ``n &lt; 32`` we mask the predicate by ``lane &lt; n`` before issuing the ballot, so bits ``[n, 32)`` of the result</span>
@@ -447,9 +447,9 @@
 <span class="sd">    * CUDA: ``__ballot_sync(0xFFFFFFFF, predicate)`` zero-extended to ``u64`` — the warp is 32 lanes so the high half</span>
 <span class="sd">      is always zero.</span>
 <span class="sd">    * AMDGPU: ``llvm.amdgcn.ballot.i64`` — returns the full 64-bit ballot on wave64; on wave32 the AMDGPU backend</span>
-<span class="sd">      lowers it to the wave32 ballot zero-extended to 64 bits, so the API stays uniform across wavefront modes (same</span>
-<span class="sd">      width-mismatch lowering as the ``ballot_first_n`` u32 form, see ``codegen_amdgpu.cpp`` and</span>
-<span class="sd">      https://github.com/llvm/llvm-project/pull/71556).</span>
+<span class="sd">      lowers it to the wave32 ballot zero-extended to 64 bits, so the API stays uniform across wavefront modes.  The</span>
+<span class="sd">      i64 form selects cleanly in current LLVM (unlike the i32 form&#39;s isel bug noted in ``ballot_first_n``); see</span>
+<span class="sd">      https://github.com/llvm/llvm-project/pull/71556 and ``codegen_amdgpu.cpp`` for the full background.</span>
 <span class="sd">    * SPIR-V: extract components 0 and 1 of the ``OpGroupNonUniformBallot`` uvec4 (lanes 0..31 and 32..63</span>
 <span class="sd">      respectively) and pack them: ``u64(hi) &lt;&lt; 32 | u64(lo)``.</span>
 
