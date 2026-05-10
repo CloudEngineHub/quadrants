@@ -8,7 +8,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="viewport" content="width=device-width, initial-scale=1" />
 
-    <title>Math &#8212; Quadrants 0.7.6 documentation</title>
+    <title>Math &#8212; Quadrants 0.7.8 documentation</title>
   
   
   
@@ -43,7 +43,7 @@
   <link rel="preload" as="script" href="../_static/scripts/bootstrap.js?digest=55c26ed414f5f8a31ebb" />
 <link rel="preload" as="script" href="../_static/scripts/pydata-sphinx-theme.js?digest=55c26ed414f5f8a31ebb" />
 
-    <script src="../_static/documentation_options.js?v=918ced64"></script>
+    <script src="../_static/documentation_options.js?v=ddeecabf"></script>
     <script src="../_static/doctools.js?v=9bcbadda"></script>
     <script src="../_static/sphinx_highlight.js?v=dc90522c"></script>
     <script src="../_static/clipboard.min.js?v=a7894cd8"></script>
@@ -63,7 +63,7 @@
     <link rel="prev" title="Grid primitives" href="grid.html" />
   <meta name="viewport" content="width=device-width, initial-scale=1"/>
   <meta name="docsearch:language" content="en"/>
-  <meta name="docsearch:version" content="0.7.6" />
+  <meta name="docsearch:version" content="0.7.8" />
   
     
     <script src="../_static/searchtools.js"></script>
@@ -131,7 +131,7 @@
   
   
   
-    <p class="title logo__title">Quadrants 0.7.6 documentation</p>
+    <p class="title logo__title">Quadrants 0.7.8 documentation</p>
   
 </a></div>
     
@@ -314,6 +314,10 @@
 <li class="toctree-l1"><a class="reference internal" href="subgroup.html">Subgroup primitives</a></li>
 <li class="toctree-l1"><a class="reference internal" href="tile16.html">Tile16x16: register-resident 16x16 tiles</a></li>
 </ul>
+<p aria-level="2" class="caption" role="heading"><span class="caption-text">Algorithms</span></p>
+<ul class="nav bd-sidenav">
+<li class="toctree-l1"><a class="reference internal" href="algorithms.html">Algorithms</a></li>
+</ul>
 <p aria-level="2" class="caption" role="heading"><span class="caption-text">Performance</span></p>
 <ul class="nav bd-sidenav">
 <li class="toctree-l1"><a class="reference internal" href="fastcache.html">Fastcache</a></li>
@@ -414,27 +418,31 @@
 <th class="head"><p>CUDA</p></th>
 <th class="head"><p>AMDGPU</p></th>
 <th class="head"><p>SPIR-V (Vulkan / Metal)</p></th>
+<th class="head"><p>x64 (CPU)</p></th>
 </tr>
 </thead>
 <tbody>
 <tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">qd.math.popcnt(x)</span></code></p></td>
 <td><p>i32, u32, i64, u64</p></td>
 <td><p>i32, u32, i64, u64</p></td>
-<td><p>any int (<code class="docutils literal notranslate"><span class="pre">OpBitCount</span></code>)</p></td>
+<td><p>i32, u32, i64, u64 (<code class="docutils literal notranslate"><span class="pre">OpBitCount</span></code>)</p></td>
+<td><p>i32, u32, i64, u64</p></td>
 </tr>
 <tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">qd.math.clz(x)</span></code></p></td>
 <td><p>i32, u32, i64, u64</p></td>
 <td><p>i32, u32, i64, u64</p></td>
 <td><p>i32, u32, i64, u64 (<code class="docutils literal notranslate"><span class="pre">FindUMsb</span></code>-based) *</p></td>
+<td><p>i32, u32, i64, u64</p></td>
 </tr>
 </tbody>
 </table>
 </div>
+<p>Both ops <strong>return <code class="docutils literal notranslate"><span class="pre">i32</span></code> on every backend</strong>, regardless of input width. This matches CUDA libdevice (<code class="docutils literal notranslate"><span class="pre">__nv_popc</span></code> / <code class="docutils literal notranslate"><span class="pre">__nv_clz</span></code> both return <code class="docutils literal notranslate"><span class="pre">int</span></code>) and the natural width of the AMDGPU SALU bit-count / leading-zero instructions (<code class="docutils literal notranslate"><span class="pre">s_bcnt1_i32_b64</span></code>, <code class="docutils literal notranslate"><span class="pre">s_flbit_i32_b64</span></code>); SPIR-V and x64 truncate down to <code class="docutils literal notranslate"><span class="pre">i32</span></code> so the same kernel source has the same return type everywhere. The result is always non-negative and fits in 7 bits (<code class="docutils literal notranslate"><span class="pre">popcnt</span></code> ≤ 64, <code class="docutils literal notranslate"><span class="pre">clz</span></code> ≤ 64).</p>
 <p>* On SPIR-V the 64-bit path (i64 / u64) is synthesised from two <code class="docutils literal notranslate"><span class="pre">FindUMsb</span></code> calls on the 32-bit halves plus an <code class="docutils literal notranslate"><span class="pre">OpSelect</span></code>, since <code class="docutils literal notranslate"><span class="pre">GLSL.std.450</span> <span class="pre">FindUMsb</span></code> itself is 32-bit-only. The runtime device must advertise the <code class="docutils literal notranslate"><span class="pre">Int64</span></code> SPIR-V capability (Vulkan: <code class="docutils literal notranslate"><span class="pre">shaderInt64</span></code>); this is the same precondition any other 64-bit op would impose. On unsupported integer widths (e.g. <code class="docutils literal notranslate"><span class="pre">i8</span></code>, <code class="docutils literal notranslate"><span class="pre">i16</span></code>, <code class="docutils literal notranslate"><span class="pre">u16</span></code>) <code class="docutils literal notranslate"><span class="pre">clz</span></code> and <code class="docutils literal notranslate"><span class="pre">popcnt</span></code> hit <code class="docutils literal notranslate"><span class="pre">QD_NOT_IMPLEMENTED</span></code> on every backend.</p>
 <p>The classic CUDA bit-tricks <code class="docutils literal notranslate"><span class="pre">__ffs</span></code> (find first set bit) and <code class="docutils literal notranslate"><span class="pre">__fns</span></code> (find n-th set bit in a mask) are not exposed; build them from <code class="docutils literal notranslate"><span class="pre">popcnt</span></code> / <code class="docutils literal notranslate"><span class="pre">clz</span></code> if needed.</p>
 <section id="qd-math-popcnt-x">
 <h3><code class="docutils literal notranslate"><span class="pre">qd.math.popcnt(x)</span></code><a class="headerlink" href="#qd-math-popcnt-x" title="Link to this heading">#</a></h3>
-<p>Counts set bits in <code class="docutils literal notranslate"><span class="pre">x</span></code> and returns an <code class="docutils literal notranslate"><span class="pre">i32</span></code>. On CUDA, lowers to <code class="docutils literal notranslate"><span class="pre">__nv_popc</span></code> for 32-bit inputs and <code class="docutils literal notranslate"><span class="pre">__nv_popcll</span></code> for 64-bit inputs (i32 / u32 / i64 / u64; narrower widths are unsupported). On AMDGPU, lowers to the portable <code class="docutils literal notranslate"><span class="pre">llvm.ctpop</span></code> intrinsic (same dtype set as CUDA), which the AMDGPU LLVM backend further lowers to a native bit-count instruction. On SPIR-V, lowers to <code class="docutils literal notranslate"><span class="pre">OpBitCount</span></code>. The 64-bit lowerings on CUDA and AMDGPU truncate the result to i32 to match the documented <code class="docutils literal notranslate"><span class="pre">i32</span></code> return type.</p>
+<p>Counts set bits in <code class="docutils literal notranslate"><span class="pre">x</span></code> and returns an <code class="docutils literal notranslate"><span class="pre">i32</span></code>. On CUDA, lowers to <code class="docutils literal notranslate"><span class="pre">__nv_popc</span></code> for 32-bit inputs and <code class="docutils literal notranslate"><span class="pre">__nv_popcll</span></code> for 64-bit inputs (i32 / u32 / i64 / u64; narrower widths are unsupported). On AMDGPU, lowers to the portable <code class="docutils literal notranslate"><span class="pre">llvm.ctpop</span></code> intrinsic (same dtype set as CUDA), which the AMDGPU LLVM backend further lowers to a native bit-count instruction (e.g. <code class="docutils literal notranslate"><span class="pre">s_bcnt1_i32_b64</span></code> for the 64-bit SALU path). On SPIR-V, lowers to <code class="docutils literal notranslate"><span class="pre">OpBitCount</span></code>. On x64, lowers to <code class="docutils literal notranslate"><span class="pre">llvm.ctpop</span></code>. Every backend truncates to <code class="docutils literal notranslate"><span class="pre">i32</span></code> to match the unified return type; the truncation is free since 64-bit <code class="docutils literal notranslate"><span class="pre">popcnt</span></code> results never exceed 64.</p>
 </section>
 <section id="qd-math-clz-x">
 <h3><code class="docutils literal notranslate"><span class="pre">qd.math.clz(x)</span></code><a class="headerlink" href="#qd-math-clz-x" title="Link to this heading">#</a></h3>
