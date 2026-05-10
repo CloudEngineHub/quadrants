@@ -14,7 +14,8 @@ Functions
    quadrants.lang.simt.subgroup.barrier
    quadrants.lang.simt.subgroup.memory_barrier
    quadrants.lang.simt.subgroup.elect
-   quadrants.lang.simt.subgroup.ballot
+   quadrants.lang.simt.subgroup.ballot_first_n
+   quadrants.lang.simt.subgroup.ballot_full_subgroup
    quadrants.lang.simt.subgroup.all_true
    quadrants.lang.simt.subgroup.any_true
    quadrants.lang.simt.subgroup.all_equal
@@ -77,13 +78,54 @@ Module Contents
    consistent across backends.
 
 
-.. py:function:: ballot(predicate)
+.. py:function:: ballot_first_n(predicate, n: template())
 
-   Return a ``u32`` bitmask whose bit ``i`` is set iff lane ``i``'s ``predicate`` is non-zero.
+   Return a ``u32`` bitmask whose bit ``i`` is set iff ``i < n`` AND lane ``i``'s ``predicate`` is non-zero.
 
-   Single hardware instruction on every backend (``__ballot_sync`` on CUDA, ``v_ballot_b32`` on AMDGPU,
-   ``OpGroupNonUniformBallot`` on SPIR-V).  The result covers the first 32 lanes; on AMDGPU CDNA wave64 only the low
-   32 bits are returned, consistent with the ``u32`` return type.  Caller contract: uniform CF + all lanes active.
+   ``n`` is a ``qd.template()`` compile-time constant in ``[1, 32]``; bits ``>= n`` of the result are always zero.
+   Pass ``n = 32`` for "ballot all 32 representable lanes" (the most common case, used by ``segmented_reduce_*`` and
+   every other consumer of the u32 ballot in this module).
+
+   Backend lowering:
+
+   * CUDA: ``__ballot_sync(0xFFFFFFFF, predicate)`` — the warp is always 32 lanes, so the ``u32`` result naturally
+     packs every lane.
+   * AMDGPU: ``llvm.amdgcn.ballot.i32`` — packs lanes 0..31 into the result; on wave64 lanes 32..63's predicates
+     simply do not appear in the ``i32`` result, which matches the ``ballot_first_n(p, n <= 32)`` contract.  The
+     width-mismatch case is documented LLVM AMDGPU behaviour (SETCC at wavefront width, then zext/trunc to the
+     requested type), see https://github.com/llvm/llvm-project/pull/71556 and the longer comment in
+     ``codegen_amdgpu.cpp``.
+   * SPIR-V: ``OpGroupNonUniformBallot`` (returns a uvec4); we extract component 0 = lanes 0..31's ballot.
+
+   For ``n < 32`` we mask the predicate by ``lane < n`` before issuing the ballot, so bits ``[n, 32)`` of the result
+   are forced to zero regardless of what those lanes' actual predicates are.  At ``n == 32`` the masking is provably
+   a no-op on every backend (lanes ``>= 32`` are either non-existent on wave32 or already not represented in the u32
+   result on wave64), so we shortcut and emit the ballot directly with no extra arithmetic.
+
+   Caller contract: uniform CF + all lanes active.  If you need a mask covering more than 32 lanes (for wave64
+   callers who want the full subgroup), use `ballot_full_subgroup` and check the high 32 bits.
+
+
+.. py:function:: ballot_full_subgroup(predicate)
+
+   Return a ``u64`` bitmask covering the entire subgroup; bit ``i`` is set iff lane ``i``'s ``predicate`` is
+   non-zero.  On wave32 backends (CUDA, RDNA wave32, most Vulkan / Metal) the high 32 bits of the result are always
+   zero, since lanes ``>= 32`` do not exist; on wave64 backends (AMDGPU CDNA, GFX9, RDNA explicit-wave64) all 64 bits
+   are meaningful.  Use this when you need a subgroup-wide population count, prefix-mask, or compaction that has to
+   cover more than 32 lanes; use `ballot_first_n` when you only care about the first 32 lanes.
+
+   Backend lowering:
+
+   * CUDA: ``__ballot_sync(0xFFFFFFFF, predicate)`` zero-extended to ``u64`` — the warp is 32 lanes so the high half
+     is always zero.
+   * AMDGPU: ``llvm.amdgcn.ballot.i64`` — returns the full 64-bit ballot on wave64; on wave32 the AMDGPU backend
+     lowers it to the wave32 ballot zero-extended to 64 bits, so the API stays uniform across wavefront modes (same
+     width-mismatch lowering as the ``ballot_first_n`` u32 form, see ``codegen_amdgpu.cpp`` and
+     https://github.com/llvm/llvm-project/pull/71556).
+   * SPIR-V: extract components 0 and 1 of the ``OpGroupNonUniformBallot`` uvec4 (lanes 0..31 and 32..63
+     respectively) and pack them: ``u64(hi) << 32 | u64(lo)``.
+
+   Caller contract: uniform CF + all lanes active.
 
 
 .. py:function:: all_true(predicate, log2_size: template())
@@ -237,9 +279,10 @@ Module Contents
 
    Caller contract:
 
-   * ``2**log2_size`` must not exceed 32 (the underlying ``ballot`` returns a ``u32`` covering the first 32 lanes; on
-     AMDGPU CDNA wave64 only the low 32 lanes contribute).  ``log2_size`` is a ``qd.template()`` compile-time
-     constant; the body is fully unrolled into ``log2_size`` ``shuffle_up + add`` pairs.
+   * ``2**log2_size`` must not exceed 32: segments are scoped to a single 32-lane half of the subgroup so the
+     bit-mask bookkeeping stays in u32 internally.  On wave64 the high 32 lanes are handled correctly via a separate
+     half-local ballot — see ``_segment_head_distance`` for the wave64 details.  ``log2_size`` is a ``qd.template()``
+     compile-time constant; the body is fully unrolled into ``log2_size`` ``shuffle_up + add`` pairs.
    * ``head_flag`` is any integer scalar; the lowering tests ``head_flag != 0``, so non-binary truthy values work.
    * Same uniform-CF + all-lanes-active contract as the rest of ``qd.simt.subgroup``.
 
