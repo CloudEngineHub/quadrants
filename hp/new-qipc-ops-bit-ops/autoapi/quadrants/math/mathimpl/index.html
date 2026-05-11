@@ -1341,9 +1341,9 @@ position of the <code class="docutils literal notranslate"><span class="pre">|of
 <li><p><code class="docutils literal notranslate"><span class="pre">offset</span> <span class="pre">==</span> <span class="pre">0</span></code>: returns <code class="docutils literal notranslate"><span class="pre">base</span></code> if <code class="docutils literal notranslate"><span class="pre">mask</span> <span class="pre">&amp;</span> <span class="pre">(1</span> <span class="pre">&lt;&lt;</span> <span class="pre">base)</span></code> is non-zero, else <code class="docutils literal notranslate"><span class="pre">0xFFFFFFFF</span></code>.</p></li>
 </ul>
 <p>Returns <code class="docutils literal notranslate"><span class="pre">0xFFFFFFFF</span></code> if the requested set bit does not exist.</p>
-<p>On CUDA the call lowers directly to libdevice’s <code class="docutils literal notranslate"><span class="pre">__nv_fns</span></code>, which is a single-instruction PTX <code class="docutils literal notranslate"><span class="pre">fns</span></code> op. On
-every other backend (x64 / AMDGPU / SPIR-V) a portable Python &#64;qd.func fallback is emitted; the body is a
-32-iteration loop over bit positions and is fully unrolled by the lowering pipeline on each backend.</p>
+<p>On CUDA the call lowers to a single PTX <code class="docutils literal notranslate"><span class="pre">fns.b32</span></code> instruction via inline asm (<code class="docutils literal notranslate"><span class="pre">__nv_fns</span></code> is not in the slim
+libdevice we ship). On every other backend (x64 / AMDGPU / SPIR-V) a portable Python &#64;qd.func fallback is emitted;
+the body is a 32-iteration loop over bit positions and is fully unrolled by the lowering pipeline on each backend.</p>
 </dd></dl>
 
 </section>
