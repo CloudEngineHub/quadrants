@@ -7,7 +7,7 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>quadrants.math.mathimpl &#8212; Quadrants 0.7.8 documentation</title>
+    <title>quadrants.math.mathimpl &#8212; Quadrants 0.7.9 documentation</title>
   
   
   
@@ -42,7 +42,7 @@
   <link rel="preload" as="script" href="../../../_static/scripts/bootstrap.js?digest=55c26ed414f5f8a31ebb" />
 <link rel="preload" as="script" href="../../../_static/scripts/pydata-sphinx-theme.js?digest=55c26ed414f5f8a31ebb" />
 
-    <script src="../../../_static/documentation_options.js?v=ddeecabf"></script>
+    <script src="../../../_static/documentation_options.js?v=79964ea6"></script>
     <script src="../../../_static/doctools.js?v=9bcbadda"></script>
     <script src="../../../_static/sphinx_highlight.js?v=dc90522c"></script>
     <script src="../../../_static/clipboard.min.js?v=a7894cd8"></script>
@@ -60,7 +60,7 @@
     <link rel="search" title="Search" href="../../../search.html" />
   <meta name="viewport" content="width=device-width, initial-scale=1"/>
   <meta name="docsearch:language" content="en"/>
-  <meta name="docsearch:version" content="0.7.8" />
+  <meta name="docsearch:version" content="0.7.9" />
   
     
     <script src="../../../_static/searchtools.js"></script>
@@ -128,7 +128,7 @@
   
   
   
-    <p class="title logo__title">Quadrants 0.7.8 documentation</p>
+    <p class="title logo__title">Quadrants 0.7.9 documentation</p>
   
 </a></div>
     
@@ -1292,10 +1292,10 @@
 
 
 
-<span class="c1"># Portable fallback for fns(): scans a 32-bit `mask` from `base` in the direction implied by the</span>
-<span class="c1"># sign of `offset` and returns the bit position of the |offset|-th set bit, or 0xFFFFFFFF if there</span>
-<span class="c1"># are fewer than |offset| set bits in the requested half-open range. The CUDA fast path lowers</span>
-<span class="c1"># directly to libdevice&#39;s __nv_fns and bypasses this @qd.func entirely; see fns() below.</span>
+<span class="c1"># Portable fallback for fns(): scans a 32-bit `mask` from `base` in the direction implied by the sign of `offset` and</span>
+<span class="c1"># returns the bit position of the |offset|-th set bit, or 0xFFFFFFFF if there are fewer than |offset| set bits in the</span>
+<span class="c1"># requested half-open range. The CUDA fast path lowers directly to libdevice&#39;s __nv_fns and bypasses this @qd.func</span>
+<span class="c1"># entirely; see fns() below.</span>
 <span class="nd">@func</span>
 <span class="k">def</span><span class="w"> </span><span class="nf">_fns_portable</span><span class="p">(</span><span class="n">mask</span><span class="p">:</span> <span class="n">u32</span><span class="p">,</span> <span class="n">base</span><span class="p">:</span> <span class="n">u32</span><span class="p">,</span> <span class="n">offset</span><span class="p">:</span> <span class="n">i32</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">u32</span><span class="p">:</span>
     <span class="n">NOT_FOUND</span> <span class="o">=</span> <span class="n">u32</span><span class="p">(</span><span class="mh">0xFFFFFFFF</span><span class="p">)</span>
@@ -1332,9 +1332,8 @@
 <span class="k">def</span><span class="w"> </span><span class="nf">fns</span><span class="p">(</span><span class="n">mask</span><span class="p">,</span> <span class="n">base</span><span class="p">,</span> <span class="n">offset</span><span class="p">):</span>
 <span class="w">    </span><span class="sd">&quot;&quot;&quot;Find the n-th set bit in a 32-bit mask, with CUDA fast-path dispatch.</span>
 
-<span class="sd">    Mirrors CUDA&#39;s ``__nv_fns(mask, base, offset)``: scans ``mask`` starting from bit ``base`` and</span>
-<span class="sd">    returns the bit position of the ``|offset|``-th set bit found. The sign of ``offset`` selects</span>
-<span class="sd">    the search direction:</span>
+<span class="sd">    Mirrors CUDA&#39;s ``__nv_fns(mask, base, offset)``: scans ``mask`` starting from bit ``base`` and returns the bit</span>
+<span class="sd">    position of the ``|offset|``-th set bit found. The sign of ``offset`` selects the search direction:</span>
 
 <span class="sd">    * ``offset &gt; 0``: scan upward (towards higher bit indices) starting at ``base`` (inclusive).</span>
 <span class="sd">    * ``offset &lt; 0``: scan downward (towards lower bit indices) starting at ``base`` (inclusive).</span>
@@ -1342,10 +1341,9 @@
 
 <span class="sd">    Returns ``0xFFFFFFFF`` if the requested set bit does not exist.</span>
 
-<span class="sd">    On CUDA the call lowers directly to libdevice&#39;s ``__nv_fns``, which is a single-instruction</span>
-<span class="sd">    PTX ``fns`` op. On every other backend (x64 / AMDGPU / SPIR-V) a portable Python @qd.func</span>
-<span class="sd">    fallback is emitted; the body is a 32-iteration loop over bit positions and is fully</span>
-<span class="sd">    unrolled by the lowering pipeline on each backend.</span>
+<span class="sd">    On CUDA the call lowers directly to libdevice&#39;s ``__nv_fns``, which is a single-instruction PTX ``fns`` op. On</span>
+<span class="sd">    every other backend (x64 / AMDGPU / SPIR-V) a portable Python @qd.func fallback is emitted; the body is a</span>
+<span class="sd">    32-iteration loop over bit positions and is fully unrolled by the lowering pipeline on each backend.</span>
 <span class="sd">    &quot;&quot;&quot;</span>
     <span class="k">if</span> <span class="n">impl</span><span class="o">.</span><span class="n">current_cfg</span><span class="p">()</span><span class="o">.</span><span class="n">arch</span> <span class="o">==</span> <span class="n">_qd_core</span><span class="o">.</span><span class="n">Arch</span><span class="o">.</span><span class="n">cuda</span><span class="p">:</span>
         <span class="k">return</span> <span class="n">impl</span><span class="o">.</span><span class="n">call_internal</span><span class="p">(</span><span class="s2">&quot;cuda_fns_u32&quot;</span><span class="p">,</span> <span class="n">mask</span><span class="p">,</span> <span class="n">base</span><span class="p">,</span> <span class="n">offset</span><span class="p">,</span> <span class="n">with_runtime_context</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span>
