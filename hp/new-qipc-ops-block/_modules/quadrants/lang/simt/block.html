@@ -486,13 +486,14 @@
 <span class="c1">#</span>
 <span class="c1"># Two-stage block reduce: each warp reduces its lanes via `shuffle_down`, lane 0 of every warp publishes the warp</span>
 <span class="c1"># aggregate to shared memory, a `block.sync()` retires the publish, and thread 0 sequentially folds the warp aggregates</span>
-<span class="c1"># with `op`.  Cost: `log2_warp` shuffles + 1 shared-mem write/read per warp + 1 `block.sync` + (NUM_WARPS - 1) ops on</span>
-<span class="c1"># thread 0.</span>
+<span class="c1"># with `op`.  Cost: `log2(warp_size)` shuffles + 1 shared-mem write/read per warp + 1 `block.sync` + (NUM_WARPS - 1)</span>
+<span class="c1"># ops on thread 0.  The warp size is read from `subgroup.group_size()` (a compile-time Python int) at the top of every</span>
+<span class="c1"># block op, so callers never plumb it in.</span>
 <span class="c1">#</span>
 <span class="c1"># `_warp_reduce` mirrors `subgroup.reduce_add` / `_min` / `_max` but takes a generic template operator so the same</span>
 <span class="c1"># kernel skeleton covers add / min / max / mul / bitwise / custom monoids.  We don&#39;t reuse `subgroup.reduce_add` etc.</span>
 <span class="c1"># directly because we want one source of truth for the block path&#39;s per-warp step and a cheap way to plug in arbitrary</span>
-<span class="c1"># operators (used internally by `_reduce`, `_reduce_all`, and downstream block scans).</span>
+<span class="c1"># operators (used internally by `reduce` / `reduce_all`).</span>
 
 
 <span class="nd">@_func</span>
@@ -509,19 +510,31 @@
 
 
 <span class="nd">@_func</span>
-<span class="k">def</span><span class="w"> </span><span class="nf">_reduce</span><span class="p">(</span><span class="n">value</span><span class="p">,</span> <span class="n">tid</span><span class="p">,</span> <span class="n">block_dim</span><span class="p">:</span> <span class="n">template</span><span class="p">(),</span> <span class="n">log2_warp</span><span class="p">:</span> <span class="n">template</span><span class="p">(),</span> <span class="n">op</span><span class="p">:</span> <span class="n">template</span><span class="p">(),</span> <span class="n">dtype</span><span class="p">:</span> <span class="n">template</span><span class="p">()):</span>
+<div class="viewcode-block" id="reduce">
+<a class="viewcode-back" href="../../../../autoapi/quadrants/lang/simt/block/index.html#quadrants.lang.simt.block.reduce">[docs]</a>
+<span class="k">def</span><span class="w"> </span><span class="nf">reduce</span><span class="p">(</span><span class="n">value</span><span class="p">,</span> <span class="n">block_dim</span><span class="p">:</span> <span class="n">template</span><span class="p">(),</span> <span class="n">op</span><span class="p">:</span> <span class="n">template</span><span class="p">(),</span> <span class="n">dtype</span><span class="p">:</span> <span class="n">template</span><span class="p">()):</span>
 <span class="w">    </span><span class="sd">&quot;&quot;&quot;Block-scope reduction under a generic associative ``op``.  Result is valid in **thread 0 only**; other threads</span>
-<span class="sd">    retain partial values.  Use ``_reduce_all`` if you need the result on every thread.</span>
+<span class="sd">    retain partial values.  Use `reduce_all` if you need the result on every thread.</span>
 
-<span class="sd">    ``tid`` is the calling thread&#39;s block-local index (``i % block_dim`` from a ``loop_config(block_dim=...)`` kernel,</span>
-<span class="sd">    or ``qd.simt.block.thread_idx()`` on backends that expose it).  ``block_dim`` must be a multiple of</span>
-<span class="sd">    ``2**log2_warp``; ``log2_warp`` should be 5 on CUDA / Metal / RDNA and 6 on CDNA AMDGPU.  ``dtype`` sizes the</span>
-<span class="sd">    inter-warp shared-memory staging slot.</span>
+<span class="sd">    Args:</span>
+<span class="sd">        value: per-thread input.</span>
+<span class="sd">        block_dim: threads per block (template).  Must be a positive multiple of ``subgroup.group_size()`` (32 on CUDA</span>
+<span class="sd">            / Metal / Vulkan-on-NVIDIA, 64 on AMDGPU).</span>
+<span class="sd">        op: ``@qd.func`` taking two values and returning the same type as ``value``; callers can plug in custom</span>
+<span class="sd">            associative monoids (bitwise ops, multiplicative, matrix-multiply, etc.) without re-implementing the</span>
+<span class="sd">            per-warp + shared-mem skeleton.  See `reduce_add` for the standard sum specialization.</span>
+<span class="sd">        dtype: scalar dtype for the inter-warp shared-memory staging slot (must match ``value``&#39;s type).</span>
 
-<span class="sd">    When the block is exactly one warp (``block_dim == 2**log2_warp``) the shared-memory path is short-circuited at</span>
-<span class="sd">    trace time and the call costs only the per-warp tree.</span>
+<span class="sd">    The calling thread&#39;s block-local index is read internally via `block.thread_idx()`; the warp size is read from</span>
+<span class="sd">    `subgroup.group_size()` at compile time.  When the block is exactly one warp the shared-memory path is</span>
+<span class="sd">    short-circuited at compile time and the call costs only the per-warp tree.</span>
 <span class="sd">    &quot;&quot;&quot;</span>
-    <span class="n">WARP_SIZE</span> <span class="o">=</span> <span class="n">impl</span><span class="o">.</span><span class="n">static</span><span class="p">(</span><span class="mi">1</span> <span class="o">&lt;&lt;</span> <span class="n">log2_warp</span><span class="p">)</span>
+    <span class="n">WARP_SIZE</span> <span class="o">=</span> <span class="n">impl</span><span class="o">.</span><span class="n">static</span><span class="p">(</span><span class="n">_subgroup</span><span class="o">.</span><span class="n">group_size</span><span class="p">())</span>
+    <span class="n">log2_warp</span> <span class="o">=</span> <span class="n">impl</span><span class="o">.</span><span class="n">static</span><span class="p">(</span><span class="n">_subgroup</span><span class="o">.</span><span class="n">log2_group_size</span><span class="p">())</span>
+    <span class="n">impl</span><span class="o">.</span><span class="n">static_assert</span><span class="p">(</span>
+        <span class="n">impl</span><span class="o">.</span><span class="n">static</span><span class="p">(</span><span class="n">block_dim</span> <span class="o">%</span> <span class="n">WARP_SIZE</span> <span class="o">==</span> <span class="mi">0</span> <span class="ow">and</span> <span class="n">block_dim</span> <span class="o">&gt;=</span> <span class="n">WARP_SIZE</span><span class="p">),</span>
+        <span class="s2">&quot;block.reduce: block_dim must be a positive multiple of subgroup size&quot;</span><span class="p">,</span>
+    <span class="p">)</span>
     <span class="n">NUM_WARPS</span> <span class="o">=</span> <span class="n">impl</span><span class="o">.</span><span class="n">static</span><span class="p">(</span><span class="n">block_dim</span> <span class="o">//</span> <span class="n">WARP_SIZE</span><span class="p">)</span>
 
     <span class="n">warp_agg</span> <span class="o">=</span> <span class="n">_warp_reduce</span><span class="p">(</span><span class="n">value</span><span class="p">,</span> <span class="n">log2_warp</span><span class="p">,</span> <span class="n">op</span><span class="p">)</span>
@@ -529,12 +542,8 @@
     <span class="k">if</span> <span class="n">impl</span><span class="o">.</span><span class="n">static</span><span class="p">(</span><span class="n">NUM_WARPS</span> <span class="o">==</span> <span class="mi">1</span><span class="p">):</span>
         <span class="k">return</span> <span class="n">warp_agg</span>
 
+    <span class="n">tid</span> <span class="o">=</span> <span class="n">thread_idx</span><span class="p">()</span>
     <span class="n">warp_id</span> <span class="o">=</span> <span class="n">tid</span> <span class="o">//</span> <span class="n">WARP_SIZE</span>
-    <span class="c1"># Use the **logical** lane (``tid &amp; (WARP_SIZE-1)``) instead of ``invocation_id()``: on wave64 hardware</span>
-    <span class="c1"># (CDNA AMDGPU) the hardware-lane index runs 0..63 inside one wave but logical warp 1 starts at lane 32, so</span>
-    <span class="c1"># ``invocation_id() == 0`` would skip every other logical warp&#39;s publish.  ``tid &amp; (WARP_SIZE-1)`` matches the</span>
-    <span class="c1"># standard ``threadIdx.x &amp; 31`` recipe on CUDA wave32 and stays correct when the hardware wave is wider than the</span>
-    <span class="c1"># logical warp.</span>
     <span class="n">lane_id</span> <span class="o">=</span> <span class="n">tid</span> <span class="o">&amp;</span> <span class="n">impl</span><span class="o">.</span><span class="n">static</span><span class="p">(</span><span class="n">WARP_SIZE</span> <span class="o">-</span> <span class="mi">1</span><span class="p">)</span>
 
     <span class="n">shared</span> <span class="o">=</span> <span class="n">SharedArray</span><span class="p">(</span><span class="n">impl</span><span class="o">.</span><span class="n">static</span><span class="p">((</span><span class="n">NUM_WARPS</span><span class="p">,)),</span> <span class="n">dtype</span><span class="p">)</span>
@@ -547,107 +556,79 @@
         <span class="n">result</span> <span class="o">=</span> <span class="n">shared</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span>
         <span class="k">for</span> <span class="n">w</span> <span class="ow">in</span> <span class="n">impl</span><span class="o">.</span><span class="n">static</span><span class="p">(</span><span class="nb">range</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="n">NUM_WARPS</span><span class="p">)):</span>
             <span class="n">result</span> <span class="o">=</span> <span class="n">op</span><span class="p">(</span><span class="n">result</span><span class="p">,</span> <span class="n">shared</span><span class="p">[</span><span class="n">impl</span><span class="o">.</span><span class="n">static</span><span class="p">(</span><span class="n">w</span><span class="p">)])</span>
-    <span class="k">return</span> <span class="n">result</span>
-
-
-<span class="nd">@_func</span>
-<span class="k">def</span><span class="w"> </span><span class="nf">_reduce_all</span><span class="p">(</span><span class="n">value</span><span class="p">,</span> <span class="n">tid</span><span class="p">,</span> <span class="n">block_dim</span><span class="p">:</span> <span class="n">template</span><span class="p">(),</span> <span class="n">log2_warp</span><span class="p">:</span> <span class="n">template</span><span class="p">(),</span> <span class="n">op</span><span class="p">:</span> <span class="n">template</span><span class="p">(),</span> <span class="n">dtype</span><span class="p">:</span> <span class="n">template</span><span class="p">()):</span>
-<span class="w">    </span><span class="sd">&quot;&quot;&quot;Block reduction whose result is broadcast to every thread.  Costs one extra ``block.sync()`` plus a one-slot</span>
-<span class="sd">    shared-memory broadcast vs. ``_reduce``.</span>
-<span class="sd">    &quot;&quot;&quot;</span>
-    <span class="n">result</span> <span class="o">=</span> <span class="n">_reduce</span><span class="p">(</span><span class="n">value</span><span class="p">,</span> <span class="n">tid</span><span class="p">,</span> <span class="n">block_dim</span><span class="p">,</span> <span class="n">log2_warp</span><span class="p">,</span> <span class="n">op</span><span class="p">,</span> <span class="n">dtype</span><span class="p">)</span>
-    <span class="n">bcast</span> <span class="o">=</span> <span class="n">SharedArray</span><span class="p">((</span><span class="mi">1</span><span class="p">,),</span> <span class="n">dtype</span><span class="p">)</span>
-    <span class="k">if</span> <span class="n">tid</span> <span class="o">==</span> <span class="mi">0</span><span class="p">:</span>
-        <span class="n">bcast</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="o">=</span> <span class="n">result</span>
-    <span class="n">sync</span><span class="p">()</span>
-    <span class="k">return</span> <span class="n">bcast</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span>
-
-
-<span class="nd">@_func</span>
-<div class="viewcode-block" id="reduce">
-<a class="viewcode-back" href="../../../../autoapi/quadrants/lang/simt/block/index.html#quadrants.lang.simt.block.reduce">[docs]</a>
-<span class="k">def</span><span class="w"> </span><span class="nf">reduce</span><span class="p">(</span><span class="n">value</span><span class="p">,</span> <span class="n">tid</span><span class="p">,</span> <span class="n">block_dim</span><span class="p">:</span> <span class="n">template</span><span class="p">(),</span> <span class="n">log2_warp</span><span class="p">:</span> <span class="n">template</span><span class="p">(),</span> <span class="n">op</span><span class="p">:</span> <span class="n">template</span><span class="p">(),</span> <span class="n">dtype</span><span class="p">:</span> <span class="n">template</span><span class="p">()):</span>
-<span class="w">    </span><span class="sd">&quot;&quot;&quot;Block-scope reduction under a generic associative ``op``.  Result valid in **thread 0 only**.  See `reduce_add`</span>
-<span class="sd">    for the argument contract; this generic form additionally takes an ``op: template()`` ``@qd.func`` taking two args</span>
-<span class="sd">    and returning the same type as ``value``, so callers can plug in custom monoids (bitwise ops, multiplicative,</span>
-<span class="sd">    matrix-multiply, etc.) without re-implementing the warp-reduce + shared-mem skeleton.</span>
-<span class="sd">    &quot;&quot;&quot;</span>
-    <span class="k">return</span> <span class="n">_reduce</span><span class="p">(</span><span class="n">value</span><span class="p">,</span> <span class="n">tid</span><span class="p">,</span> <span class="n">block_dim</span><span class="p">,</span> <span class="n">log2_warp</span><span class="p">,</span> <span class="n">op</span><span class="p">,</span> <span class="n">dtype</span><span class="p">)</span></div>
+    <span class="k">return</span> <span class="n">result</span></div>
 
 
 
 <span class="nd">@_func</span>
 <div class="viewcode-block" id="reduce_all">
 <a class="viewcode-back" href="../../../../autoapi/quadrants/lang/simt/block/index.html#quadrants.lang.simt.block.reduce_all">[docs]</a>
-<span class="k">def</span><span class="w"> </span><span class="nf">reduce_all</span><span class="p">(</span><span class="n">value</span><span class="p">,</span> <span class="n">tid</span><span class="p">,</span> <span class="n">block_dim</span><span class="p">:</span> <span class="n">template</span><span class="p">(),</span> <span class="n">log2_warp</span><span class="p">:</span> <span class="n">template</span><span class="p">(),</span> <span class="n">op</span><span class="p">:</span> <span class="n">template</span><span class="p">(),</span> <span class="n">dtype</span><span class="p">:</span> <span class="n">template</span><span class="p">()):</span>
-<span class="w">    </span><span class="sd">&quot;&quot;&quot;Block-scope reduction under a generic associative ``op``, broadcast to every thread.  See `reduce_all_add` for</span>
-<span class="sd">    the cost profile and `reduce` for the operator contract.</span>
+<span class="k">def</span><span class="w"> </span><span class="nf">reduce_all</span><span class="p">(</span><span class="n">value</span><span class="p">,</span> <span class="n">block_dim</span><span class="p">:</span> <span class="n">template</span><span class="p">(),</span> <span class="n">op</span><span class="p">:</span> <span class="n">template</span><span class="p">(),</span> <span class="n">dtype</span><span class="p">:</span> <span class="n">template</span><span class="p">()):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Block-scope reduction under a generic associative ``op``, broadcast to every thread.  Costs one extra</span>
+<span class="sd">    ``block.sync()`` plus a one-slot shared-memory broadcast vs. `reduce`.  See `reduce` for the operator contract.</span>
 <span class="sd">    &quot;&quot;&quot;</span>
-    <span class="k">return</span> <span class="n">_reduce_all</span><span class="p">(</span><span class="n">value</span><span class="p">,</span> <span class="n">tid</span><span class="p">,</span> <span class="n">block_dim</span><span class="p">,</span> <span class="n">log2_warp</span><span class="p">,</span> <span class="n">op</span><span class="p">,</span> <span class="n">dtype</span><span class="p">)</span></div>
+    <span class="n">result</span> <span class="o">=</span> <span class="n">reduce</span><span class="p">(</span><span class="n">value</span><span class="p">,</span> <span class="n">block_dim</span><span class="p">,</span> <span class="n">op</span><span class="p">,</span> <span class="n">dtype</span><span class="p">)</span>
+    <span class="n">bcast</span> <span class="o">=</span> <span class="n">SharedArray</span><span class="p">((</span><span class="mi">1</span><span class="p">,),</span> <span class="n">dtype</span><span class="p">)</span>
+    <span class="k">if</span> <span class="n">thread_idx</span><span class="p">()</span> <span class="o">==</span> <span class="mi">0</span><span class="p">:</span>
+        <span class="n">bcast</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="o">=</span> <span class="n">result</span>
+    <span class="n">sync</span><span class="p">()</span>
+    <span class="k">return</span> <span class="n">bcast</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span></div>
 
 
 
 <span class="nd">@_func</span>
 <div class="viewcode-block" id="reduce_add">
 <a class="viewcode-back" href="../../../../autoapi/quadrants/lang/simt/block/index.html#quadrants.lang.simt.block.reduce_add">[docs]</a>
-<span class="k">def</span><span class="w"> </span><span class="nf">reduce_add</span><span class="p">(</span><span class="n">value</span><span class="p">,</span> <span class="n">tid</span><span class="p">,</span> <span class="n">block_dim</span><span class="p">:</span> <span class="n">template</span><span class="p">(),</span> <span class="n">log2_warp</span><span class="p">:</span> <span class="n">template</span><span class="p">(),</span> <span class="n">dtype</span><span class="p">:</span> <span class="n">template</span><span class="p">()):</span>
-<span class="w">    </span><span class="sd">&quot;&quot;&quot;Block-scope sum reduction.  Result valid in **thread 0 only**.</span>
-
-<span class="sd">    Args:</span>
-<span class="sd">        value: per-thread input.</span>
-<span class="sd">        tid: calling thread&#39;s block-local index.</span>
-<span class="sd">        block_dim: threads per block (template, multiple of ``2**log2_warp``).</span>
-<span class="sd">        log2_warp: ``log2(warp_size)``; 5 on CUDA / Metal / RDNA, 6 on CDNA AMDGPU.</span>
-<span class="sd">        dtype: scalar dtype for the inter-warp shared-memory staging slot (must match ``value``&#39;s type).</span>
-<span class="sd">    &quot;&quot;&quot;</span>
-    <span class="k">return</span> <span class="n">_reduce</span><span class="p">(</span><span class="n">value</span><span class="p">,</span> <span class="n">tid</span><span class="p">,</span> <span class="n">block_dim</span><span class="p">,</span> <span class="n">log2_warp</span><span class="p">,</span> <span class="n">_bin_add</span><span class="p">,</span> <span class="n">dtype</span><span class="p">)</span></div>
+<span class="k">def</span><span class="w"> </span><span class="nf">reduce_add</span><span class="p">(</span><span class="n">value</span><span class="p">,</span> <span class="n">block_dim</span><span class="p">:</span> <span class="n">template</span><span class="p">(),</span> <span class="n">dtype</span><span class="p">:</span> <span class="n">template</span><span class="p">()):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Block-scope sum reduction.  Result valid in **thread 0 only**.  See `reduce` for the argument contract.&quot;&quot;&quot;</span>
+    <span class="k">return</span> <span class="n">reduce</span><span class="p">(</span><span class="n">value</span><span class="p">,</span> <span class="n">block_dim</span><span class="p">,</span> <span class="n">_bin_add</span><span class="p">,</span> <span class="n">dtype</span><span class="p">)</span></div>
 
 
 
 <span class="nd">@_func</span>
 <div class="viewcode-block" id="reduce_min">
 <a class="viewcode-back" href="../../../../autoapi/quadrants/lang/simt/block/index.html#quadrants.lang.simt.block.reduce_min">[docs]</a>
-<span class="k">def</span><span class="w"> </span><span class="nf">reduce_min</span><span class="p">(</span><span class="n">value</span><span class="p">,</span> <span class="n">tid</span><span class="p">,</span> <span class="n">block_dim</span><span class="p">:</span> <span class="n">template</span><span class="p">(),</span> <span class="n">log2_warp</span><span class="p">:</span> <span class="n">template</span><span class="p">(),</span> <span class="n">dtype</span><span class="p">:</span> <span class="n">template</span><span class="p">()):</span>
-<span class="w">    </span><span class="sd">&quot;&quot;&quot;Block-scope min reduction.  Result valid in **thread 0 only**.  See `reduce_add` for the argument contract.&quot;&quot;&quot;</span>
-    <span class="k">return</span> <span class="n">_reduce</span><span class="p">(</span><span class="n">value</span><span class="p">,</span> <span class="n">tid</span><span class="p">,</span> <span class="n">block_dim</span><span class="p">,</span> <span class="n">log2_warp</span><span class="p">,</span> <span class="n">_bin_min</span><span class="p">,</span> <span class="n">dtype</span><span class="p">)</span></div>
+<span class="k">def</span><span class="w"> </span><span class="nf">reduce_min</span><span class="p">(</span><span class="n">value</span><span class="p">,</span> <span class="n">block_dim</span><span class="p">:</span> <span class="n">template</span><span class="p">(),</span> <span class="n">dtype</span><span class="p">:</span> <span class="n">template</span><span class="p">()):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Block-scope min reduction.  Result valid in **thread 0 only**.  See `reduce` for the argument contract.&quot;&quot;&quot;</span>
+    <span class="k">return</span> <span class="n">reduce</span><span class="p">(</span><span class="n">value</span><span class="p">,</span> <span class="n">block_dim</span><span class="p">,</span> <span class="n">_bin_min</span><span class="p">,</span> <span class="n">dtype</span><span class="p">)</span></div>
 
 
 
 <span class="nd">@_func</span>
 <div class="viewcode-block" id="reduce_max">
 <a class="viewcode-back" href="../../../../autoapi/quadrants/lang/simt/block/index.html#quadrants.lang.simt.block.reduce_max">[docs]</a>
-<span class="k">def</span><span class="w"> </span><span class="nf">reduce_max</span><span class="p">(</span><span class="n">value</span><span class="p">,</span> <span class="n">tid</span><span class="p">,</span> <span class="n">block_dim</span><span class="p">:</span> <span class="n">template</span><span class="p">(),</span> <span class="n">log2_warp</span><span class="p">:</span> <span class="n">template</span><span class="p">(),</span> <span class="n">dtype</span><span class="p">:</span> <span class="n">template</span><span class="p">()):</span>
-<span class="w">    </span><span class="sd">&quot;&quot;&quot;Block-scope max reduction.  Result valid in **thread 0 only**.  See `reduce_add` for the argument contract.&quot;&quot;&quot;</span>
-    <span class="k">return</span> <span class="n">_reduce</span><span class="p">(</span><span class="n">value</span><span class="p">,</span> <span class="n">tid</span><span class="p">,</span> <span class="n">block_dim</span><span class="p">,</span> <span class="n">log2_warp</span><span class="p">,</span> <span class="n">_bin_max</span><span class="p">,</span> <span class="n">dtype</span><span class="p">)</span></div>
+<span class="k">def</span><span class="w"> </span><span class="nf">reduce_max</span><span class="p">(</span><span class="n">value</span><span class="p">,</span> <span class="n">block_dim</span><span class="p">:</span> <span class="n">template</span><span class="p">(),</span> <span class="n">dtype</span><span class="p">:</span> <span class="n">template</span><span class="p">()):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Block-scope max reduction.  Result valid in **thread 0 only**.  See `reduce` for the argument contract.&quot;&quot;&quot;</span>
+    <span class="k">return</span> <span class="n">reduce</span><span class="p">(</span><span class="n">value</span><span class="p">,</span> <span class="n">block_dim</span><span class="p">,</span> <span class="n">_bin_max</span><span class="p">,</span> <span class="n">dtype</span><span class="p">)</span></div>
 
 
 
 <span class="nd">@_func</span>
 <div class="viewcode-block" id="reduce_all_add">
 <a class="viewcode-back" href="../../../../autoapi/quadrants/lang/simt/block/index.html#quadrants.lang.simt.block.reduce_all_add">[docs]</a>
-<span class="k">def</span><span class="w"> </span><span class="nf">reduce_all_add</span><span class="p">(</span><span class="n">value</span><span class="p">,</span> <span class="n">tid</span><span class="p">,</span> <span class="n">block_dim</span><span class="p">:</span> <span class="n">template</span><span class="p">(),</span> <span class="n">log2_warp</span><span class="p">:</span> <span class="n">template</span><span class="p">(),</span> <span class="n">dtype</span><span class="p">:</span> <span class="n">template</span><span class="p">()):</span>
+<span class="k">def</span><span class="w"> </span><span class="nf">reduce_all_add</span><span class="p">(</span><span class="n">value</span><span class="p">,</span> <span class="n">block_dim</span><span class="p">:</span> <span class="n">template</span><span class="p">(),</span> <span class="n">dtype</span><span class="p">:</span> <span class="n">template</span><span class="p">()):</span>
 <span class="w">    </span><span class="sd">&quot;&quot;&quot;Block-scope sum reduction with the result broadcast to every thread.  See `reduce_add` for the cheaper</span>
-<span class="sd">    thread-0-only variant and for the argument contract.</span>
+<span class="sd">    thread-0-only variant and `reduce` for the argument contract.</span>
 <span class="sd">    &quot;&quot;&quot;</span>
-    <span class="k">return</span> <span class="n">_reduce_all</span><span class="p">(</span><span class="n">value</span><span class="p">,</span> <span class="n">tid</span><span class="p">,</span> <span class="n">block_dim</span><span class="p">,</span> <span class="n">log2_warp</span><span class="p">,</span> <span class="n">_bin_add</span><span class="p">,</span> <span class="n">dtype</span><span class="p">)</span></div>
+    <span class="k">return</span> <span class="n">reduce_all</span><span class="p">(</span><span class="n">value</span><span class="p">,</span> <span class="n">block_dim</span><span class="p">,</span> <span class="n">_bin_add</span><span class="p">,</span> <span class="n">dtype</span><span class="p">)</span></div>
 
 
 
 <span class="nd">@_func</span>
 <div class="viewcode-block" id="reduce_all_min">
 <a class="viewcode-back" href="../../../../autoapi/quadrants/lang/simt/block/index.html#quadrants.lang.simt.block.reduce_all_min">[docs]</a>
-<span class="k">def</span><span class="w"> </span><span class="nf">reduce_all_min</span><span class="p">(</span><span class="n">value</span><span class="p">,</span> <span class="n">tid</span><span class="p">,</span> <span class="n">block_dim</span><span class="p">:</span> <span class="n">template</span><span class="p">(),</span> <span class="n">log2_warp</span><span class="p">:</span> <span class="n">template</span><span class="p">(),</span> <span class="n">dtype</span><span class="p">:</span> <span class="n">template</span><span class="p">()):</span>
+<span class="k">def</span><span class="w"> </span><span class="nf">reduce_all_min</span><span class="p">(</span><span class="n">value</span><span class="p">,</span> <span class="n">block_dim</span><span class="p">:</span> <span class="n">template</span><span class="p">(),</span> <span class="n">dtype</span><span class="p">:</span> <span class="n">template</span><span class="p">()):</span>
 <span class="w">    </span><span class="sd">&quot;&quot;&quot;Block-scope min reduction broadcast to every thread.  See `reduce_all_add`.&quot;&quot;&quot;</span>
-    <span class="k">return</span> <span class="n">_reduce_all</span><span class="p">(</span><span class="n">value</span><span class="p">,</span> <span class="n">tid</span><span class="p">,</span> <span class="n">block_dim</span><span class="p">,</span> <span class="n">log2_warp</span><span class="p">,</span> <span class="n">_bin_min</span><span class="p">,</span> <span class="n">dtype</span><span class="p">)</span></div>
+    <span class="k">return</span> <span class="n">reduce_all</span><span class="p">(</span><span class="n">value</span><span class="p">,</span> <span class="n">block_dim</span><span class="p">,</span> <span class="n">_bin_min</span><span class="p">,</span> <span class="n">dtype</span><span class="p">)</span></div>
 
 
 
 <span class="nd">@_func</span>
 <div class="viewcode-block" id="reduce_all_max">
 <a class="viewcode-back" href="../../../../autoapi/quadrants/lang/simt/block/index.html#quadrants.lang.simt.block.reduce_all_max">[docs]</a>
-<span class="k">def</span><span class="w"> </span><span class="nf">reduce_all_max</span><span class="p">(</span><span class="n">value</span><span class="p">,</span> <span class="n">tid</span><span class="p">,</span> <span class="n">block_dim</span><span class="p">:</span> <span class="n">template</span><span class="p">(),</span> <span class="n">log2_warp</span><span class="p">:</span> <span class="n">template</span><span class="p">(),</span> <span class="n">dtype</span><span class="p">:</span> <span class="n">template</span><span class="p">()):</span>
+<span class="k">def</span><span class="w"> </span><span class="nf">reduce_all_max</span><span class="p">(</span><span class="n">value</span><span class="p">,</span> <span class="n">block_dim</span><span class="p">:</span> <span class="n">template</span><span class="p">(),</span> <span class="n">dtype</span><span class="p">:</span> <span class="n">template</span><span class="p">()):</span>
 <span class="w">    </span><span class="sd">&quot;&quot;&quot;Block-scope max reduction broadcast to every thread.  See `reduce_all_add`.&quot;&quot;&quot;</span>
-    <span class="k">return</span> <span class="n">_reduce_all</span><span class="p">(</span><span class="n">value</span><span class="p">,</span> <span class="n">tid</span><span class="p">,</span> <span class="n">block_dim</span><span class="p">,</span> <span class="n">log2_warp</span><span class="p">,</span> <span class="n">_bin_max</span><span class="p">,</span> <span class="n">dtype</span><span class="p">)</span></div>
+    <span class="k">return</span> <span class="n">reduce_all</span><span class="p">(</span><span class="n">value</span><span class="p">,</span> <span class="n">block_dim</span><span class="p">,</span> <span class="n">_bin_max</span><span class="p">,</span> <span class="n">dtype</span><span class="p">)</span></div>
 
 
 
@@ -668,13 +649,30 @@
 
 
 <span class="nd">@_func</span>
-<span class="k">def</span><span class="w"> </span><span class="nf">_inclusive_block</span><span class="p">(</span><span class="n">value</span><span class="p">,</span> <span class="n">tid</span><span class="p">,</span> <span class="n">block_dim</span><span class="p">:</span> <span class="n">template</span><span class="p">(),</span> <span class="n">log2_warp</span><span class="p">:</span> <span class="n">template</span><span class="p">(),</span> <span class="n">op</span><span class="p">:</span> <span class="n">template</span><span class="p">(),</span> <span class="n">dtype</span><span class="p">:</span> <span class="n">template</span><span class="p">()):</span>
+<div class="viewcode-block" id="inclusive_scan">
+<a class="viewcode-back" href="../../../../autoapi/quadrants/lang/simt/block/index.html#quadrants.lang.simt.block.inclusive_scan">[docs]</a>
+<span class="k">def</span><span class="w"> </span><span class="nf">inclusive_scan</span><span class="p">(</span><span class="n">value</span><span class="p">,</span> <span class="n">block_dim</span><span class="p">:</span> <span class="n">template</span><span class="p">(),</span> <span class="n">op</span><span class="p">:</span> <span class="n">template</span><span class="p">(),</span> <span class="n">dtype</span><span class="p">:</span> <span class="n">template</span><span class="p">()):</span>
 <span class="w">    </span><span class="sd">&quot;&quot;&quot;Block-scope inclusive scan under a generic associative ``op``.  Every thread receives a valid result.</span>
 
-<span class="sd">    See `inclusive_add` for the argument contract.  When the block is exactly one warp the cross-warp</span>
-<span class="sd">    shared-memory path is short-circuited at trace time and the call costs only the per-warp Hillis-Steele tree.</span>
+<span class="sd">    Args:</span>
+<span class="sd">        value: per-thread input.</span>
+<span class="sd">        block_dim: threads per block (template).  Must be a positive multiple of ``subgroup.group_size()`` (32 on CUDA</span>
+<span class="sd">            / Metal / Vulkan-on-NVIDIA, 64 on AMDGPU).</span>
+<span class="sd">        op: ``@qd.func`` taking two values and returning the same type as ``value``; callers can plug in custom</span>
+<span class="sd">            associative monoids without re-implementing the per-warp + shared-mem skeleton.  See `inclusive_add`</span>
+<span class="sd">            for the standard sum specialization.</span>
+<span class="sd">        dtype: scalar dtype for the inter-warp shared-memory staging slot; must match ``value``&#39;s type.</span>
+
+<span class="sd">    The calling thread&#39;s block-local index is read internally via `block.thread_idx()`; the warp size is read from</span>
+<span class="sd">    `subgroup.group_size()` at compile time.  When the block is exactly one warp the cross-warp shared-memory path is</span>
+<span class="sd">    short-circuited at compile time and the call costs only the per-warp Hillis-Steele tree.</span>
 <span class="sd">    &quot;&quot;&quot;</span>
-    <span class="n">WARP_SIZE</span> <span class="o">=</span> <span class="n">impl</span><span class="o">.</span><span class="n">static</span><span class="p">(</span><span class="mi">1</span> <span class="o">&lt;&lt;</span> <span class="n">log2_warp</span><span class="p">)</span>
+    <span class="n">WARP_SIZE</span> <span class="o">=</span> <span class="n">impl</span><span class="o">.</span><span class="n">static</span><span class="p">(</span><span class="n">_subgroup</span><span class="o">.</span><span class="n">group_size</span><span class="p">())</span>
+    <span class="n">log2_warp</span> <span class="o">=</span> <span class="n">impl</span><span class="o">.</span><span class="n">static</span><span class="p">(</span><span class="n">_subgroup</span><span class="o">.</span><span class="n">log2_group_size</span><span class="p">())</span>
+    <span class="n">impl</span><span class="o">.</span><span class="n">static_assert</span><span class="p">(</span>
+        <span class="n">impl</span><span class="o">.</span><span class="n">static</span><span class="p">(</span><span class="n">block_dim</span> <span class="o">%</span> <span class="n">WARP_SIZE</span> <span class="o">==</span> <span class="mi">0</span> <span class="ow">and</span> <span class="n">block_dim</span> <span class="o">&gt;=</span> <span class="n">WARP_SIZE</span><span class="p">),</span>
+        <span class="s2">&quot;block.inclusive_scan: block_dim must be a positive multiple of subgroup size&quot;</span><span class="p">,</span>
+    <span class="p">)</span>
     <span class="n">NUM_WARPS</span> <span class="o">=</span> <span class="n">impl</span><span class="o">.</span><span class="n">static</span><span class="p">(</span><span class="n">block_dim</span> <span class="o">//</span> <span class="n">WARP_SIZE</span><span class="p">)</span>
 
     <span class="n">inclusive</span> <span class="o">=</span> <span class="n">_subgroup</span><span class="o">.</span><span class="n">_inclusive_scan</span><span class="p">(</span><span class="n">value</span><span class="p">,</span> <span class="n">op</span><span class="p">,</span> <span class="n">log2_warp</span><span class="p">)</span>
@@ -682,8 +680,8 @@
     <span class="k">if</span> <span class="n">impl</span><span class="o">.</span><span class="n">static</span><span class="p">(</span><span class="n">NUM_WARPS</span> <span class="o">==</span> <span class="mi">1</span><span class="p">):</span>
         <span class="k">return</span> <span class="n">inclusive</span>
 
+    <span class="n">tid</span> <span class="o">=</span> <span class="n">thread_idx</span><span class="p">()</span>
     <span class="n">warp_id</span> <span class="o">=</span> <span class="n">tid</span> <span class="o">//</span> <span class="n">WARP_SIZE</span>
-    <span class="c1"># Logical lane within the 32-lane warp (see ``_reduce`` for the wave32-vs-wave64 rationale).</span>
     <span class="n">lane_id</span> <span class="o">=</span> <span class="n">tid</span> <span class="o">&amp;</span> <span class="n">impl</span><span class="o">.</span><span class="n">static</span><span class="p">(</span><span class="n">WARP_SIZE</span> <span class="o">-</span> <span class="mi">1</span><span class="p">)</span>
 
     <span class="n">shared</span> <span class="o">=</span> <span class="n">SharedArray</span><span class="p">(</span><span class="n">impl</span><span class="o">.</span><span class="n">static</span><span class="p">((</span><span class="n">NUM_WARPS</span><span class="p">,)),</span> <span class="n">dtype</span><span class="p">)</span>
@@ -704,17 +702,27 @@
 
     <span class="k">if</span> <span class="n">warp_id</span> <span class="o">!=</span> <span class="mi">0</span><span class="p">:</span>
         <span class="n">inclusive</span> <span class="o">=</span> <span class="n">op</span><span class="p">(</span><span class="n">warp_prefix</span><span class="p">,</span> <span class="n">inclusive</span><span class="p">)</span>
-    <span class="k">return</span> <span class="n">inclusive</span>
+    <span class="k">return</span> <span class="n">inclusive</span></div>
+
 
 
 <span class="nd">@_func</span>
-<span class="k">def</span><span class="w"> </span><span class="nf">_exclusive_block</span><span class="p">(</span>
-    <span class="n">value</span><span class="p">,</span> <span class="n">tid</span><span class="p">,</span> <span class="n">block_dim</span><span class="p">:</span> <span class="n">template</span><span class="p">(),</span> <span class="n">log2_warp</span><span class="p">:</span> <span class="n">template</span><span class="p">(),</span> <span class="n">op</span><span class="p">:</span> <span class="n">template</span><span class="p">(),</span> <span class="n">identity</span><span class="p">,</span> <span class="n">dtype</span><span class="p">:</span> <span class="n">template</span><span class="p">()</span>
-<span class="p">):</span>
-<span class="w">    </span><span class="sd">&quot;&quot;&quot;Block-scope exclusive scan under a generic associative ``op``.  Every thread receives a valid result; thread 0</span>
-<span class="sd">    holds ``identity``.  See `exclusive_add` for the argument contract.</span>
+<div class="viewcode-block" id="exclusive_scan">
+<a class="viewcode-back" href="../../../../autoapi/quadrants/lang/simt/block/index.html#quadrants.lang.simt.block.exclusive_scan">[docs]</a>
+<span class="k">def</span><span class="w"> </span><span class="nf">exclusive_scan</span><span class="p">(</span><span class="n">value</span><span class="p">,</span> <span class="n">block_dim</span><span class="p">:</span> <span class="n">template</span><span class="p">(),</span> <span class="n">op</span><span class="p">:</span> <span class="n">template</span><span class="p">(),</span> <span class="n">identity</span><span class="p">,</span> <span class="n">dtype</span><span class="p">:</span> <span class="n">template</span><span class="p">()):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Block-scope exclusive scan under a generic associative ``op`` with explicit ``identity``.  Every thread receives</span>
+<span class="sd">    a valid result; thread 0 holds ``identity`` and thread ``i &gt; 0`` holds ``op(v[0], ..., v[i-1])``.</span>
+
+<span class="sd">    See `inclusive_scan` for the per-arg contract; in addition this op takes an explicit ``identity`` because exclusive</span>
+<span class="sd">    scan needs a definite value for thread 0 (and for the sentinel paths in `exclusive_min` / `exclusive_max`).  See</span>
+<span class="sd">    `exclusive_add` for the additive specialization which derives a zero identity automatically.</span>
 <span class="sd">    &quot;&quot;&quot;</span>
-    <span class="n">WARP_SIZE</span> <span class="o">=</span> <span class="n">impl</span><span class="o">.</span><span class="n">static</span><span class="p">(</span><span class="mi">1</span> <span class="o">&lt;&lt;</span> <span class="n">log2_warp</span><span class="p">)</span>
+    <span class="n">WARP_SIZE</span> <span class="o">=</span> <span class="n">impl</span><span class="o">.</span><span class="n">static</span><span class="p">(</span><span class="n">_subgroup</span><span class="o">.</span><span class="n">group_size</span><span class="p">())</span>
+    <span class="n">log2_warp</span> <span class="o">=</span> <span class="n">impl</span><span class="o">.</span><span class="n">static</span><span class="p">(</span><span class="n">_subgroup</span><span class="o">.</span><span class="n">log2_group_size</span><span class="p">())</span>
+    <span class="n">impl</span><span class="o">.</span><span class="n">static_assert</span><span class="p">(</span>
+        <span class="n">impl</span><span class="o">.</span><span class="n">static</span><span class="p">(</span><span class="n">block_dim</span> <span class="o">%</span> <span class="n">WARP_SIZE</span> <span class="o">==</span> <span class="mi">0</span> <span class="ow">and</span> <span class="n">block_dim</span> <span class="o">&gt;=</span> <span class="n">WARP_SIZE</span><span class="p">),</span>
+        <span class="s2">&quot;block.exclusive_scan: block_dim must be a positive multiple of subgroup size&quot;</span><span class="p">,</span>
+    <span class="p">)</span>
     <span class="n">NUM_WARPS</span> <span class="o">=</span> <span class="n">impl</span><span class="o">.</span><span class="n">static</span><span class="p">(</span><span class="n">block_dim</span> <span class="o">//</span> <span class="n">WARP_SIZE</span><span class="p">)</span>
 
     <span class="n">exclusive</span> <span class="o">=</span> <span class="n">_subgroup</span><span class="o">.</span><span class="n">_exclusive_scan</span><span class="p">(</span><span class="n">value</span><span class="p">,</span> <span class="n">op</span><span class="p">,</span> <span class="n">identity</span><span class="p">,</span> <span class="n">log2_warp</span><span class="p">)</span>
@@ -722,8 +730,8 @@
     <span class="k">if</span> <span class="n">impl</span><span class="o">.</span><span class="n">static</span><span class="p">(</span><span class="n">NUM_WARPS</span> <span class="o">==</span> <span class="mi">1</span><span class="p">):</span>
         <span class="k">return</span> <span class="n">exclusive</span>
 
+    <span class="n">tid</span> <span class="o">=</span> <span class="n">thread_idx</span><span class="p">()</span>
     <span class="n">warp_id</span> <span class="o">=</span> <span class="n">tid</span> <span class="o">//</span> <span class="n">WARP_SIZE</span>
-    <span class="c1"># Logical lane within the 32-lane warp (see ``_reduce`` for the wave32-vs-wave64 rationale).</span>
     <span class="n">lane_id</span> <span class="o">=</span> <span class="n">tid</span> <span class="o">&amp;</span> <span class="n">impl</span><span class="o">.</span><span class="n">static</span><span class="p">(</span><span class="n">WARP_SIZE</span> <span class="o">-</span> <span class="mi">1</span><span class="p">)</span>
 
     <span class="n">shared</span> <span class="o">=</span> <span class="n">SharedArray</span><span class="p">(</span><span class="n">impl</span><span class="o">.</span><span class="n">static</span><span class="p">((</span><span class="n">NUM_WARPS</span><span class="p">,)),</span> <span class="n">dtype</span><span class="p">)</span>
@@ -742,102 +750,72 @@
 
     <span class="k">if</span> <span class="n">warp_id</span> <span class="o">!=</span> <span class="mi">0</span><span class="p">:</span>
         <span class="n">exclusive</span> <span class="o">=</span> <span class="n">op</span><span class="p">(</span><span class="n">warp_prefix</span><span class="p">,</span> <span class="n">exclusive</span><span class="p">)</span>
-    <span class="k">return</span> <span class="n">exclusive</span>
-
-
-<span class="nd">@_func</span>
-<div class="viewcode-block" id="inclusive_scan">
-<a class="viewcode-back" href="../../../../autoapi/quadrants/lang/simt/block/index.html#quadrants.lang.simt.block.inclusive_scan">[docs]</a>
-<span class="k">def</span><span class="w"> </span><span class="nf">inclusive_scan</span><span class="p">(</span><span class="n">value</span><span class="p">,</span> <span class="n">tid</span><span class="p">,</span> <span class="n">block_dim</span><span class="p">:</span> <span class="n">template</span><span class="p">(),</span> <span class="n">log2_warp</span><span class="p">:</span> <span class="n">template</span><span class="p">(),</span> <span class="n">op</span><span class="p">:</span> <span class="n">template</span><span class="p">(),</span> <span class="n">dtype</span><span class="p">:</span> <span class="n">template</span><span class="p">()):</span>
-<span class="w">    </span><span class="sd">&quot;&quot;&quot;Block-scope inclusive scan under a generic associative ``op``.  See `inclusive_add` for the argument contract;</span>
-<span class="sd">    this generic form additionally takes an ``op: template()`` ``@qd.func`` so callers can plug in custom monoids</span>
-<span class="sd">    without re-implementing the per-warp + shared-mem skeleton.</span>
-<span class="sd">    &quot;&quot;&quot;</span>
-    <span class="k">return</span> <span class="n">_inclusive_block</span><span class="p">(</span><span class="n">value</span><span class="p">,</span> <span class="n">tid</span><span class="p">,</span> <span class="n">block_dim</span><span class="p">,</span> <span class="n">log2_warp</span><span class="p">,</span> <span class="n">op</span><span class="p">,</span> <span class="n">dtype</span><span class="p">)</span></div>
-
-
-
-<span class="nd">@_func</span>
-<div class="viewcode-block" id="exclusive_scan">
-<a class="viewcode-back" href="../../../../autoapi/quadrants/lang/simt/block/index.html#quadrants.lang.simt.block.exclusive_scan">[docs]</a>
-<span class="k">def</span><span class="w"> </span><span class="nf">exclusive_scan</span><span class="p">(</span>
-    <span class="n">value</span><span class="p">,</span> <span class="n">tid</span><span class="p">,</span> <span class="n">block_dim</span><span class="p">:</span> <span class="n">template</span><span class="p">(),</span> <span class="n">log2_warp</span><span class="p">:</span> <span class="n">template</span><span class="p">(),</span> <span class="n">op</span><span class="p">:</span> <span class="n">template</span><span class="p">(),</span> <span class="n">identity</span><span class="p">,</span> <span class="n">dtype</span><span class="p">:</span> <span class="n">template</span><span class="p">()</span>
-<span class="p">):</span>
-<span class="w">    </span><span class="sd">&quot;&quot;&quot;Block-scope exclusive scan under a generic associative ``op`` with explicit ``identity``.  See `exclusive_add`</span>
-<span class="sd">    for the argument contract.  Thread 0 holds ``identity``; subsequent threads hold ``op(v[0], ..., v[i-1])``.</span>
-<span class="sd">    &quot;&quot;&quot;</span>
-    <span class="k">return</span> <span class="n">_exclusive_block</span><span class="p">(</span><span class="n">value</span><span class="p">,</span> <span class="n">tid</span><span class="p">,</span> <span class="n">block_dim</span><span class="p">,</span> <span class="n">log2_warp</span><span class="p">,</span> <span class="n">op</span><span class="p">,</span> <span class="n">identity</span><span class="p">,</span> <span class="n">dtype</span><span class="p">)</span></div>
+    <span class="k">return</span> <span class="n">exclusive</span></div>
 
 
 
 <span class="nd">@_func</span>
 <div class="viewcode-block" id="inclusive_add">
 <a class="viewcode-back" href="../../../../autoapi/quadrants/lang/simt/block/index.html#quadrants.lang.simt.block.inclusive_add">[docs]</a>
-<span class="k">def</span><span class="w"> </span><span class="nf">inclusive_add</span><span class="p">(</span><span class="n">value</span><span class="p">,</span> <span class="n">tid</span><span class="p">,</span> <span class="n">block_dim</span><span class="p">:</span> <span class="n">template</span><span class="p">(),</span> <span class="n">log2_warp</span><span class="p">:</span> <span class="n">template</span><span class="p">(),</span> <span class="n">dtype</span><span class="p">:</span> <span class="n">template</span><span class="p">()):</span>
-<span class="w">    </span><span class="sd">&quot;&quot;&quot;Block-scope inclusive prefix sum.  After the call, thread ``i`` holds ``v[0] + v[1] + ... + v[i]``.</span>
-
-<span class="sd">    Args:</span>
-<span class="sd">        value: per-thread input.</span>
-<span class="sd">        tid: calling thread&#39;s block-local index (``i % block_dim``, or `block.thread_idx()`).</span>
-<span class="sd">        block_dim: threads per block (template, multiple of ``2**log2_warp``).</span>
-<span class="sd">        log2_warp: ``log2(warp_size)``; 5 on CUDA / Metal / RDNA, 6 on CDNA AMDGPU.</span>
-<span class="sd">        dtype: scalar dtype for the inter-warp shared-memory staging slot; must match ``value``&#39;s type.</span>
+<span class="k">def</span><span class="w"> </span><span class="nf">inclusive_add</span><span class="p">(</span><span class="n">value</span><span class="p">,</span> <span class="n">block_dim</span><span class="p">:</span> <span class="n">template</span><span class="p">(),</span> <span class="n">dtype</span><span class="p">:</span> <span class="n">template</span><span class="p">()):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Block-scope inclusive prefix sum.  After the call, thread ``i`` holds ``v[0] + v[1] + ... + v[i]``.  See</span>
+<span class="sd">    `inclusive_scan` for the argument contract.</span>
 <span class="sd">    &quot;&quot;&quot;</span>
-    <span class="k">return</span> <span class="n">_inclusive_block</span><span class="p">(</span><span class="n">value</span><span class="p">,</span> <span class="n">tid</span><span class="p">,</span> <span class="n">block_dim</span><span class="p">,</span> <span class="n">log2_warp</span><span class="p">,</span> <span class="n">_bin_add</span><span class="p">,</span> <span class="n">dtype</span><span class="p">)</span></div>
+    <span class="k">return</span> <span class="n">inclusive_scan</span><span class="p">(</span><span class="n">value</span><span class="p">,</span> <span class="n">block_dim</span><span class="p">,</span> <span class="n">_bin_add</span><span class="p">,</span> <span class="n">dtype</span><span class="p">)</span></div>
 
 
 
 <span class="nd">@_func</span>
 <div class="viewcode-block" id="inclusive_min">
 <a class="viewcode-back" href="../../../../autoapi/quadrants/lang/simt/block/index.html#quadrants.lang.simt.block.inclusive_min">[docs]</a>
-<span class="k">def</span><span class="w"> </span><span class="nf">inclusive_min</span><span class="p">(</span><span class="n">value</span><span class="p">,</span> <span class="n">tid</span><span class="p">,</span> <span class="n">block_dim</span><span class="p">:</span> <span class="n">template</span><span class="p">(),</span> <span class="n">log2_warp</span><span class="p">:</span> <span class="n">template</span><span class="p">(),</span> <span class="n">dtype</span><span class="p">:</span> <span class="n">template</span><span class="p">()):</span>
-<span class="w">    </span><span class="sd">&quot;&quot;&quot;Block-scope inclusive prefix min.  See `inclusive_add` for the argument contract.&quot;&quot;&quot;</span>
-    <span class="k">return</span> <span class="n">_inclusive_block</span><span class="p">(</span><span class="n">value</span><span class="p">,</span> <span class="n">tid</span><span class="p">,</span> <span class="n">block_dim</span><span class="p">,</span> <span class="n">log2_warp</span><span class="p">,</span> <span class="n">_bin_min</span><span class="p">,</span> <span class="n">dtype</span><span class="p">)</span></div>
+<span class="k">def</span><span class="w"> </span><span class="nf">inclusive_min</span><span class="p">(</span><span class="n">value</span><span class="p">,</span> <span class="n">block_dim</span><span class="p">:</span> <span class="n">template</span><span class="p">(),</span> <span class="n">dtype</span><span class="p">:</span> <span class="n">template</span><span class="p">()):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Block-scope inclusive prefix min.  See `inclusive_scan` for the argument contract.&quot;&quot;&quot;</span>
+    <span class="k">return</span> <span class="n">inclusive_scan</span><span class="p">(</span><span class="n">value</span><span class="p">,</span> <span class="n">block_dim</span><span class="p">,</span> <span class="n">_bin_min</span><span class="p">,</span> <span class="n">dtype</span><span class="p">)</span></div>
 
 
 
 <span class="nd">@_func</span>
 <div class="viewcode-block" id="inclusive_max">
 <a class="viewcode-back" href="../../../../autoapi/quadrants/lang/simt/block/index.html#quadrants.lang.simt.block.inclusive_max">[docs]</a>
-<span class="k">def</span><span class="w"> </span><span class="nf">inclusive_max</span><span class="p">(</span><span class="n">value</span><span class="p">,</span> <span class="n">tid</span><span class="p">,</span> <span class="n">block_dim</span><span class="p">:</span> <span class="n">template</span><span class="p">(),</span> <span class="n">log2_warp</span><span class="p">:</span> <span class="n">template</span><span class="p">(),</span> <span class="n">dtype</span><span class="p">:</span> <span class="n">template</span><span class="p">()):</span>
-<span class="w">    </span><span class="sd">&quot;&quot;&quot;Block-scope inclusive prefix max.  See `inclusive_add` for the argument contract.&quot;&quot;&quot;</span>
-    <span class="k">return</span> <span class="n">_inclusive_block</span><span class="p">(</span><span class="n">value</span><span class="p">,</span> <span class="n">tid</span><span class="p">,</span> <span class="n">block_dim</span><span class="p">,</span> <span class="n">log2_warp</span><span class="p">,</span> <span class="n">_bin_max</span><span class="p">,</span> <span class="n">dtype</span><span class="p">)</span></div>
+<span class="k">def</span><span class="w"> </span><span class="nf">inclusive_max</span><span class="p">(</span><span class="n">value</span><span class="p">,</span> <span class="n">block_dim</span><span class="p">:</span> <span class="n">template</span><span class="p">(),</span> <span class="n">dtype</span><span class="p">:</span> <span class="n">template</span><span class="p">()):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Block-scope inclusive prefix max.  See `inclusive_scan` for the argument contract.&quot;&quot;&quot;</span>
+    <span class="k">return</span> <span class="n">inclusive_scan</span><span class="p">(</span><span class="n">value</span><span class="p">,</span> <span class="n">block_dim</span><span class="p">,</span> <span class="n">_bin_max</span><span class="p">,</span> <span class="n">dtype</span><span class="p">)</span></div>
 
 
 
 <span class="nd">@_func</span>
 <div class="viewcode-block" id="exclusive_add">
 <a class="viewcode-back" href="../../../../autoapi/quadrants/lang/simt/block/index.html#quadrants.lang.simt.block.exclusive_add">[docs]</a>
-<span class="k">def</span><span class="w"> </span><span class="nf">exclusive_add</span><span class="p">(</span><span class="n">value</span><span class="p">,</span> <span class="n">tid</span><span class="p">,</span> <span class="n">block_dim</span><span class="p">:</span> <span class="n">template</span><span class="p">(),</span> <span class="n">log2_warp</span><span class="p">:</span> <span class="n">template</span><span class="p">(),</span> <span class="n">dtype</span><span class="p">:</span> <span class="n">template</span><span class="p">()):</span>
+<span class="k">def</span><span class="w"> </span><span class="nf">exclusive_add</span><span class="p">(</span><span class="n">value</span><span class="p">,</span> <span class="n">block_dim</span><span class="p">:</span> <span class="n">template</span><span class="p">(),</span> <span class="n">dtype</span><span class="p">:</span> <span class="n">template</span><span class="p">()):</span>
 <span class="w">    </span><span class="sd">&quot;&quot;&quot;Block-scope exclusive prefix sum.  After the call, thread ``i &gt; 0`` holds ``v[0] + v[1] + ... + v[i-1]`` and</span>
-<span class="sd">    thread 0 holds the additive identity (zero, in ``value``&#39;s dtype, derived as ``value - value``).  See `inclusive_add`</span>
-<span class="sd">    for the argument contract.</span>
+<span class="sd">    thread 0 holds the additive identity (zero, in ``value``&#39;s dtype, derived as ``value - value``).  See</span>
+<span class="sd">    `exclusive_scan` for the argument contract.</span>
 <span class="sd">    &quot;&quot;&quot;</span>
-    <span class="k">return</span> <span class="n">_exclusive_block</span><span class="p">(</span><span class="n">value</span><span class="p">,</span> <span class="n">tid</span><span class="p">,</span> <span class="n">block_dim</span><span class="p">,</span> <span class="n">log2_warp</span><span class="p">,</span> <span class="n">_bin_add</span><span class="p">,</span> <span class="n">value</span> <span class="o">-</span> <span class="n">value</span><span class="p">,</span> <span class="n">dtype</span><span class="p">)</span></div>
+    <span class="k">return</span> <span class="n">exclusive_scan</span><span class="p">(</span><span class="n">value</span><span class="p">,</span> <span class="n">block_dim</span><span class="p">,</span> <span class="n">_bin_add</span><span class="p">,</span> <span class="n">value</span> <span class="o">-</span> <span class="n">value</span><span class="p">,</span> <span class="n">dtype</span><span class="p">)</span></div>
 
 
 
 <span class="nd">@_func</span>
 <div class="viewcode-block" id="exclusive_min">
 <a class="viewcode-back" href="../../../../autoapi/quadrants/lang/simt/block/index.html#quadrants.lang.simt.block.exclusive_min">[docs]</a>
-<span class="k">def</span><span class="w"> </span><span class="nf">exclusive_min</span><span class="p">(</span><span class="n">value</span><span class="p">,</span> <span class="n">tid</span><span class="p">,</span> <span class="n">block_dim</span><span class="p">:</span> <span class="n">template</span><span class="p">(),</span> <span class="n">log2_warp</span><span class="p">:</span> <span class="n">template</span><span class="p">(),</span> <span class="n">identity</span><span class="p">,</span> <span class="n">dtype</span><span class="p">:</span> <span class="n">template</span><span class="p">()):</span>
+<span class="k">def</span><span class="w"> </span><span class="nf">exclusive_min</span><span class="p">(</span><span class="n">value</span><span class="p">,</span> <span class="n">block_dim</span><span class="p">:</span> <span class="n">template</span><span class="p">(),</span> <span class="n">identity</span><span class="p">,</span> <span class="n">dtype</span><span class="p">:</span> <span class="n">template</span><span class="p">()):</span>
 <span class="w">    </span><span class="sd">&quot;&quot;&quot;Block-scope exclusive prefix min.  Thread 0 holds ``identity``: the caller must supply a value that is ``&gt;=``</span>
 <span class="sd">    every legal element of the input (typically ``+∞`` for floats, the dtype&#39;s maximum for integers).  See</span>
 <span class="sd">    `subgroup.exclusive_min` for why this op alone takes an explicit identity.</span>
 <span class="sd">    &quot;&quot;&quot;</span>
-    <span class="k">return</span> <span class="n">_exclusive_block</span><span class="p">(</span><span class="n">value</span><span class="p">,</span> <span class="n">tid</span><span class="p">,</span> <span class="n">block_dim</span><span class="p">,</span> <span class="n">log2_warp</span><span class="p">,</span> <span class="n">_bin_min</span><span class="p">,</span> <span class="n">identity</span><span class="p">,</span> <span class="n">dtype</span><span class="p">)</span></div>
+    <span class="k">return</span> <span class="n">exclusive_scan</span><span class="p">(</span><span class="n">value</span><span class="p">,</span> <span class="n">block_dim</span><span class="p">,</span> <span class="n">_bin_min</span><span class="p">,</span> <span class="n">identity</span><span class="p">,</span> <span class="n">dtype</span><span class="p">)</span></div>
 
 
 
 <span class="nd">@_func</span>
 <div class="viewcode-block" id="exclusive_max">
 <a class="viewcode-back" href="../../../../autoapi/quadrants/lang/simt/block/index.html#quadrants.lang.simt.block.exclusive_max">[docs]</a>
-<span class="k">def</span><span class="w"> </span><span class="nf">exclusive_max</span><span class="p">(</span><span class="n">value</span><span class="p">,</span> <span class="n">tid</span><span class="p">,</span> <span class="n">block_dim</span><span class="p">:</span> <span class="n">template</span><span class="p">(),</span> <span class="n">log2_warp</span><span class="p">:</span> <span class="n">template</span><span class="p">(),</span> <span class="n">identity</span><span class="p">,</span> <span class="n">dtype</span><span class="p">:</span> <span class="n">template</span><span class="p">()):</span>
+<span class="k">def</span><span class="w"> </span><span class="nf">exclusive_max</span><span class="p">(</span><span class="n">value</span><span class="p">,</span> <span class="n">block_dim</span><span class="p">:</span> <span class="n">template</span><span class="p">(),</span> <span class="n">identity</span><span class="p">,</span> <span class="n">dtype</span><span class="p">:</span> <span class="n">template</span><span class="p">()):</span>
 <span class="w">    </span><span class="sd">&quot;&quot;&quot;Block-scope exclusive prefix max.  Thread 0 holds ``identity``: the caller must supply a value that is ``&lt;=``</span>
 <span class="sd">    every legal element of the input (typically ``-∞`` for floats, the dtype&#39;s minimum for integers).  See</span>
 <span class="sd">    `exclusive_min`.</span>
 <span class="sd">    &quot;&quot;&quot;</span>
-    <span class="k">return</span> <span class="n">_exclusive_block</span><span class="p">(</span><span class="n">value</span><span class="p">,</span> <span class="n">tid</span><span class="p">,</span> <span class="n">block_dim</span><span class="p">,</span> <span class="n">log2_warp</span><span class="p">,</span> <span class="n">_bin_max</span><span class="p">,</span> <span class="n">identity</span><span class="p">,</span> <span class="n">dtype</span><span class="p">)</span></div>
+    <span class="k">return</span> <span class="n">exclusive_scan</span><span class="p">(</span><span class="n">value</span><span class="p">,</span> <span class="n">block_dim</span><span class="p">,</span> <span class="n">_bin_max</span><span class="p">,</span> <span class="n">identity</span><span class="p">,</span> <span class="n">dtype</span><span class="p">)</span></div>
 
 
 
@@ -892,9 +870,7 @@
 <a class="viewcode-back" href="../../../../autoapi/quadrants/lang/simt/block/index.html#quadrants.lang.simt.block.radix_rank_match_atomic_or">[docs]</a>
 <span class="k">def</span><span class="w"> </span><span class="nf">radix_rank_match_atomic_or</span><span class="p">(</span>
     <span class="n">key</span><span class="p">,</span>
-    <span class="n">tid</span><span class="p">,</span>
     <span class="n">block_dim</span><span class="p">:</span> <span class="n">template</span><span class="p">(),</span>
-    <span class="n">log2_warp</span><span class="p">:</span> <span class="n">template</span><span class="p">(),</span>
     <span class="n">radix_bits</span><span class="p">:</span> <span class="n">template</span><span class="p">(),</span>
     <span class="n">bit_start</span><span class="p">:</span> <span class="n">template</span><span class="p">(),</span>
     <span class="n">num_bits</span><span class="p">:</span> <span class="n">template</span><span class="p">(),</span>
@@ -907,12 +883,8 @@
 
 <span class="sd">    Args:</span>
 <span class="sd">        key: ``u32`` key, one per thread.</span>
-<span class="sd">        tid: calling thread&#39;s block-local index.</span>
 <span class="sd">        block_dim: threads per block (template).  Must equal ``RADIX_DIGITS = 1 &lt;&lt; radix_bits``: each digit gets exactly</span>
 <span class="sd">            one thread for the per-thread bin/excl_prefix output.</span>
-<span class="sd">        log2_warp: ``log2(warp_size)`` (template).  Must currently be 5 (warp size 32) — the atomic-OR match path is</span>
-<span class="sd">            built around 32-lane ``i32`` ballot masks, so wave64 callers should pass 5 and arrange to launch with a</span>
-<span class="sd">            32-thread subgroup, or wait until a wave64 path lands.</span>
 <span class="sd">        radix_bits: number of bits in the digit (template).  Typical onesweep value is 8, giving 256 digits.</span>
 <span class="sd">        bit_start: starting bit of the digit (template).  Used as ``key &gt;&gt; bit_start``.</span>
 <span class="sd">        num_bits: actual digit width in bits (template), with ``num_bits &lt;= radix_bits``.  Bits ``[bit_start, bit_start +</span>
@@ -922,16 +894,29 @@
 <span class="sd">        excl_prefix: ``block.SharedArray((1 &lt;&lt; radix_bits,), qd.i32)`` outparam.  After the call, ``excl_prefix[d]`` holds</span>
 <span class="sd">            the exclusive prefix sum of ``bins`` up to digit ``d``.  Caller allocates as for ``bins``.</span>
 
+<span class="sd">    The calling thread&#39;s block-local index is read internally via `block.thread_idx()`; the warp size is read from</span>
+<span class="sd">    `subgroup.group_size()` at compile time.  Currently only the wave32 subgroup size (32) is supported — the</span>
+<span class="sd">    atomic-OR match path is built around 32-lane ``i32`` ballot masks, so the function asserts that subgroup size at</span>
+<span class="sd">    compile time.  Targeting AMDGPU (wave64) will need a parallel wave64 path; not yet implemented.</span>
+
 <span class="sd">    Pre/post: caller must guarantee uniform control flow on entry; the function inserts the necessary ``block.sync()``</span>
 <span class="sd">    and ``subgroup.sync()`` retires.  After the call, ``bins`` and ``excl_prefix`` are visible to every thread without a</span>
 <span class="sd">    further ``block.sync()`` (we sync internally before exit).</span>
 
 <span class="sd">    Cost: ``~items_per_thread`` atomic_or + atomic_add per pass on shared memory + 2 ``block.sync()`` + 1 block exclusive</span>
 <span class="sd">    scan + ``BLOCK_WARPS`` ops per thread for the column-sum upsweep.  The shared-memory footprint is</span>
-<span class="sd">    ``2 * BLOCK_WARPS * RADIX_DIGITS`` i32 ints (16 KiB at the default ``log2_warp=5, radix_bits=8`` configuration).</span>
+<span class="sd">    ``2 * BLOCK_WARPS * RADIX_DIGITS`` i32 ints (16 KiB at the default ``radix_bits=8`` configuration on wave32).</span>
 <span class="sd">    &quot;&quot;&quot;</span>
-    <span class="n">WARP_THREADS</span> <span class="o">=</span> <span class="n">impl</span><span class="o">.</span><span class="n">static</span><span class="p">(</span><span class="mi">1</span> <span class="o">&lt;&lt;</span> <span class="n">log2_warp</span><span class="p">)</span>
+    <span class="n">WARP_THREADS</span> <span class="o">=</span> <span class="n">impl</span><span class="o">.</span><span class="n">static</span><span class="p">(</span><span class="n">_subgroup</span><span class="o">.</span><span class="n">group_size</span><span class="p">())</span>
+    <span class="n">impl</span><span class="o">.</span><span class="n">static_assert</span><span class="p">(</span>
+        <span class="n">impl</span><span class="o">.</span><span class="n">static</span><span class="p">(</span><span class="n">WARP_THREADS</span> <span class="o">==</span> <span class="mi">32</span><span class="p">),</span>
+        <span class="s2">&quot;block.radix_rank_match_atomic_or: subgroup size must be 32; wave64 path not yet implemented&quot;</span><span class="p">,</span>
+    <span class="p">)</span>
     <span class="n">RADIX_DIGITS</span> <span class="o">=</span> <span class="n">impl</span><span class="o">.</span><span class="n">static</span><span class="p">(</span><span class="mi">1</span> <span class="o">&lt;&lt;</span> <span class="n">radix_bits</span><span class="p">)</span>
+    <span class="n">impl</span><span class="o">.</span><span class="n">static_assert</span><span class="p">(</span>
+        <span class="n">impl</span><span class="o">.</span><span class="n">static</span><span class="p">(</span><span class="n">block_dim</span> <span class="o">==</span> <span class="n">RADIX_DIGITS</span><span class="p">),</span>
+        <span class="s2">&quot;block.radix_rank_match_atomic_or: block_dim must equal RADIX_DIGITS (1 &lt;&lt; radix_bits)&quot;</span><span class="p">,</span>
+    <span class="p">)</span>
     <span class="n">BLOCK_WARPS</span> <span class="o">=</span> <span class="n">impl</span><span class="o">.</span><span class="n">static</span><span class="p">(</span><span class="n">block_dim</span> <span class="o">//</span> <span class="n">WARP_THREADS</span><span class="p">)</span>
     <span class="n">NUM_BITS_MASK</span> <span class="o">=</span> <span class="n">impl</span><span class="o">.</span><span class="n">static</span><span class="p">((</span><span class="mi">1</span> <span class="o">&lt;&lt;</span> <span class="n">num_bits</span><span class="p">)</span> <span class="o">-</span> <span class="mi">1</span><span class="p">)</span>
     <span class="n">MM_OFF</span> <span class="o">=</span> <span class="n">impl</span><span class="o">.</span><span class="n">static</span><span class="p">(</span><span class="n">BLOCK_WARPS</span> <span class="o">*</span> <span class="n">RADIX_DIGITS</span><span class="p">)</span>
@@ -940,6 +925,7 @@
     <span class="c1"># ``TempStorage``: union of warp_offsets / warp_histograms (same backing) + match_masks.  All i32.</span>
     <span class="n">smem</span> <span class="o">=</span> <span class="n">SharedArray</span><span class="p">(</span><span class="n">impl</span><span class="o">.</span><span class="n">static</span><span class="p">((</span><span class="mi">2</span> <span class="o">*</span> <span class="n">BLOCK_WARPS</span> <span class="o">*</span> <span class="n">RADIX_DIGITS</span><span class="p">,)),</span> <span class="n">_i32</span><span class="p">)</span>
 
+    <span class="n">tid</span> <span class="o">=</span> <span class="n">thread_idx</span><span class="p">()</span>
     <span class="n">warp_idx</span> <span class="o">=</span> <span class="n">tid</span> <span class="o">//</span> <span class="n">WARP_THREADS</span>
     <span class="n">lane</span> <span class="o">=</span> <span class="n">_ops</span><span class="o">.</span><span class="n">cast</span><span class="p">(</span><span class="n">_subgroup</span><span class="o">.</span><span class="n">invocation_id</span><span class="p">(),</span> <span class="n">_i32</span><span class="p">)</span>
 
@@ -966,7 +952,7 @@
         <span class="n">bin_count</span> <span class="o">=</span> <span class="n">bin_count</span> <span class="o">+</span> <span class="n">warp_count</span>
 
     <span class="c1"># Step 3: block-wide exclusive sum on the per-thread bin counts.</span>
-    <span class="n">exclusive_digit_prefix</span> <span class="o">=</span> <span class="n">exclusive_add</span><span class="p">(</span><span class="n">bin_count</span><span class="p">,</span> <span class="n">tid</span><span class="p">,</span> <span class="n">block_dim</span><span class="p">,</span> <span class="n">log2_warp</span><span class="p">,</span> <span class="n">_i32</span><span class="p">)</span>
+    <span class="n">exclusive_digit_prefix</span> <span class="o">=</span> <span class="n">exclusive_add</span><span class="p">(</span><span class="n">bin_count</span><span class="p">,</span> <span class="n">block_dim</span><span class="p">,</span> <span class="n">_i32</span><span class="p">)</span>
 
     <span class="c1"># Step 4: ComputeOffsetsWarpDownsweep — fold the block-wide exclusive prefix into every warp&#39;s offset.</span>
     <span class="k">for</span> <span class="n">j_warp</span> <span class="ow">in</span> <span class="n">impl</span><span class="o">.</span><span class="n">static</span><span class="p">(</span><span class="nb">range</span><span class="p">(</span><span class="n">BLOCK_WARPS</span><span class="p">)):</span>

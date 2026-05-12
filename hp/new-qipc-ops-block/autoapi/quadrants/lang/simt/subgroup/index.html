@@ -403,86 +403,173 @@
 <tr class="row-even"><td><p><a class="reference internal" href="#quadrants.lang.simt.subgroup.broadcast_first" title="quadrants.lang.simt.subgroup.broadcast_first"><code class="xref py py-obj docutils literal notranslate"><span class="pre">broadcast_first</span></code></a>(value)</p></td>
 <td><p>Broadcast lane 0's <code class="docutils literal notranslate"><span class="pre">value</span></code> to every lane in the subgroup.</p></td>
 </tr>
-<tr class="row-odd"><td><p><a class="reference internal" href="#quadrants.lang.simt.subgroup.reduce_add" title="quadrants.lang.simt.subgroup.reduce_add"><code class="xref py py-obj docutils literal notranslate"><span class="pre">reduce_add</span></code></a>(value, log2_size)</p></td>
+<tr class="row-odd"><td><p><a class="reference internal" href="#quadrants.lang.simt.subgroup.group_size" title="quadrants.lang.simt.subgroup.group_size"><code class="xref py py-obj docutils literal notranslate"><span class="pre">group_size</span></code></a>(→ int)</p></td>
+<td><p>Active subgroup size for the current launch, as a Python <code class="docutils literal notranslate"><span class="pre">int</span></code>.</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="#quadrants.lang.simt.subgroup.log2_group_size" title="quadrants.lang.simt.subgroup.log2_group_size"><code class="xref py py-obj docutils literal notranslate"><span class="pre">log2_group_size</span></code></a>(→ int)</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">log2(group_size())</span></code> as a Python <code class="docutils literal notranslate"><span class="pre">int</span></code>, asserting the subgroup size is a power of two.</p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="#quadrants.lang.simt.subgroup.invocation_id" title="quadrants.lang.simt.subgroup.invocation_id"><code class="xref py py-obj docutils literal notranslate"><span class="pre">invocation_id</span></code></a>()</p></td>
+<td><p></p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="#quadrants.lang.simt.subgroup.reduce_add" title="quadrants.lang.simt.subgroup.reduce_add"><code class="xref py py-obj docutils literal notranslate"><span class="pre">reduce_add</span></code></a>(value, log2_size)</p></td>
 <td><p>Sum <code class="docutils literal notranslate"><span class="pre">value</span></code> across <code class="docutils literal notranslate"><span class="pre">2**log2_size</span></code> consecutive lanes via a <code class="docutils literal notranslate"><span class="pre">shuffle_down</span></code> tree.</p></td>
 </tr>
-<tr class="row-even"><td><p><a class="reference internal" href="#quadrants.lang.simt.subgroup.reduce_all_add" title="quadrants.lang.simt.subgroup.reduce_all_add"><code class="xref py py-obj docutils literal notranslate"><span class="pre">reduce_all_add</span></code></a>(value, log2_size)</p></td>
+<tr class="row-odd"><td><p><a class="reference internal" href="#quadrants.lang.simt.subgroup.reduce_all_add" title="quadrants.lang.simt.subgroup.reduce_all_add"><code class="xref py py-obj docutils literal notranslate"><span class="pre">reduce_all_add</span></code></a>(value, log2_size)</p></td>
 <td><p>Sum <code class="docutils literal notranslate"><span class="pre">value</span></code> across <code class="docutils literal notranslate"><span class="pre">2**log2_size</span></code> consecutive lanes via a butterfly XOR.</p></td>
 </tr>
-<tr class="row-odd"><td><p><a class="reference internal" href="#quadrants.lang.simt.subgroup.reduce_min" title="quadrants.lang.simt.subgroup.reduce_min"><code class="xref py py-obj docutils literal notranslate"><span class="pre">reduce_min</span></code></a>(value, log2_size)</p></td>
+<tr class="row-even"><td><p><a class="reference internal" href="#quadrants.lang.simt.subgroup.reduce_min" title="quadrants.lang.simt.subgroup.reduce_min"><code class="xref py py-obj docutils literal notranslate"><span class="pre">reduce_min</span></code></a>(value, log2_size)</p></td>
 <td><p>Min of <code class="docutils literal notranslate"><span class="pre">value</span></code> across <code class="docutils literal notranslate"><span class="pre">2**log2_size</span></code> consecutive lanes via a <code class="docutils literal notranslate"><span class="pre">shuffle_down</span></code> tree.</p></td>
 </tr>
-<tr class="row-even"><td><p><a class="reference internal" href="#quadrants.lang.simt.subgroup.reduce_max" title="quadrants.lang.simt.subgroup.reduce_max"><code class="xref py py-obj docutils literal notranslate"><span class="pre">reduce_max</span></code></a>(value, log2_size)</p></td>
+<tr class="row-odd"><td><p><a class="reference internal" href="#quadrants.lang.simt.subgroup.reduce_max" title="quadrants.lang.simt.subgroup.reduce_max"><code class="xref py py-obj docutils literal notranslate"><span class="pre">reduce_max</span></code></a>(value, log2_size)</p></td>
 <td><p>Max of <code class="docutils literal notranslate"><span class="pre">value</span></code> across <code class="docutils literal notranslate"><span class="pre">2**log2_size</span></code> consecutive lanes via a <code class="docutils literal notranslate"><span class="pre">shuffle_down</span></code> tree.</p></td>
 </tr>
-<tr class="row-odd"><td><p><a class="reference internal" href="#quadrants.lang.simt.subgroup.reduce_all_min" title="quadrants.lang.simt.subgroup.reduce_all_min"><code class="xref py py-obj docutils literal notranslate"><span class="pre">reduce_all_min</span></code></a>(value, log2_size)</p></td>
+<tr class="row-even"><td><p><a class="reference internal" href="#quadrants.lang.simt.subgroup.reduce_all_min" title="quadrants.lang.simt.subgroup.reduce_all_min"><code class="xref py py-obj docutils literal notranslate"><span class="pre">reduce_all_min</span></code></a>(value, log2_size)</p></td>
 <td><p>Min of <code class="docutils literal notranslate"><span class="pre">value</span></code> across <code class="docutils literal notranslate"><span class="pre">2**log2_size</span></code> consecutive lanes via a butterfly XOR.</p></td>
 </tr>
-<tr class="row-even"><td><p><a class="reference internal" href="#quadrants.lang.simt.subgroup.reduce_all_max" title="quadrants.lang.simt.subgroup.reduce_all_max"><code class="xref py py-obj docutils literal notranslate"><span class="pre">reduce_all_max</span></code></a>(value, log2_size)</p></td>
+<tr class="row-odd"><td><p><a class="reference internal" href="#quadrants.lang.simt.subgroup.reduce_all_max" title="quadrants.lang.simt.subgroup.reduce_all_max"><code class="xref py py-obj docutils literal notranslate"><span class="pre">reduce_all_max</span></code></a>(value, log2_size)</p></td>
 <td><p>Max of <code class="docutils literal notranslate"><span class="pre">value</span></code> across <code class="docutils literal notranslate"><span class="pre">2**log2_size</span></code> consecutive lanes via a butterfly XOR.</p></td>
 </tr>
-<tr class="row-odd"><td><p><a class="reference internal" href="#quadrants.lang.simt.subgroup.segmented_reduce_add" title="quadrants.lang.simt.subgroup.segmented_reduce_add"><code class="xref py py-obj docutils literal notranslate"><span class="pre">segmented_reduce_add</span></code></a>(value, head_flag, log2_size)</p></td>
+<tr class="row-even"><td><p><a class="reference internal" href="#quadrants.lang.simt.subgroup.segmented_reduce_add" title="quadrants.lang.simt.subgroup.segmented_reduce_add"><code class="xref py py-obj docutils literal notranslate"><span class="pre">segmented_reduce_add</span></code></a>(value, head_flag, log2_size)</p></td>
 <td><p>Per-lane inclusive sum that resets at every non-zero <code class="docutils literal notranslate"><span class="pre">head_flag</span></code>, scoped to <code class="docutils literal notranslate"><span class="pre">2**log2_size</span></code> lanes.</p></td>
 </tr>
-<tr class="row-even"><td><p><a class="reference internal" href="#quadrants.lang.simt.subgroup.segmented_reduce_min" title="quadrants.lang.simt.subgroup.segmented_reduce_min"><code class="xref py py-obj docutils literal notranslate"><span class="pre">segmented_reduce_min</span></code></a>(value, head_flag, log2_size)</p></td>
+<tr class="row-odd"><td><p><a class="reference internal" href="#quadrants.lang.simt.subgroup.segmented_reduce_min" title="quadrants.lang.simt.subgroup.segmented_reduce_min"><code class="xref py py-obj docutils literal notranslate"><span class="pre">segmented_reduce_min</span></code></a>(value, head_flag, log2_size)</p></td>
 <td><p>Per-lane inclusive min that resets at every non-zero <code class="docutils literal notranslate"><span class="pre">head_flag</span></code>, scoped to <code class="docutils literal notranslate"><span class="pre">2**log2_size</span></code> lanes.</p></td>
 </tr>
-<tr class="row-odd"><td><p><a class="reference internal" href="#quadrants.lang.simt.subgroup.segmented_reduce_max" title="quadrants.lang.simt.subgroup.segmented_reduce_max"><code class="xref py py-obj docutils literal notranslate"><span class="pre">segmented_reduce_max</span></code></a>(value, head_flag, log2_size)</p></td>
+<tr class="row-even"><td><p><a class="reference internal" href="#quadrants.lang.simt.subgroup.segmented_reduce_max" title="quadrants.lang.simt.subgroup.segmented_reduce_max"><code class="xref py py-obj docutils literal notranslate"><span class="pre">segmented_reduce_max</span></code></a>(value, head_flag, log2_size)</p></td>
 <td><p>Per-lane inclusive max that resets at every non-zero <code class="docutils literal notranslate"><span class="pre">head_flag</span></code>, scoped to <code class="docutils literal notranslate"><span class="pre">2**log2_size</span></code> lanes.</p></td>
 </tr>
-<tr class="row-even"><td><p><a class="reference internal" href="#quadrants.lang.simt.subgroup.inclusive_add" title="quadrants.lang.simt.subgroup.inclusive_add"><code class="xref py py-obj docutils literal notranslate"><span class="pre">inclusive_add</span></code></a>(value, log2_size)</p></td>
+<tr class="row-odd"><td><p><a class="reference internal" href="#quadrants.lang.simt.subgroup.inclusive_add" title="quadrants.lang.simt.subgroup.inclusive_add"><code class="xref py py-obj docutils literal notranslate"><span class="pre">inclusive_add</span></code></a>(value, log2_size)</p></td>
 <td><p>Inclusive prefix sum across <code class="docutils literal notranslate"><span class="pre">2**log2_size</span></code> consecutive lanes.</p></td>
 </tr>
-<tr class="row-odd"><td><p><a class="reference internal" href="#quadrants.lang.simt.subgroup.inclusive_mul" title="quadrants.lang.simt.subgroup.inclusive_mul"><code class="xref py py-obj docutils literal notranslate"><span class="pre">inclusive_mul</span></code></a>(value, log2_size)</p></td>
+<tr class="row-even"><td><p><a class="reference internal" href="#quadrants.lang.simt.subgroup.inclusive_mul" title="quadrants.lang.simt.subgroup.inclusive_mul"><code class="xref py py-obj docutils literal notranslate"><span class="pre">inclusive_mul</span></code></a>(value, log2_size)</p></td>
 <td><p>Inclusive prefix product across <code class="docutils literal notranslate"><span class="pre">2**log2_size</span></code> consecutive lanes.</p></td>
 </tr>
-<tr class="row-even"><td><p><a class="reference internal" href="#quadrants.lang.simt.subgroup.inclusive_min" title="quadrants.lang.simt.subgroup.inclusive_min"><code class="xref py py-obj docutils literal notranslate"><span class="pre">inclusive_min</span></code></a>(value, log2_size)</p></td>
+<tr class="row-odd"><td><p><a class="reference internal" href="#quadrants.lang.simt.subgroup.inclusive_min" title="quadrants.lang.simt.subgroup.inclusive_min"><code class="xref py py-obj docutils literal notranslate"><span class="pre">inclusive_min</span></code></a>(value, log2_size)</p></td>
 <td><p>Inclusive prefix min across <code class="docutils literal notranslate"><span class="pre">2**log2_size</span></code> consecutive lanes.  See <cite>inclusive_add</cite> for the size contract.</p></td>
 </tr>
-<tr class="row-odd"><td><p><a class="reference internal" href="#quadrants.lang.simt.subgroup.inclusive_max" title="quadrants.lang.simt.subgroup.inclusive_max"><code class="xref py py-obj docutils literal notranslate"><span class="pre">inclusive_max</span></code></a>(value, log2_size)</p></td>
+<tr class="row-even"><td><p><a class="reference internal" href="#quadrants.lang.simt.subgroup.inclusive_max" title="quadrants.lang.simt.subgroup.inclusive_max"><code class="xref py py-obj docutils literal notranslate"><span class="pre">inclusive_max</span></code></a>(value, log2_size)</p></td>
 <td><p>Inclusive prefix max across <code class="docutils literal notranslate"><span class="pre">2**log2_size</span></code> consecutive lanes.  See <cite>inclusive_add</cite> for the size contract.</p></td>
 </tr>
-<tr class="row-even"><td><p><a class="reference internal" href="#quadrants.lang.simt.subgroup.inclusive_and" title="quadrants.lang.simt.subgroup.inclusive_and"><code class="xref py py-obj docutils literal notranslate"><span class="pre">inclusive_and</span></code></a>(value, log2_size)</p></td>
+<tr class="row-odd"><td><p><a class="reference internal" href="#quadrants.lang.simt.subgroup.inclusive_and" title="quadrants.lang.simt.subgroup.inclusive_and"><code class="xref py py-obj docutils literal notranslate"><span class="pre">inclusive_and</span></code></a>(value, log2_size)</p></td>
 <td><p>Inclusive prefix bitwise-AND across <code class="docutils literal notranslate"><span class="pre">2**log2_size</span></code> consecutive lanes.  Integer dtypes only.  See</p></td>
 </tr>
-<tr class="row-odd"><td><p><a class="reference internal" href="#quadrants.lang.simt.subgroup.inclusive_or" title="quadrants.lang.simt.subgroup.inclusive_or"><code class="xref py py-obj docutils literal notranslate"><span class="pre">inclusive_or</span></code></a>(value, log2_size)</p></td>
+<tr class="row-even"><td><p><a class="reference internal" href="#quadrants.lang.simt.subgroup.inclusive_or" title="quadrants.lang.simt.subgroup.inclusive_or"><code class="xref py py-obj docutils literal notranslate"><span class="pre">inclusive_or</span></code></a>(value, log2_size)</p></td>
 <td><p>Inclusive prefix bitwise-OR across <code class="docutils literal notranslate"><span class="pre">2**log2_size</span></code> consecutive lanes.  Integer dtypes only.  See</p></td>
 </tr>
-<tr class="row-even"><td><p><a class="reference internal" href="#quadrants.lang.simt.subgroup.inclusive_xor" title="quadrants.lang.simt.subgroup.inclusive_xor"><code class="xref py py-obj docutils literal notranslate"><span class="pre">inclusive_xor</span></code></a>(value, log2_size)</p></td>
+<tr class="row-odd"><td><p><a class="reference internal" href="#quadrants.lang.simt.subgroup.inclusive_xor" title="quadrants.lang.simt.subgroup.inclusive_xor"><code class="xref py py-obj docutils literal notranslate"><span class="pre">inclusive_xor</span></code></a>(value, log2_size)</p></td>
 <td><p>Inclusive prefix bitwise-XOR across <code class="docutils literal notranslate"><span class="pre">2**log2_size</span></code> consecutive lanes.  Integer dtypes only.  See</p></td>
 </tr>
-<tr class="row-odd"><td><p><a class="reference internal" href="#quadrants.lang.simt.subgroup.exclusive_add" title="quadrants.lang.simt.subgroup.exclusive_add"><code class="xref py py-obj docutils literal notranslate"><span class="pre">exclusive_add</span></code></a>(value, log2_size)</p></td>
+<tr class="row-even"><td><p><a class="reference internal" href="#quadrants.lang.simt.subgroup.exclusive_add" title="quadrants.lang.simt.subgroup.exclusive_add"><code class="xref py py-obj docutils literal notranslate"><span class="pre">exclusive_add</span></code></a>(value, log2_size)</p></td>
 <td><p>Exclusive prefix sum across <code class="docutils literal notranslate"><span class="pre">2**log2_size</span></code> consecutive lanes.</p></td>
 </tr>
-<tr class="row-even"><td><p><a class="reference internal" href="#quadrants.lang.simt.subgroup.exclusive_mul" title="quadrants.lang.simt.subgroup.exclusive_mul"><code class="xref py py-obj docutils literal notranslate"><span class="pre">exclusive_mul</span></code></a>(value, log2_size)</p></td>
+<tr class="row-odd"><td><p><a class="reference internal" href="#quadrants.lang.simt.subgroup.exclusive_mul" title="quadrants.lang.simt.subgroup.exclusive_mul"><code class="xref py py-obj docutils literal notranslate"><span class="pre">exclusive_mul</span></code></a>(value, log2_size)</p></td>
 <td><p>Exclusive prefix product across <code class="docutils literal notranslate"><span class="pre">2**log2_size</span></code> consecutive lanes.  Lane 0 of each group returns the</p></td>
 </tr>
-<tr class="row-odd"><td><p><a class="reference internal" href="#quadrants.lang.simt.subgroup.exclusive_min" title="quadrants.lang.simt.subgroup.exclusive_min"><code class="xref py py-obj docutils literal notranslate"><span class="pre">exclusive_min</span></code></a>(value, log2_size, identity)</p></td>
+<tr class="row-even"><td><p><a class="reference internal" href="#quadrants.lang.simt.subgroup.exclusive_min" title="quadrants.lang.simt.subgroup.exclusive_min"><code class="xref py py-obj docutils literal notranslate"><span class="pre">exclusive_min</span></code></a>(value, log2_size, identity)</p></td>
 <td><p>Exclusive prefix min across <code class="docutils literal notranslate"><span class="pre">2**log2_size</span></code> consecutive lanes.</p></td>
 </tr>
-<tr class="row-even"><td><p><a class="reference internal" href="#quadrants.lang.simt.subgroup.exclusive_max" title="quadrants.lang.simt.subgroup.exclusive_max"><code class="xref py py-obj docutils literal notranslate"><span class="pre">exclusive_max</span></code></a>(value, log2_size, identity)</p></td>
+<tr class="row-odd"><td><p><a class="reference internal" href="#quadrants.lang.simt.subgroup.exclusive_max" title="quadrants.lang.simt.subgroup.exclusive_max"><code class="xref py py-obj docutils literal notranslate"><span class="pre">exclusive_max</span></code></a>(value, log2_size, identity)</p></td>
 <td><p>Exclusive prefix max across <code class="docutils literal notranslate"><span class="pre">2**log2_size</span></code> consecutive lanes.</p></td>
 </tr>
-<tr class="row-odd"><td><p><a class="reference internal" href="#quadrants.lang.simt.subgroup.exclusive_and" title="quadrants.lang.simt.subgroup.exclusive_and"><code class="xref py py-obj docutils literal notranslate"><span class="pre">exclusive_and</span></code></a>(value, log2_size)</p></td>
+<tr class="row-even"><td><p><a class="reference internal" href="#quadrants.lang.simt.subgroup.exclusive_and" title="quadrants.lang.simt.subgroup.exclusive_and"><code class="xref py py-obj docutils literal notranslate"><span class="pre">exclusive_and</span></code></a>(value, log2_size)</p></td>
 <td><p>Exclusive prefix bitwise-AND.  Integer dtypes only.  Lane 0 of each group returns all-bits-set in <code class="docutils literal notranslate"><span class="pre">value</span></code>'s</p></td>
 </tr>
-<tr class="row-even"><td><p><a class="reference internal" href="#quadrants.lang.simt.subgroup.exclusive_or" title="quadrants.lang.simt.subgroup.exclusive_or"><code class="xref py py-obj docutils literal notranslate"><span class="pre">exclusive_or</span></code></a>(value, log2_size)</p></td>
+<tr class="row-odd"><td><p><a class="reference internal" href="#quadrants.lang.simt.subgroup.exclusive_or" title="quadrants.lang.simt.subgroup.exclusive_or"><code class="xref py py-obj docutils literal notranslate"><span class="pre">exclusive_or</span></code></a>(value, log2_size)</p></td>
 <td><p>Exclusive prefix bitwise-OR.  Integer dtypes only.  Lane 0 of each group returns zero in <code class="docutils literal notranslate"><span class="pre">value</span></code>'s dtype.</p></td>
 </tr>
-<tr class="row-odd"><td><p><a class="reference internal" href="#quadrants.lang.simt.subgroup.exclusive_xor" title="quadrants.lang.simt.subgroup.exclusive_xor"><code class="xref py py-obj docutils literal notranslate"><span class="pre">exclusive_xor</span></code></a>(value, log2_size)</p></td>
+<tr class="row-even"><td><p><a class="reference internal" href="#quadrants.lang.simt.subgroup.exclusive_xor" title="quadrants.lang.simt.subgroup.exclusive_xor"><code class="xref py py-obj docutils literal notranslate"><span class="pre">exclusive_xor</span></code></a>(value, log2_size)</p></td>
 <td><p>Exclusive prefix bitwise-XOR.  Integer dtypes only.  Lane 0 of each group returns zero in <code class="docutils literal notranslate"><span class="pre">value</span></code>'s dtype.</p></td>
 </tr>
-<tr class="row-even"><td><p><a class="reference internal" href="#quadrants.lang.simt.subgroup.shuffle" title="quadrants.lang.simt.subgroup.shuffle"><code class="xref py py-obj docutils literal notranslate"><span class="pre">shuffle</span></code></a>(value, index)</p></td>
+<tr class="row-odd"><td><p><a class="reference internal" href="#quadrants.lang.simt.subgroup.shuffle" title="quadrants.lang.simt.subgroup.shuffle"><code class="xref py py-obj docutils literal notranslate"><span class="pre">shuffle</span></code></a>(value, index)</p></td>
 <td><p></p></td>
 </tr>
-<tr class="row-odd"><td><p><a class="reference internal" href="#quadrants.lang.simt.subgroup.shuffle_xor" title="quadrants.lang.simt.subgroup.shuffle_xor"><code class="xref py py-obj docutils literal notranslate"><span class="pre">shuffle_xor</span></code></a>(value, mask)</p></td>
+<tr class="row-even"><td><p><a class="reference internal" href="#quadrants.lang.simt.subgroup.shuffle_xor" title="quadrants.lang.simt.subgroup.shuffle_xor"><code class="xref py py-obj docutils literal notranslate"><span class="pre">shuffle_xor</span></code></a>(value, mask)</p></td>
 <td><p>Lane <code class="docutils literal notranslate"><span class="pre">i</span></code> reads <code class="docutils literal notranslate"><span class="pre">value</span></code> from lane <code class="docutils literal notranslate"><span class="pre">i</span> <span class="pre">^</span> <span class="pre">mask</span></code>.</p></td>
 </tr>
-<tr class="row-even"><td><p><a class="reference internal" href="#quadrants.lang.simt.subgroup.shuffle_up" title="quadrants.lang.simt.subgroup.shuffle_up"><code class="xref py py-obj docutils literal notranslate"><span class="pre">shuffle_up</span></code></a>(value, offset)</p></td>
+<tr class="row-odd"><td><p><a class="reference internal" href="#quadrants.lang.simt.subgroup.shuffle_up" title="quadrants.lang.simt.subgroup.shuffle_up"><code class="xref py py-obj docutils literal notranslate"><span class="pre">shuffle_up</span></code></a>(value, offset)</p></td>
 <td><p></p></td>
 </tr>
-<tr class="row-odd"><td><p><a class="reference internal" href="#quadrants.lang.simt.subgroup.shuffle_down" title="quadrants.lang.simt.subgroup.shuffle_down"><code class="xref py py-obj docutils literal notranslate"><span class="pre">shuffle_down</span></code></a>(value, offset)</p></td>
+<tr class="row-even"><td><p><a class="reference internal" href="#quadrants.lang.simt.subgroup.shuffle_down" title="quadrants.lang.simt.subgroup.shuffle_down"><code class="xref py py-obj docutils literal notranslate"><span class="pre">shuffle_down</span></code></a>(value, offset)</p></td>
 <td><p></p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="#quadrants.lang.simt.subgroup.all_true_full" title="quadrants.lang.simt.subgroup.all_true_full"><code class="xref py py-obj docutils literal notranslate"><span class="pre">all_true_full</span></code></a>(predicate)</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">all_true</span></code> across the entire subgroup -- see <code class="docutils literal notranslate"><span class="pre">all_true(...,</span> <span class="pre">log2_size=log2_group_size())</span></code>.</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="#quadrants.lang.simt.subgroup.any_true_full" title="quadrants.lang.simt.subgroup.any_true_full"><code class="xref py py-obj docutils literal notranslate"><span class="pre">any_true_full</span></code></a>(predicate)</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">any_true</span></code> across the entire subgroup -- see <code class="docutils literal notranslate"><span class="pre">any_true(...,</span> <span class="pre">log2_size=log2_group_size())</span></code>.</p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="#quadrants.lang.simt.subgroup.all_equal_full" title="quadrants.lang.simt.subgroup.all_equal_full"><code class="xref py py-obj docutils literal notranslate"><span class="pre">all_equal_full</span></code></a>(value)</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">all_equal</span></code> across the entire subgroup -- see <code class="docutils literal notranslate"><span class="pre">all_equal(...,</span> <span class="pre">log2_size=log2_group_size())</span></code>.</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="#quadrants.lang.simt.subgroup.reduce_add_full" title="quadrants.lang.simt.subgroup.reduce_add_full"><code class="xref py py-obj docutils literal notranslate"><span class="pre">reduce_add_full</span></code></a>(value)</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">reduce_add</span></code> over the entire subgroup -- lane 0 ends up with the sum across all <code class="docutils literal notranslate"><span class="pre">group_size()</span></code> lanes.</p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="#quadrants.lang.simt.subgroup.reduce_all_add_full" title="quadrants.lang.simt.subgroup.reduce_all_add_full"><code class="xref py py-obj docutils literal notranslate"><span class="pre">reduce_all_add_full</span></code></a>(value)</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">reduce_all_add</span></code> over the entire subgroup -- every lane ends up with the sum across all lanes.</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="#quadrants.lang.simt.subgroup.reduce_min_full" title="quadrants.lang.simt.subgroup.reduce_min_full"><code class="xref py py-obj docutils literal notranslate"><span class="pre">reduce_min_full</span></code></a>(value)</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">reduce_min</span></code> over the entire subgroup -- lane 0 ends up with the min across all lanes.</p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="#quadrants.lang.simt.subgroup.reduce_max_full" title="quadrants.lang.simt.subgroup.reduce_max_full"><code class="xref py py-obj docutils literal notranslate"><span class="pre">reduce_max_full</span></code></a>(value)</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">reduce_max</span></code> over the entire subgroup -- lane 0 ends up with the max across all lanes.</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="#quadrants.lang.simt.subgroup.reduce_all_min_full" title="quadrants.lang.simt.subgroup.reduce_all_min_full"><code class="xref py py-obj docutils literal notranslate"><span class="pre">reduce_all_min_full</span></code></a>(value)</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">reduce_all_min</span></code> over the entire subgroup -- every lane ends up with the min across all lanes.</p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="#quadrants.lang.simt.subgroup.reduce_all_max_full" title="quadrants.lang.simt.subgroup.reduce_all_max_full"><code class="xref py py-obj docutils literal notranslate"><span class="pre">reduce_all_max_full</span></code></a>(value)</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">reduce_all_max</span></code> over the entire subgroup -- every lane ends up with the max across all lanes.</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="#quadrants.lang.simt.subgroup.inclusive_add_full" title="quadrants.lang.simt.subgroup.inclusive_add_full"><code class="xref py py-obj docutils literal notranslate"><span class="pre">inclusive_add_full</span></code></a>(value)</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">inclusive_add</span></code> over the entire subgroup.</p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="#quadrants.lang.simt.subgroup.inclusive_mul_full" title="quadrants.lang.simt.subgroup.inclusive_mul_full"><code class="xref py py-obj docutils literal notranslate"><span class="pre">inclusive_mul_full</span></code></a>(value)</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">inclusive_mul</span></code> over the entire subgroup.</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="#quadrants.lang.simt.subgroup.inclusive_min_full" title="quadrants.lang.simt.subgroup.inclusive_min_full"><code class="xref py py-obj docutils literal notranslate"><span class="pre">inclusive_min_full</span></code></a>(value)</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">inclusive_min</span></code> over the entire subgroup.</p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="#quadrants.lang.simt.subgroup.inclusive_max_full" title="quadrants.lang.simt.subgroup.inclusive_max_full"><code class="xref py py-obj docutils literal notranslate"><span class="pre">inclusive_max_full</span></code></a>(value)</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">inclusive_max</span></code> over the entire subgroup.</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="#quadrants.lang.simt.subgroup.inclusive_and_full" title="quadrants.lang.simt.subgroup.inclusive_and_full"><code class="xref py py-obj docutils literal notranslate"><span class="pre">inclusive_and_full</span></code></a>(value)</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">inclusive_and</span></code> over the entire subgroup.  Integer dtypes only.</p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="#quadrants.lang.simt.subgroup.inclusive_or_full" title="quadrants.lang.simt.subgroup.inclusive_or_full"><code class="xref py py-obj docutils literal notranslate"><span class="pre">inclusive_or_full</span></code></a>(value)</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">inclusive_or</span></code> over the entire subgroup.  Integer dtypes only.</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="#quadrants.lang.simt.subgroup.inclusive_xor_full" title="quadrants.lang.simt.subgroup.inclusive_xor_full"><code class="xref py py-obj docutils literal notranslate"><span class="pre">inclusive_xor_full</span></code></a>(value)</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">inclusive_xor</span></code> over the entire subgroup.  Integer dtypes only.</p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="#quadrants.lang.simt.subgroup.exclusive_add_full" title="quadrants.lang.simt.subgroup.exclusive_add_full"><code class="xref py py-obj docutils literal notranslate"><span class="pre">exclusive_add_full</span></code></a>(value)</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">exclusive_add</span></code> over the entire subgroup.</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="#quadrants.lang.simt.subgroup.exclusive_mul_full" title="quadrants.lang.simt.subgroup.exclusive_mul_full"><code class="xref py py-obj docutils literal notranslate"><span class="pre">exclusive_mul_full</span></code></a>(value)</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">exclusive_mul</span></code> over the entire subgroup.</p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="#quadrants.lang.simt.subgroup.exclusive_min_full" title="quadrants.lang.simt.subgroup.exclusive_min_full"><code class="xref py py-obj docutils literal notranslate"><span class="pre">exclusive_min_full</span></code></a>(value, identity)</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">exclusive_min</span></code> over the entire subgroup.  <code class="docutils literal notranslate"><span class="pre">identity</span></code> must be <code class="docutils literal notranslate"><span class="pre">&gt;=</span></code> every legal element (typically <code class="docutils literal notranslate"><span class="pre">+inf</span></code>).</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="#quadrants.lang.simt.subgroup.exclusive_max_full" title="quadrants.lang.simt.subgroup.exclusive_max_full"><code class="xref py py-obj docutils literal notranslate"><span class="pre">exclusive_max_full</span></code></a>(value, identity)</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">exclusive_max</span></code> over the entire subgroup.  <code class="docutils literal notranslate"><span class="pre">identity</span></code> must be <code class="docutils literal notranslate"><span class="pre">&lt;=</span></code> every legal element (typically <code class="docutils literal notranslate"><span class="pre">-inf</span></code>).</p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="#quadrants.lang.simt.subgroup.exclusive_and_full" title="quadrants.lang.simt.subgroup.exclusive_and_full"><code class="xref py py-obj docutils literal notranslate"><span class="pre">exclusive_and_full</span></code></a>(value)</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">exclusive_and</span></code> over the entire subgroup.  Integer dtypes only.</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="#quadrants.lang.simt.subgroup.exclusive_or_full" title="quadrants.lang.simt.subgroup.exclusive_or_full"><code class="xref py py-obj docutils literal notranslate"><span class="pre">exclusive_or_full</span></code></a>(value)</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">exclusive_or</span></code> over the entire subgroup.  Integer dtypes only.</p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="#quadrants.lang.simt.subgroup.exclusive_xor_full" title="quadrants.lang.simt.subgroup.exclusive_xor_full"><code class="xref py py-obj docutils literal notranslate"><span class="pre">exclusive_xor_full</span></code></a>(value)</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">exclusive_xor</span></code> over the entire subgroup.  Integer dtypes only.</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="#quadrants.lang.simt.subgroup.segmented_reduce_add_full" title="quadrants.lang.simt.subgroup.segmented_reduce_add_full"><code class="xref py py-obj docutils literal notranslate"><span class="pre">segmented_reduce_add_full</span></code></a>(value, head_flag)</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">segmented_reduce_add</span></code> over the entire subgroup (<code class="docutils literal notranslate"><span class="pre">log2_size</span> <span class="pre">=</span> <span class="pre">log2_group_size()</span></code> — 5 on wave32 backends, 6 on AMDGPU).</p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="#quadrants.lang.simt.subgroup.segmented_reduce_min_full" title="quadrants.lang.simt.subgroup.segmented_reduce_min_full"><code class="xref py py-obj docutils literal notranslate"><span class="pre">segmented_reduce_min_full</span></code></a>(value, head_flag)</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">segmented_reduce_min</span></code> over the entire subgroup.</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="#quadrants.lang.simt.subgroup.segmented_reduce_max_full" title="quadrants.lang.simt.subgroup.segmented_reduce_max_full"><code class="xref py py-obj docutils literal notranslate"><span class="pre">segmented_reduce_max_full</span></code></a>(value, head_flag)</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">segmented_reduce_max</span></code> over the entire subgroup.</p></td>
 </tr>
 </tbody>
 </table>
@@ -648,6 +735,37 @@ kernel.</p>
 </dd></dl>
 
 <dl class="py function">
+<dt class="sig sig-object py" id="quadrants.lang.simt.subgroup.group_size">
+<span class="sig-prename descclassname"><span class="pre">quadrants.lang.simt.subgroup.</span></span><span class="sig-name descname"><span class="pre">group_size</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">int</span></span></span><a class="reference internal" href="../../../../../_modules/quadrants/lang/simt/subgroup.html#group_size"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#quadrants.lang.simt.subgroup.group_size" title="Link to this definition">#</a></dt>
+<dd><p>Active subgroup size for the current launch, as a Python <code class="docutils literal notranslate"><span class="pre">int</span></code>.</p>
+<p>Resolves once at compile time by querying the live <code class="docutils literal notranslate"><span class="pre">Program</span></code> — 32 on CUDA, 64 on AMDGPU (every AMDGPU target is
+pinned to <code class="docutils literal notranslate"><span class="pre">+wavefrontsize64</span></code>), and the device-probed value on the SPIR-V backends (read from
+<code class="docutils literal notranslate"><span class="pre">VkPhysicalDeviceSubgroupProperties::subgroupSize</span></code> on Vulkan, fixed at 32 on Metal). Because the return type is a
+plain <code class="docutils literal notranslate"><span class="pre">int</span></code>, the value can be used as a <code class="docutils literal notranslate"><span class="pre">qd.template()</span></code> argument inside <code class="docutils literal notranslate"><span class="pre">&#64;qd.kernel</span></code> / <code class="docutils literal notranslate"><span class="pre">&#64;qd.func</span></code> bodies —
+this is how the <code class="docutils literal notranslate"><span class="pre">_full</span></code>-suffixed reductions (e.g. <code class="docutils literal notranslate"><span class="pre">reduce_add_full</span></code>) pick up the right <code class="docutils literal notranslate"><span class="pre">log2_size</span></code> per backend
+without the caller having to plumb it manually.</p>
+<p>For use inside <code class="docutils literal notranslate"><span class="pre">&#64;qd.kernel</span></code> / <code class="docutils literal notranslate"><span class="pre">&#64;qd.func</span></code> bodies: the value is folded into the kernel IR as a constant on every
+backend, including SPIR-V (so MoltenVK / desktop Vulkan see a literal subgroup size rather than a runtime
+<code class="docutils literal notranslate"><span class="pre">OpLoad</span></code> of <code class="docutils literal notranslate"><span class="pre">BuiltInSubgroupSize</span></code>). Calling it from plain host Python after <code class="docutils literal notranslate"><span class="pre">qd.init()</span></code> is also legal and
+returns the same number, which is handy for setting up grid dimensions on the host side.</p>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="quadrants.lang.simt.subgroup.log2_group_size">
+<span class="sig-prename descclassname"><span class="pre">quadrants.lang.simt.subgroup.</span></span><span class="sig-name descname"><span class="pre">log2_group_size</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">int</span></span></span><a class="reference internal" href="../../../../../_modules/quadrants/lang/simt/subgroup.html#log2_group_size"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#quadrants.lang.simt.subgroup.log2_group_size" title="Link to this definition">#</a></dt>
+<dd><p><code class="docutils literal notranslate"><span class="pre">log2(group_size())</span></code> as a Python <code class="docutils literal notranslate"><span class="pre">int</span></code>, asserting the subgroup size is a power of two.</p>
+<p>Equivalent to <code class="docutils literal notranslate"><span class="pre">int(math.log2(group_size()))</span></code> but emits a clearer error if the device ever reports a non-power-of-two
+subgroup width (no current SPIR-V driver does, but the spec allows it). Like <code class="docutils literal notranslate"><span class="pre">group_size()</span></code> this is a compile-time
+constant on every backend — callers feed it straight into <code class="docutils literal notranslate"><span class="pre">qd.template()</span></code> to pick the right <code class="docutils literal notranslate"><span class="pre">log2_size</span></code> for a
+full-subgroup reduction (e.g. <code class="docutils literal notranslate"><span class="pre">reduce_add(v,</span> <span class="pre">qd.simt.subgroup.log2_group_size())</span></code>).</p>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="quadrants.lang.simt.subgroup.invocation_id">
+<span class="sig-prename descclassname"><span class="pre">quadrants.lang.simt.subgroup.</span></span><span class="sig-name descname"><span class="pre">invocation_id</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="../../../../../_modules/quadrants/lang/simt/subgroup.html#invocation_id"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#quadrants.lang.simt.subgroup.invocation_id" title="Link to this definition">#</a></dt>
+<dd></dd></dl>
+
+<dl class="py function">
 <dt class="sig sig-object py" id="quadrants.lang.simt.subgroup.reduce_add">
 <span class="sig-prename descclassname"><span class="pre">quadrants.lang.simt.subgroup.</span></span><span class="sig-name descname"><span class="pre">reduce_add</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">value</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">log2_size</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">template</span><span class="p"><span class="pre">(</span></span><span class="p"><span class="pre">)</span></span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../../../../../_modules/quadrants/lang/simt/subgroup.html#reduce_add"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#quadrants.lang.simt.subgroup.reduce_add" title="Link to this definition">#</a></dt>
 <dd><p>Sum <code class="docutils literal notranslate"><span class="pre">value</span></code> across <code class="docutils literal notranslate"><span class="pre">2**log2_size</span></code> consecutive lanes via a <code class="docutils literal notranslate"><span class="pre">shuffle_down</span></code> tree.</p>
@@ -715,10 +833,12 @@ the lane’s <code class="docutils literal notranslate"><span class="pre">2**log
 group’s first lane is treated as an implicit head, so the result is the inclusive sum from <code class="docutils literal notranslate"><span class="pre">group_base</span></code> to <code class="docutils literal notranslate"><span class="pre">i</span></code>.</p>
 <p>Caller contract:</p>
 <ul class="simple">
-<li><p><code class="docutils literal notranslate"><span class="pre">2**log2_size</span></code> must not exceed 32: segments are scoped to a single 32-lane half of the subgroup so the
-bit-mask bookkeeping stays in u32 internally.  On wave64 the high 32 lanes are handled correctly via a separate
-half-local ballot — see <code class="docutils literal notranslate"><span class="pre">_segment_head_distance</span></code> for the wave64 details.  <code class="docutils literal notranslate"><span class="pre">log2_size</span></code> is a <code class="docutils literal notranslate"><span class="pre">qd.template()</span></code>
-compile-time constant; the body is fully unrolled into <code class="docutils literal notranslate"><span class="pre">log2_size</span></code> <code class="docutils literal notranslate"><span class="pre">shuffle_up</span> <span class="pre">+</span> <span class="pre">add</span></code> pairs.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">2**log2_size</span></code> must not exceed the active subgroup size: up to 32 on CUDA / Metal / Vulkan-wave32, up to 64 on
+AMDGPU (wave64).  <code class="docutils literal notranslate"><span class="pre">log2_size</span></code> is a <code class="docutils literal notranslate"><span class="pre">qd.template()</span></code> compile-time constant; the body is fully unrolled into
+<code class="docutils literal notranslate"><span class="pre">log2_size</span></code> <code class="docutils literal notranslate"><span class="pre">shuffle_up</span> <span class="pre">+</span> <span class="pre">add</span></code> pairs.  <code class="docutils literal notranslate"><span class="pre">_segment_head_distance</span></code> selects between a u32-bitmask path
+(<code class="docutils literal notranslate"><span class="pre">log2_size</span> <span class="pre">&lt;=</span> <span class="pre">5</span></code>, identical IR to the historical wave32-only impl) and a u64-bitmask path
+(<code class="docutils literal notranslate"><span class="pre">log2_size</span> <span class="pre">==</span> <span class="pre">6</span></code>, AMDGPU-only) at compile time, so CUDA / SPIR-V callers see zero overhead from the wave64
+support.</p></li>
 <li><p><code class="docutils literal notranslate"><span class="pre">head_flag</span></code> is any integer scalar; the lowering tests <code class="docutils literal notranslate"><span class="pre">head_flag</span> <span class="pre">!=</span> <span class="pre">0</span></code>, so non-binary truthy values work.</p></li>
 <li><p>Same uniform-CF + all-lanes-active contract as the rest of <code class="docutils literal notranslate"><span class="pre">qd.simt.subgroup</span></code>.</p></li>
 </ul>
@@ -729,7 +849,7 @@ compile-time constant; the body is fully unrolled into <code class="docutils lit
 <span class="sig-prename descclassname"><span class="pre">quadrants.lang.simt.subgroup.</span></span><span class="sig-name descname"><span class="pre">segmented_reduce_min</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">value</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">head_flag</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">log2_size</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">template</span><span class="p"><span class="pre">(</span></span><span class="p"><span class="pre">)</span></span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../../../../../_modules/quadrants/lang/simt/subgroup.html#segmented_reduce_min"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#quadrants.lang.simt.subgroup.segmented_reduce_min" title="Link to this definition">#</a></dt>
 <dd><p>Per-lane inclusive min that resets at every non-zero <code class="docutils literal notranslate"><span class="pre">head_flag</span></code>, scoped to <code class="docutils literal notranslate"><span class="pre">2**log2_size</span></code> lanes.</p>
 <p>Lane <code class="docutils literal notranslate"><span class="pre">i</span></code> returns <code class="docutils literal notranslate"><span class="pre">min(value[head_below..i+1])</span></code>; see <cite>segmented_reduce_add</cite> for the head-flag semantics, the
-<code class="docutils literal notranslate"><span class="pre">2**log2_size</span> <span class="pre">&lt;=</span> <span class="pre">32</span></code> cap, and the truthy-predicate / uniform-CF contract.</p>
+<code class="docutils literal notranslate"><span class="pre">2**log2_size</span> <span class="pre">&lt;=</span> <span class="pre">group_size()</span></code> cap, and the truthy-predicate / uniform-CF contract.</p>
 <p>Float NaN handling is implementation-defined: <code class="docutils literal notranslate"><span class="pre">qd.min</span></code> lowers to a backend-specific intrinsic (<code class="docutils literal notranslate"><span class="pre">fminnm</span></code> on
 PTX, <code class="docutils literal notranslate"><span class="pre">llvm.minnum</span></code> on AMDGPU, <code class="docutils literal notranslate"><span class="pre">OpFMin</span></code> on SPIR-V) and these differ on whether NaN propagates or is suppressed.
 Avoid NaN inputs if you need a portable result.</p>
@@ -739,8 +859,8 @@ Avoid NaN inputs if you need a portable result.</p>
 <dt class="sig sig-object py" id="quadrants.lang.simt.subgroup.segmented_reduce_max">
 <span class="sig-prename descclassname"><span class="pre">quadrants.lang.simt.subgroup.</span></span><span class="sig-name descname"><span class="pre">segmented_reduce_max</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">value</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">head_flag</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">log2_size</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">template</span><span class="p"><span class="pre">(</span></span><span class="p"><span class="pre">)</span></span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../../../../../_modules/quadrants/lang/simt/subgroup.html#segmented_reduce_max"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#quadrants.lang.simt.subgroup.segmented_reduce_max" title="Link to this definition">#</a></dt>
 <dd><p>Per-lane inclusive max that resets at every non-zero <code class="docutils literal notranslate"><span class="pre">head_flag</span></code>, scoped to <code class="docutils literal notranslate"><span class="pre">2**log2_size</span></code> lanes.</p>
-<p>See <cite>segmented_reduce_min</cite> (with <code class="docutils literal notranslate"><span class="pre">qd.max</span></code> in place of <code class="docutils literal notranslate"><span class="pre">qd.min</span></code>).  Same head-flag semantics, <code class="docutils literal notranslate"><span class="pre">2**log2_size</span> <span class="pre">&lt;=</span>
-<span class="pre">32</span></code> cap, truthy-predicate / uniform-CF contract, and NaN caveat.</p>
+<p>See <cite>segmented_reduce_min</cite> (with <code class="docutils literal notranslate"><span class="pre">qd.max</span></code> in place of <code class="docutils literal notranslate"><span class="pre">qd.min</span></code>).  Same head-flag semantics,
+<code class="docutils literal notranslate"><span class="pre">2**log2_size</span> <span class="pre">&lt;=</span> <span class="pre">group_size()</span></code> cap, truthy-predicate / uniform-CF contract, and NaN caveat.</p>
 </dd></dl>
 
 <dl class="py function">
@@ -870,6 +990,162 @@ the calling kernel.</p>
 <span class="sig-prename descclassname"><span class="pre">quadrants.lang.simt.subgroup.</span></span><span class="sig-name descname"><span class="pre">shuffle_down</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">value</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">offset</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../../../../../_modules/quadrants/lang/simt/subgroup.html#shuffle_down"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#quadrants.lang.simt.subgroup.shuffle_down" title="Link to this definition">#</a></dt>
 <dd></dd></dl>
 
+<dl class="py function">
+<dt class="sig sig-object py" id="quadrants.lang.simt.subgroup.all_true_full">
+<span class="sig-prename descclassname"><span class="pre">quadrants.lang.simt.subgroup.</span></span><span class="sig-name descname"><span class="pre">all_true_full</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">predicate</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../../../../../_modules/quadrants/lang/simt/subgroup.html#all_true_full"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#quadrants.lang.simt.subgroup.all_true_full" title="Link to this definition">#</a></dt>
+<dd><p><code class="docutils literal notranslate"><span class="pre">all_true</span></code> across the entire subgroup – see <code class="docutils literal notranslate"><span class="pre">all_true(...,</span> <span class="pre">log2_size=log2_group_size())</span></code>.</p>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="quadrants.lang.simt.subgroup.any_true_full">
+<span class="sig-prename descclassname"><span class="pre">quadrants.lang.simt.subgroup.</span></span><span class="sig-name descname"><span class="pre">any_true_full</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">predicate</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../../../../../_modules/quadrants/lang/simt/subgroup.html#any_true_full"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#quadrants.lang.simt.subgroup.any_true_full" title="Link to this definition">#</a></dt>
+<dd><p><code class="docutils literal notranslate"><span class="pre">any_true</span></code> across the entire subgroup – see <code class="docutils literal notranslate"><span class="pre">any_true(...,</span> <span class="pre">log2_size=log2_group_size())</span></code>.</p>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="quadrants.lang.simt.subgroup.all_equal_full">
+<span class="sig-prename descclassname"><span class="pre">quadrants.lang.simt.subgroup.</span></span><span class="sig-name descname"><span class="pre">all_equal_full</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">value</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../../../../../_modules/quadrants/lang/simt/subgroup.html#all_equal_full"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#quadrants.lang.simt.subgroup.all_equal_full" title="Link to this definition">#</a></dt>
+<dd><p><code class="docutils literal notranslate"><span class="pre">all_equal</span></code> across the entire subgroup – see <code class="docutils literal notranslate"><span class="pre">all_equal(...,</span> <span class="pre">log2_size=log2_group_size())</span></code>.</p>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="quadrants.lang.simt.subgroup.reduce_add_full">
+<span class="sig-prename descclassname"><span class="pre">quadrants.lang.simt.subgroup.</span></span><span class="sig-name descname"><span class="pre">reduce_add_full</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">value</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../../../../../_modules/quadrants/lang/simt/subgroup.html#reduce_add_full"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#quadrants.lang.simt.subgroup.reduce_add_full" title="Link to this definition">#</a></dt>
+<dd><p><code class="docutils literal notranslate"><span class="pre">reduce_add</span></code> over the entire subgroup – lane 0 ends up with the sum across all <code class="docutils literal notranslate"><span class="pre">group_size()</span></code> lanes.</p>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="quadrants.lang.simt.subgroup.reduce_all_add_full">
+<span class="sig-prename descclassname"><span class="pre">quadrants.lang.simt.subgroup.</span></span><span class="sig-name descname"><span class="pre">reduce_all_add_full</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">value</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../../../../../_modules/quadrants/lang/simt/subgroup.html#reduce_all_add_full"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#quadrants.lang.simt.subgroup.reduce_all_add_full" title="Link to this definition">#</a></dt>
+<dd><p><code class="docutils literal notranslate"><span class="pre">reduce_all_add</span></code> over the entire subgroup – every lane ends up with the sum across all lanes.</p>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="quadrants.lang.simt.subgroup.reduce_min_full">
+<span class="sig-prename descclassname"><span class="pre">quadrants.lang.simt.subgroup.</span></span><span class="sig-name descname"><span class="pre">reduce_min_full</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">value</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../../../../../_modules/quadrants/lang/simt/subgroup.html#reduce_min_full"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#quadrants.lang.simt.subgroup.reduce_min_full" title="Link to this definition">#</a></dt>
+<dd><p><code class="docutils literal notranslate"><span class="pre">reduce_min</span></code> over the entire subgroup – lane 0 ends up with the min across all lanes.</p>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="quadrants.lang.simt.subgroup.reduce_max_full">
+<span class="sig-prename descclassname"><span class="pre">quadrants.lang.simt.subgroup.</span></span><span class="sig-name descname"><span class="pre">reduce_max_full</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">value</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../../../../../_modules/quadrants/lang/simt/subgroup.html#reduce_max_full"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#quadrants.lang.simt.subgroup.reduce_max_full" title="Link to this definition">#</a></dt>
+<dd><p><code class="docutils literal notranslate"><span class="pre">reduce_max</span></code> over the entire subgroup – lane 0 ends up with the max across all lanes.</p>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="quadrants.lang.simt.subgroup.reduce_all_min_full">
+<span class="sig-prename descclassname"><span class="pre">quadrants.lang.simt.subgroup.</span></span><span class="sig-name descname"><span class="pre">reduce_all_min_full</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">value</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../../../../../_modules/quadrants/lang/simt/subgroup.html#reduce_all_min_full"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#quadrants.lang.simt.subgroup.reduce_all_min_full" title="Link to this definition">#</a></dt>
+<dd><p><code class="docutils literal notranslate"><span class="pre">reduce_all_min</span></code> over the entire subgroup – every lane ends up with the min across all lanes.</p>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="quadrants.lang.simt.subgroup.reduce_all_max_full">
+<span class="sig-prename descclassname"><span class="pre">quadrants.lang.simt.subgroup.</span></span><span class="sig-name descname"><span class="pre">reduce_all_max_full</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">value</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../../../../../_modules/quadrants/lang/simt/subgroup.html#reduce_all_max_full"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#quadrants.lang.simt.subgroup.reduce_all_max_full" title="Link to this definition">#</a></dt>
+<dd><p><code class="docutils literal notranslate"><span class="pre">reduce_all_max</span></code> over the entire subgroup – every lane ends up with the max across all lanes.</p>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="quadrants.lang.simt.subgroup.inclusive_add_full">
+<span class="sig-prename descclassname"><span class="pre">quadrants.lang.simt.subgroup.</span></span><span class="sig-name descname"><span class="pre">inclusive_add_full</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">value</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../../../../../_modules/quadrants/lang/simt/subgroup.html#inclusive_add_full"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#quadrants.lang.simt.subgroup.inclusive_add_full" title="Link to this definition">#</a></dt>
+<dd><p><code class="docutils literal notranslate"><span class="pre">inclusive_add</span></code> over the entire subgroup.</p>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="quadrants.lang.simt.subgroup.inclusive_mul_full">
+<span class="sig-prename descclassname"><span class="pre">quadrants.lang.simt.subgroup.</span></span><span class="sig-name descname"><span class="pre">inclusive_mul_full</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">value</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../../../../../_modules/quadrants/lang/simt/subgroup.html#inclusive_mul_full"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#quadrants.lang.simt.subgroup.inclusive_mul_full" title="Link to this definition">#</a></dt>
+<dd><p><code class="docutils literal notranslate"><span class="pre">inclusive_mul</span></code> over the entire subgroup.</p>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="quadrants.lang.simt.subgroup.inclusive_min_full">
+<span class="sig-prename descclassname"><span class="pre">quadrants.lang.simt.subgroup.</span></span><span class="sig-name descname"><span class="pre">inclusive_min_full</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">value</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../../../../../_modules/quadrants/lang/simt/subgroup.html#inclusive_min_full"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#quadrants.lang.simt.subgroup.inclusive_min_full" title="Link to this definition">#</a></dt>
+<dd><p><code class="docutils literal notranslate"><span class="pre">inclusive_min</span></code> over the entire subgroup.</p>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="quadrants.lang.simt.subgroup.inclusive_max_full">
+<span class="sig-prename descclassname"><span class="pre">quadrants.lang.simt.subgroup.</span></span><span class="sig-name descname"><span class="pre">inclusive_max_full</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">value</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../../../../../_modules/quadrants/lang/simt/subgroup.html#inclusive_max_full"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#quadrants.lang.simt.subgroup.inclusive_max_full" title="Link to this definition">#</a></dt>
+<dd><p><code class="docutils literal notranslate"><span class="pre">inclusive_max</span></code> over the entire subgroup.</p>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="quadrants.lang.simt.subgroup.inclusive_and_full">
+<span class="sig-prename descclassname"><span class="pre">quadrants.lang.simt.subgroup.</span></span><span class="sig-name descname"><span class="pre">inclusive_and_full</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">value</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../../../../../_modules/quadrants/lang/simt/subgroup.html#inclusive_and_full"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#quadrants.lang.simt.subgroup.inclusive_and_full" title="Link to this definition">#</a></dt>
+<dd><p><code class="docutils literal notranslate"><span class="pre">inclusive_and</span></code> over the entire subgroup.  Integer dtypes only.</p>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="quadrants.lang.simt.subgroup.inclusive_or_full">
+<span class="sig-prename descclassname"><span class="pre">quadrants.lang.simt.subgroup.</span></span><span class="sig-name descname"><span class="pre">inclusive_or_full</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">value</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../../../../../_modules/quadrants/lang/simt/subgroup.html#inclusive_or_full"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#quadrants.lang.simt.subgroup.inclusive_or_full" title="Link to this definition">#</a></dt>
+<dd><p><code class="docutils literal notranslate"><span class="pre">inclusive_or</span></code> over the entire subgroup.  Integer dtypes only.</p>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="quadrants.lang.simt.subgroup.inclusive_xor_full">
+<span class="sig-prename descclassname"><span class="pre">quadrants.lang.simt.subgroup.</span></span><span class="sig-name descname"><span class="pre">inclusive_xor_full</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">value</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../../../../../_modules/quadrants/lang/simt/subgroup.html#inclusive_xor_full"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#quadrants.lang.simt.subgroup.inclusive_xor_full" title="Link to this definition">#</a></dt>
+<dd><p><code class="docutils literal notranslate"><span class="pre">inclusive_xor</span></code> over the entire subgroup.  Integer dtypes only.</p>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="quadrants.lang.simt.subgroup.exclusive_add_full">
+<span class="sig-prename descclassname"><span class="pre">quadrants.lang.simt.subgroup.</span></span><span class="sig-name descname"><span class="pre">exclusive_add_full</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">value</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../../../../../_modules/quadrants/lang/simt/subgroup.html#exclusive_add_full"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#quadrants.lang.simt.subgroup.exclusive_add_full" title="Link to this definition">#</a></dt>
+<dd><p><code class="docutils literal notranslate"><span class="pre">exclusive_add</span></code> over the entire subgroup.</p>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="quadrants.lang.simt.subgroup.exclusive_mul_full">
+<span class="sig-prename descclassname"><span class="pre">quadrants.lang.simt.subgroup.</span></span><span class="sig-name descname"><span class="pre">exclusive_mul_full</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">value</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../../../../../_modules/quadrants/lang/simt/subgroup.html#exclusive_mul_full"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#quadrants.lang.simt.subgroup.exclusive_mul_full" title="Link to this definition">#</a></dt>
+<dd><p><code class="docutils literal notranslate"><span class="pre">exclusive_mul</span></code> over the entire subgroup.</p>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="quadrants.lang.simt.subgroup.exclusive_min_full">
+<span class="sig-prename descclassname"><span class="pre">quadrants.lang.simt.subgroup.</span></span><span class="sig-name descname"><span class="pre">exclusive_min_full</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">value</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">identity</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../../../../../_modules/quadrants/lang/simt/subgroup.html#exclusive_min_full"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#quadrants.lang.simt.subgroup.exclusive_min_full" title="Link to this definition">#</a></dt>
+<dd><p><code class="docutils literal notranslate"><span class="pre">exclusive_min</span></code> over the entire subgroup.  <code class="docutils literal notranslate"><span class="pre">identity</span></code> must be <code class="docutils literal notranslate"><span class="pre">&gt;=</span></code> every legal element (typically <code class="docutils literal notranslate"><span class="pre">+inf</span></code>).</p>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="quadrants.lang.simt.subgroup.exclusive_max_full">
+<span class="sig-prename descclassname"><span class="pre">quadrants.lang.simt.subgroup.</span></span><span class="sig-name descname"><span class="pre">exclusive_max_full</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">value</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">identity</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../../../../../_modules/quadrants/lang/simt/subgroup.html#exclusive_max_full"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#quadrants.lang.simt.subgroup.exclusive_max_full" title="Link to this definition">#</a></dt>
+<dd><p><code class="docutils literal notranslate"><span class="pre">exclusive_max</span></code> over the entire subgroup.  <code class="docutils literal notranslate"><span class="pre">identity</span></code> must be <code class="docutils literal notranslate"><span class="pre">&lt;=</span></code> every legal element (typically <code class="docutils literal notranslate"><span class="pre">-inf</span></code>).</p>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="quadrants.lang.simt.subgroup.exclusive_and_full">
+<span class="sig-prename descclassname"><span class="pre">quadrants.lang.simt.subgroup.</span></span><span class="sig-name descname"><span class="pre">exclusive_and_full</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">value</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../../../../../_modules/quadrants/lang/simt/subgroup.html#exclusive_and_full"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#quadrants.lang.simt.subgroup.exclusive_and_full" title="Link to this definition">#</a></dt>
+<dd><p><code class="docutils literal notranslate"><span class="pre">exclusive_and</span></code> over the entire subgroup.  Integer dtypes only.</p>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="quadrants.lang.simt.subgroup.exclusive_or_full">
+<span class="sig-prename descclassname"><span class="pre">quadrants.lang.simt.subgroup.</span></span><span class="sig-name descname"><span class="pre">exclusive_or_full</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">value</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../../../../../_modules/quadrants/lang/simt/subgroup.html#exclusive_or_full"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#quadrants.lang.simt.subgroup.exclusive_or_full" title="Link to this definition">#</a></dt>
+<dd><p><code class="docutils literal notranslate"><span class="pre">exclusive_or</span></code> over the entire subgroup.  Integer dtypes only.</p>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="quadrants.lang.simt.subgroup.exclusive_xor_full">
+<span class="sig-prename descclassname"><span class="pre">quadrants.lang.simt.subgroup.</span></span><span class="sig-name descname"><span class="pre">exclusive_xor_full</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">value</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../../../../../_modules/quadrants/lang/simt/subgroup.html#exclusive_xor_full"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#quadrants.lang.simt.subgroup.exclusive_xor_full" title="Link to this definition">#</a></dt>
+<dd><p><code class="docutils literal notranslate"><span class="pre">exclusive_xor</span></code> over the entire subgroup.  Integer dtypes only.</p>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="quadrants.lang.simt.subgroup.segmented_reduce_add_full">
+<span class="sig-prename descclassname"><span class="pre">quadrants.lang.simt.subgroup.</span></span><span class="sig-name descname"><span class="pre">segmented_reduce_add_full</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">value</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">head_flag</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../../../../../_modules/quadrants/lang/simt/subgroup.html#segmented_reduce_add_full"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#quadrants.lang.simt.subgroup.segmented_reduce_add_full" title="Link to this definition">#</a></dt>
+<dd><p><code class="docutils literal notranslate"><span class="pre">segmented_reduce_add</span></code> over the entire subgroup (<code class="docutils literal notranslate"><span class="pre">log2_size</span> <span class="pre">=</span> <span class="pre">log2_group_size()</span></code> — 5 on wave32 backends, 6 on AMDGPU).</p>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="quadrants.lang.simt.subgroup.segmented_reduce_min_full">
+<span class="sig-prename descclassname"><span class="pre">quadrants.lang.simt.subgroup.</span></span><span class="sig-name descname"><span class="pre">segmented_reduce_min_full</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">value</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">head_flag</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../../../../../_modules/quadrants/lang/simt/subgroup.html#segmented_reduce_min_full"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#quadrants.lang.simt.subgroup.segmented_reduce_min_full" title="Link to this definition">#</a></dt>
+<dd><p><code class="docutils literal notranslate"><span class="pre">segmented_reduce_min</span></code> over the entire subgroup.</p>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="quadrants.lang.simt.subgroup.segmented_reduce_max_full">
+<span class="sig-prename descclassname"><span class="pre">quadrants.lang.simt.subgroup.</span></span><span class="sig-name descname"><span class="pre">segmented_reduce_max_full</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">value</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">head_flag</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../../../../../_modules/quadrants/lang/simt/subgroup.html#segmented_reduce_max_full"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#quadrants.lang.simt.subgroup.segmented_reduce_max_full" title="Link to this definition">#</a></dt>
+<dd><p><code class="docutils literal notranslate"><span class="pre">segmented_reduce_max</span></code> over the entire subgroup.</p>
+</dd></dl>
+
 </section>
 </section>
 
@@ -938,6 +1214,9 @@ the calling kernel.</p>
 <li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#quadrants.lang.simt.subgroup.lanemask_gt"><code class="docutils literal notranslate"><span class="pre">lanemask_gt()</span></code></a></li>
 <li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#quadrants.lang.simt.subgroup.lanemask_ge"><code class="docutils literal notranslate"><span class="pre">lanemask_ge()</span></code></a></li>
 <li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#quadrants.lang.simt.subgroup.broadcast_first"><code class="docutils literal notranslate"><span class="pre">broadcast_first()</span></code></a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#quadrants.lang.simt.subgroup.group_size"><code class="docutils literal notranslate"><span class="pre">group_size()</span></code></a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#quadrants.lang.simt.subgroup.log2_group_size"><code class="docutils literal notranslate"><span class="pre">log2_group_size()</span></code></a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#quadrants.lang.simt.subgroup.invocation_id"><code class="docutils literal notranslate"><span class="pre">invocation_id()</span></code></a></li>
 <li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#quadrants.lang.simt.subgroup.reduce_add"><code class="docutils literal notranslate"><span class="pre">reduce_add()</span></code></a></li>
 <li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#quadrants.lang.simt.subgroup.reduce_all_add"><code class="docutils literal notranslate"><span class="pre">reduce_all_add()</span></code></a></li>
 <li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#quadrants.lang.simt.subgroup.reduce_min"><code class="docutils literal notranslate"><span class="pre">reduce_min()</span></code></a></li>
@@ -965,6 +1244,32 @@ the calling kernel.</p>
 <li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#quadrants.lang.simt.subgroup.shuffle_xor"><code class="docutils literal notranslate"><span class="pre">shuffle_xor()</span></code></a></li>
 <li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#quadrants.lang.simt.subgroup.shuffle_up"><code class="docutils literal notranslate"><span class="pre">shuffle_up()</span></code></a></li>
 <li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#quadrants.lang.simt.subgroup.shuffle_down"><code class="docutils literal notranslate"><span class="pre">shuffle_down()</span></code></a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#quadrants.lang.simt.subgroup.all_true_full"><code class="docutils literal notranslate"><span class="pre">all_true_full()</span></code></a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#quadrants.lang.simt.subgroup.any_true_full"><code class="docutils literal notranslate"><span class="pre">any_true_full()</span></code></a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#quadrants.lang.simt.subgroup.all_equal_full"><code class="docutils literal notranslate"><span class="pre">all_equal_full()</span></code></a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#quadrants.lang.simt.subgroup.reduce_add_full"><code class="docutils literal notranslate"><span class="pre">reduce_add_full()</span></code></a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#quadrants.lang.simt.subgroup.reduce_all_add_full"><code class="docutils literal notranslate"><span class="pre">reduce_all_add_full()</span></code></a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#quadrants.lang.simt.subgroup.reduce_min_full"><code class="docutils literal notranslate"><span class="pre">reduce_min_full()</span></code></a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#quadrants.lang.simt.subgroup.reduce_max_full"><code class="docutils literal notranslate"><span class="pre">reduce_max_full()</span></code></a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#quadrants.lang.simt.subgroup.reduce_all_min_full"><code class="docutils literal notranslate"><span class="pre">reduce_all_min_full()</span></code></a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#quadrants.lang.simt.subgroup.reduce_all_max_full"><code class="docutils literal notranslate"><span class="pre">reduce_all_max_full()</span></code></a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#quadrants.lang.simt.subgroup.inclusive_add_full"><code class="docutils literal notranslate"><span class="pre">inclusive_add_full()</span></code></a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#quadrants.lang.simt.subgroup.inclusive_mul_full"><code class="docutils literal notranslate"><span class="pre">inclusive_mul_full()</span></code></a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#quadrants.lang.simt.subgroup.inclusive_min_full"><code class="docutils literal notranslate"><span class="pre">inclusive_min_full()</span></code></a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#quadrants.lang.simt.subgroup.inclusive_max_full"><code class="docutils literal notranslate"><span class="pre">inclusive_max_full()</span></code></a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#quadrants.lang.simt.subgroup.inclusive_and_full"><code class="docutils literal notranslate"><span class="pre">inclusive_and_full()</span></code></a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#quadrants.lang.simt.subgroup.inclusive_or_full"><code class="docutils literal notranslate"><span class="pre">inclusive_or_full()</span></code></a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#quadrants.lang.simt.subgroup.inclusive_xor_full"><code class="docutils literal notranslate"><span class="pre">inclusive_xor_full()</span></code></a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#quadrants.lang.simt.subgroup.exclusive_add_full"><code class="docutils literal notranslate"><span class="pre">exclusive_add_full()</span></code></a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#quadrants.lang.simt.subgroup.exclusive_mul_full"><code class="docutils literal notranslate"><span class="pre">exclusive_mul_full()</span></code></a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#quadrants.lang.simt.subgroup.exclusive_min_full"><code class="docutils literal notranslate"><span class="pre">exclusive_min_full()</span></code></a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#quadrants.lang.simt.subgroup.exclusive_max_full"><code class="docutils literal notranslate"><span class="pre">exclusive_max_full()</span></code></a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#quadrants.lang.simt.subgroup.exclusive_and_full"><code class="docutils literal notranslate"><span class="pre">exclusive_and_full()</span></code></a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#quadrants.lang.simt.subgroup.exclusive_or_full"><code class="docutils literal notranslate"><span class="pre">exclusive_or_full()</span></code></a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#quadrants.lang.simt.subgroup.exclusive_xor_full"><code class="docutils literal notranslate"><span class="pre">exclusive_xor_full()</span></code></a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#quadrants.lang.simt.subgroup.segmented_reduce_add_full"><code class="docutils literal notranslate"><span class="pre">segmented_reduce_add_full()</span></code></a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#quadrants.lang.simt.subgroup.segmented_reduce_min_full"><code class="docutils literal notranslate"><span class="pre">segmented_reduce_min_full()</span></code></a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#quadrants.lang.simt.subgroup.segmented_reduce_max_full"><code class="docutils literal notranslate"><span class="pre">segmented_reduce_max_full()</span></code></a></li>
 </ul>
 </li>
 </ul>
