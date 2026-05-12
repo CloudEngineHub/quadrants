@@ -55,6 +55,32 @@ Functions
    quadrants.lang.simt.subgroup.shuffle_xor
    quadrants.lang.simt.subgroup.shuffle_up
    quadrants.lang.simt.subgroup.shuffle_down
+   quadrants.lang.simt.subgroup.all_true_full
+   quadrants.lang.simt.subgroup.any_true_full
+   quadrants.lang.simt.subgroup.all_equal_full
+   quadrants.lang.simt.subgroup.reduce_add_full
+   quadrants.lang.simt.subgroup.reduce_all_add_full
+   quadrants.lang.simt.subgroup.reduce_min_full
+   quadrants.lang.simt.subgroup.reduce_max_full
+   quadrants.lang.simt.subgroup.reduce_all_min_full
+   quadrants.lang.simt.subgroup.reduce_all_max_full
+   quadrants.lang.simt.subgroup.inclusive_add_full
+   quadrants.lang.simt.subgroup.inclusive_mul_full
+   quadrants.lang.simt.subgroup.inclusive_min_full
+   quadrants.lang.simt.subgroup.inclusive_max_full
+   quadrants.lang.simt.subgroup.inclusive_and_full
+   quadrants.lang.simt.subgroup.inclusive_or_full
+   quadrants.lang.simt.subgroup.inclusive_xor_full
+   quadrants.lang.simt.subgroup.exclusive_add_full
+   quadrants.lang.simt.subgroup.exclusive_mul_full
+   quadrants.lang.simt.subgroup.exclusive_min_full
+   quadrants.lang.simt.subgroup.exclusive_max_full
+   quadrants.lang.simt.subgroup.exclusive_and_full
+   quadrants.lang.simt.subgroup.exclusive_or_full
+   quadrants.lang.simt.subgroup.exclusive_xor_full
+   quadrants.lang.simt.subgroup.segmented_reduce_add_full
+   quadrants.lang.simt.subgroup.segmented_reduce_min_full
+   quadrants.lang.simt.subgroup.segmented_reduce_max_full
 
 
 Module Contents
@@ -312,10 +338,12 @@ Module Contents
 
    Caller contract:
 
-   * ``2**log2_size`` must not exceed 32: segments are scoped to a single 32-lane half of the subgroup so the
-     bit-mask bookkeeping stays in u32 internally.  On wave64 the high 32 lanes are handled correctly via a separate
-     half-local ballot — see ``_segment_head_distance`` for the wave64 details.  ``log2_size`` is a ``qd.template()``
-     compile-time constant; the body is fully unrolled into ``log2_size`` ``shuffle_up + add`` pairs.
+   * ``2**log2_size`` must not exceed the active subgroup size: up to 32 on CUDA / Metal / Vulkan-wave32, up to 64 on
+     AMDGPU (wave64).  ``log2_size`` is a ``qd.template()`` compile-time constant; the body is fully unrolled into
+     ``log2_size`` ``shuffle_up + add`` pairs.  ``_segment_head_distance`` selects between a u32-bitmask path
+     (``log2_size <= 5``, identical IR to the historical wave32-only impl) and a u64-bitmask path
+     (``log2_size == 6``, AMDGPU-only) at compile time, so CUDA / SPIR-V callers see zero overhead from the wave64
+     support.
    * ``head_flag`` is any integer scalar; the lowering tests ``head_flag != 0``, so non-binary truthy values work.
    * Same uniform-CF + all-lanes-active contract as the rest of ``qd.simt.subgroup``.
 
@@ -325,7 +353,7 @@ Module Contents
    Per-lane inclusive min that resets at every non-zero ``head_flag``, scoped to ``2**log2_size`` lanes.
 
    Lane ``i`` returns ``min(value[head_below..i+1])``; see `segmented_reduce_add` for the head-flag semantics, the
-   ``2**log2_size <= 32`` cap, and the truthy-predicate / uniform-CF contract.
+   ``2**log2_size <= group_size()`` cap, and the truthy-predicate / uniform-CF contract.
 
    Float NaN handling is implementation-defined: ``qd.min`` lowers to a backend-specific intrinsic (``fminnm`` on
    PTX, ``llvm.minnum`` on AMDGPU, ``OpFMin`` on SPIR-V) and these differ on whether NaN propagates or is suppressed.
@@ -336,8 +364,8 @@ Module Contents
 
    Per-lane inclusive max that resets at every non-zero ``head_flag``, scoped to ``2**log2_size`` lanes.
 
-   See `segmented_reduce_min` (with ``qd.max`` in place of ``qd.min``).  Same head-flag semantics, ``2**log2_size <=
-   32`` cap, truthy-predicate / uniform-CF contract, and NaN caveat.
+   See `segmented_reduce_min` (with ``qd.max`` in place of ``qd.min``).  Same head-flag semantics,
+   ``2**log2_size <= group_size()`` cap, truthy-predicate / uniform-CF contract, and NaN caveat.
 
 
 .. py:function:: inclusive_add(value, log2_size: template())
@@ -448,4 +476,134 @@ Module Contents
 .. py:function:: shuffle_up(value, offset)
 
 .. py:function:: shuffle_down(value, offset)
+
+.. py:function:: all_true_full(predicate)
+
+   ``all_true`` across the entire subgroup -- see ``all_true(..., log2_size=log2_group_size())``.
+
+
+.. py:function:: any_true_full(predicate)
+
+   ``any_true`` across the entire subgroup -- see ``any_true(..., log2_size=log2_group_size())``.
+
+
+.. py:function:: all_equal_full(value)
+
+   ``all_equal`` across the entire subgroup -- see ``all_equal(..., log2_size=log2_group_size())``.
+
+
+.. py:function:: reduce_add_full(value)
+
+   ``reduce_add`` over the entire subgroup -- lane 0 ends up with the sum across all ``group_size()`` lanes.
+
+
+.. py:function:: reduce_all_add_full(value)
+
+   ``reduce_all_add`` over the entire subgroup -- every lane ends up with the sum across all lanes.
+
+
+.. py:function:: reduce_min_full(value)
+
+   ``reduce_min`` over the entire subgroup -- lane 0 ends up with the min across all lanes.
+
+
+.. py:function:: reduce_max_full(value)
+
+   ``reduce_max`` over the entire subgroup -- lane 0 ends up with the max across all lanes.
+
+
+.. py:function:: reduce_all_min_full(value)
+
+   ``reduce_all_min`` over the entire subgroup -- every lane ends up with the min across all lanes.
+
+
+.. py:function:: reduce_all_max_full(value)
+
+   ``reduce_all_max`` over the entire subgroup -- every lane ends up with the max across all lanes.
+
+
+.. py:function:: inclusive_add_full(value)
+
+   ``inclusive_add`` over the entire subgroup.
+
+
+.. py:function:: inclusive_mul_full(value)
+
+   ``inclusive_mul`` over the entire subgroup.
+
+
+.. py:function:: inclusive_min_full(value)
+
+   ``inclusive_min`` over the entire subgroup.
+
+
+.. py:function:: inclusive_max_full(value)
+
+   ``inclusive_max`` over the entire subgroup.
+
+
+.. py:function:: inclusive_and_full(value)
+
+   ``inclusive_and`` over the entire subgroup.  Integer dtypes only.
+
+
+.. py:function:: inclusive_or_full(value)
+
+   ``inclusive_or`` over the entire subgroup.  Integer dtypes only.
+
+
+.. py:function:: inclusive_xor_full(value)
+
+   ``inclusive_xor`` over the entire subgroup.  Integer dtypes only.
+
+
+.. py:function:: exclusive_add_full(value)
+
+   ``exclusive_add`` over the entire subgroup.
+
+
+.. py:function:: exclusive_mul_full(value)
+
+   ``exclusive_mul`` over the entire subgroup.
+
+
+.. py:function:: exclusive_min_full(value, identity)
+
+   ``exclusive_min`` over the entire subgroup.  ``identity`` must be ``>=`` every legal element (typically ``+inf``).
+
+
+.. py:function:: exclusive_max_full(value, identity)
+
+   ``exclusive_max`` over the entire subgroup.  ``identity`` must be ``<=`` every legal element (typically ``-inf``).
+
+
+.. py:function:: exclusive_and_full(value)
+
+   ``exclusive_and`` over the entire subgroup.  Integer dtypes only.
+
+
+.. py:function:: exclusive_or_full(value)
+
+   ``exclusive_or`` over the entire subgroup.  Integer dtypes only.
+
+
+.. py:function:: exclusive_xor_full(value)
+
+   ``exclusive_xor`` over the entire subgroup.  Integer dtypes only.
+
+
+.. py:function:: segmented_reduce_add_full(value, head_flag)
+
+   ``segmented_reduce_add`` over the entire subgroup (``log2_size = log2_group_size()`` — 5 on wave32 backends, 6 on AMDGPU).
+
+
+.. py:function:: segmented_reduce_min_full(value, head_flag)
+
+   ``segmented_reduce_min`` over the entire subgroup.
+
+
+.. py:function:: segmented_reduce_max_full(value, head_flag)
+
+   ``segmented_reduce_max`` over the entire subgroup.
+
 
