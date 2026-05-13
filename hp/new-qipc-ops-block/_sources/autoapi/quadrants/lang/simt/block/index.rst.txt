@@ -182,18 +182,18 @@ Module Contents
    `exclusive_scan` for the argument contract.
 
 
-.. py:function:: exclusive_min(value, block_dim: template(), identity, dtype: template())
+.. py:function:: exclusive_min(value, block_dim: template(), dtype: template())
 
-   Block-scope exclusive prefix min.  Thread 0 holds ``identity``: the caller must supply a value that is ``>=``
-   every legal element of the input (typically ``+∞`` for floats, the dtype's maximum for integers).  See
-   `subgroup.exclusive_min` for why this op alone takes an explicit identity.
+   Block-scope exclusive prefix min.  After the call, thread ``i > 0`` holds ``min(v[0], ..., v[i-1])`` and
+   thread 0 holds the dtype-derived identity: ``+inf`` for real dtypes, ``np.iinfo(dtype).max`` for integer dtypes
+   (``UINT_MAX`` for unsigned, ``INT_MAX`` for signed).  See `exclusive_scan` for the underlying contract.
 
 
-.. py:function:: exclusive_max(value, block_dim: template(), identity, dtype: template())
+.. py:function:: exclusive_max(value, block_dim: template(), dtype: template())
 
-   Block-scope exclusive prefix max.  Thread 0 holds ``identity``: the caller must supply a value that is ``<=``
-   every legal element of the input (typically ``-∞`` for floats, the dtype's minimum for integers).  See
-   `exclusive_min`.
+   Block-scope exclusive prefix max.  After the call, thread ``i > 0`` holds ``max(v[0], ..., v[i-1])`` and
+   thread 0 holds the dtype-derived identity: ``-inf`` for real dtypes, ``np.iinfo(dtype).min`` for signed integer
+   dtypes, ``0`` for unsigned and bool.  See `exclusive_scan` for the underlying contract.
 
 
 .. py:function:: radix_rank_match_atomic_or(key, block_dim: template(), radix_bits: template(), bit_start: template(), num_bits: template(), bins, excl_prefix)
