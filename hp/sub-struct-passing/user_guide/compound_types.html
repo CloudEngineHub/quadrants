@@ -530,10 +530,7 @@ my_struct.b[37] 5
 </section>
 <section id="passing-nested-sub-structs-to-a-qd-func">
 <h3>Passing nested sub-structs to a <code class="docutils literal notranslate"><span class="pre">qd.func</span></code><a class="headerlink" href="#passing-nested-sub-structs-to-a-qd-func" title="Link to this heading">#</a></h3>
-<p>You can pass either a whole nested-dataclass argument or one of its
-sub-struct fields to a <code class="docutils literal notranslate"><span class="pre">qd.func</span></code>. The callee declares the sub-struct’s
-type as the parameter annotation; the caller writes the attribute access
-at the call site:</p>
+<p>You can pass either a whole nested-dataclass argument or one of its sub-struct fields to a <code class="docutils literal notranslate"><span class="pre">qd.func</span></code>. The callee declares the sub-struct’s type as the parameter annotation; the caller writes the attribute access at the call site:</p>
 <div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="nd">@dataclass</span>
 <span class="k">class</span><span class="w"> </span><span class="nc">Inner</span><span class="p">:</span>
     <span class="n">x</span><span class="p">:</span> <span class="n">qd</span><span class="o">.</span><span class="n">types</span><span class="o">.</span><span class="n">NDArray</span><span class="p">[</span><span class="n">qd</span><span class="o">.</span><span class="n">f32</span><span class="p">,</span> <span class="mi">1</span><span class="p">]</span>
@@ -554,8 +551,8 @@ at the call site:</p>
 
 <span class="nd">@qd</span><span class="o">.</span><span class="n">kernel</span>
 <span class="k">def</span><span class="w"> </span><span class="nf">k</span><span class="p">(</span><span class="n">s</span><span class="p">:</span> <span class="n">Outer</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
-    <span class="n">touch_outer</span><span class="p">(</span><span class="n">s</span><span class="p">)</span>              <span class="c1"># whole-struct call (already supported)</span>
-    <span class="n">touch_inner</span><span class="p">(</span><span class="n">s</span><span class="o">.</span><span class="n">inner</span><span class="p">)</span>        <span class="c1"># sub-struct call (also supported)</span>
+    <span class="n">touch_outer</span><span class="p">(</span><span class="n">s</span><span class="p">)</span>              <span class="c1"># whole-struct call</span>
+    <span class="n">touch_inner</span><span class="p">(</span><span class="n">s</span><span class="o">.</span><span class="n">inner</span><span class="p">)</span>        <span class="c1"># sub-struct call</span>
 </pre></div>
 </div>
 <p>Sub-struct passing supports:</p>
@@ -565,9 +562,7 @@ at the call site:</p>
 <li><p>call sites both directly inside <code class="docutils literal notranslate"><span class="pre">&#64;qd.kernel</span></code> bodies and inside other <code class="docutils literal notranslate"><span class="pre">&#64;qd.func</span></code> bodies</p></li>
 <li><p>pruning of the sub-struct’s leaf fields that the callee never reads</p></li>
 </ul>
-<p>Note: assigning a sub-struct to a local variable and then passing it
-(<code class="docutils literal notranslate"><span class="pre">t</span> <span class="pre">=</span> <span class="pre">s.inner;</span> <span class="pre">touch_inner(t)</span></code>) is <strong>not</strong> supported. Pass the attribute
-access directly at the call site.</p>
+<p>Note: assigning a sub-struct to a local variable and then passing it (<code class="docutils literal notranslate"><span class="pre">t</span> <span class="pre">=</span> <span class="pre">s.inner;</span> <span class="pre">touch_inner(t)</span></code>) is <strong>not</strong> supported. Pass the attribute access directly at the call site.</p>
 </section>
 </section>
 <section id="qd-data-oriented">

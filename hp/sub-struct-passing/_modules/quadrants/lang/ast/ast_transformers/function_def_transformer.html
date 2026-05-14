@@ -730,16 +730,15 @@
 
     <span class="nd">@staticmethod</span>
     <span class="k">def</span><span class="w"> </span><span class="nf">_bind_intermediate_dataclass_sentinels</span><span class="p">(</span><span class="n">ctx</span><span class="p">:</span> <span class="n">ASTTransformerFuncContext</span><span class="p">,</span> <span class="n">basename</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">dc_type</span><span class="p">:</span> <span class="n">Any</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
-<span class="w">        </span><span class="sd">&quot;&quot;&quot;Recursively bind every nested dataclass node ``__qd_&lt;basename&gt;__qd_&lt;field&gt;`` to its</span>
-<span class="sd">        dataclass type, so AST-flattened intermediate names (e.g. ``s.child`` rewritten to</span>
-<span class="sd">        ``Name(&quot;__qd_s__qd_child&quot;)`` by FlattenAttributeNameTransformer) resolve at lookup</span>
-<span class="sd">        time and call-site expansion in ``_expand_Call_dataclass_args`` triggers correctly.</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Recursively bind every nested dataclass node ``__qd_&lt;basename&gt;__qd_&lt;field&gt;`` to its dataclass type, so</span>
+<span class="sd">        AST-flattened intermediate names (e.g. ``s.child`` rewritten to ``Name(&quot;__qd_s__qd_child&quot;)`` by</span>
+<span class="sd">        FlattenAttributeNameTransformer) resolve at lookup time and call-site expansion in</span>
+<span class="sd">        ``_expand_Call_dataclass_args`` triggers correctly.</span>
 
-<span class="sd">        Mirrors what ``_transform_kernel_arg`` already does kernel-side via its recursion</span>
-<span class="sd">        (each recursive call&#39;s first action is ``ctx.create_variable(flat_name, field.type)``).</span>
-<span class="sd">        On the func side these intermediates are missing, because ``_transform_func_arg`` is</span>
-<span class="sd">        invoked once per *leaf* arg (``fuse_args`` has already expanded the dataclass into</span>
-<span class="sd">        leaf arg-metas by then).</span>
+<span class="sd">        Mirrors what ``_transform_kernel_arg`` already does kernel-side via its recursion (each recursive call&#39;s first</span>
+<span class="sd">        action is ``ctx.create_variable(flat_name, field.type)``). On the func side these intermediates are missing,</span>
+<span class="sd">        because ``_transform_func_arg`` is invoked once per *leaf* arg (``fuse_args`` has already expanded the dataclass</span>
+<span class="sd">        into leaf arg-metas by then).</span>
 <span class="sd">        &quot;&quot;&quot;</span>
         <span class="k">for</span> <span class="n">field</span> <span class="ow">in</span> <span class="n">dataclasses</span><span class="o">.</span><span class="n">fields</span><span class="p">(</span><span class="n">dc_type</span><span class="p">):</span>
             <span class="k">if</span> <span class="n">dataclasses</span><span class="o">.</span><span class="n">is_dataclass</span><span class="p">(</span><span class="n">field</span><span class="o">.</span><span class="n">type</span><span class="p">):</span>
