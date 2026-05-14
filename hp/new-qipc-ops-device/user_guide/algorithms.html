@@ -407,7 +407,7 @@
                   
   <section class="tex2jax_ignore mathjax_ignore" id="algorithms">
 <h1>Algorithms<a class="headerlink" href="#algorithms" title="Link to this heading">#</a></h1>
-<p>Device-wide algorithms - primitives that consume and produce whole arrays, executed as one or more kernel launches under the hood. They sit one tier above grid-scope synchronization: they <em>use</em> block, subgroup, and grid primitives internally and expose a high-level entry point that the user calls from host (Python) code, not from inside a kernel.</p>
+<p>Device-wide algorithms are primitives that consume and produce whole arrays, executed as one or more kernel launches under the hood. They sit one tier above block and subgroup primitives: they <em>use</em> <code class="docutils literal notranslate"><span class="pre">block.reduce</span></code>, <code class="docutils literal notranslate"><span class="pre">block.exclusive_scan</span></code>, <code class="docutils literal notranslate"><span class="pre">block.radix_rank_match_atomic_or</span></code>, and <code class="docutils literal notranslate"><span class="pre">subgroup</span></code> reductions internally, and rely on the kernel-launch boundary (plus <code class="docutils literal notranslate"><span class="pre">atomic_add</span></code> in a few places) for cross-block synchronization rather than any in-kernel grid-scope barrier. The user calls them from host (Python) code, not from inside a kernel.</p>
 <section id="what-s-available">
 <h2>What’s available<a class="headerlink" href="#what-s-available" title="Link to this heading">#</a></h2>
 <div class="pst-scrollable-table-container"><table class="table">
