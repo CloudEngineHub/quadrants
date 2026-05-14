@@ -166,20 +166,31 @@ class CallTransformer:
 
     @staticmethod
     def _expand_Call_dataclass_args(
-        ctx: ASTTransformerFuncContext, args: tuple[ast.stmt, ...]
+        ctx: ASTTransformerFuncContext,
+        args: tuple[ast.stmt, ...],
+        callee_annotations: tuple[Any, ...] | None = None,
     ) -> tuple[tuple[ast.stmt, ...], tuple[ast.stmt, ...]]:
         """
         We require that each node has a .ptr attribute added to it, that contains
-        the associated Python object
+        the associated Python object.
+
+        callee_annotations, when provided, supplies the declared parameter type for each positional
+        arg. If the callee declares a dataclass that is a structural subset of the caller-side
+        value, iteration is driven by the callee's fields so extra caller-side fields are dropped.
         """
         args_new = []
         added_args = []
         pruning = ctx.global_context.pruning
         func_id = ctx.func.func_id
-        for arg in args:
+        for i, arg in enumerate(args):
             val = arg.ptr
             if dataclasses.is_dataclass(val) and isinstance(val, type):
-                dataclass_type = val
+                callee_t = None
+                if callee_annotations is not None and i < len(callee_annotations):
+                    cand = callee_annotations[i]
+                    if dataclasses.is_dataclass(cand) and isinstance(cand, type):
+                        callee_t = cand
+                dataclass_type = callee_t if callee_t is not None else val
                 for field in dataclasses.fields(dataclass_type):
                     try:
                         child_name = create_flat_name(arg.id, field.name)
@@ -198,7 +209,9 @@ class CallTransformer:
                     )
                     if dataclasses.is_dataclass(field.type):
                         arg_node.ptr = field.type
-                        _added_args, _args_new = CallTransformer._expand_Call_dataclass_args(ctx, (arg_node,))
+                        _added_args, _args_new = CallTransformer._expand_Call_dataclass_args(
+                            ctx, (arg_node,), callee_annotations=(field.type,)
+                        )
                         args_new.extend(_args_new)
                         added_args.extend(_added_args)
                     else:
@@ -213,19 +226,29 @@ class CallTransformer:
         ctx: ASTTransformerFuncContext,
         kwargs: list[ast.keyword],
         used_args: set[str] | None,
+        callee_annotations_by_name: dict[str, Any] | None = None,
     ) -> tuple[list[ast.keyword], list[ast.keyword]]:
         """
         We require that each node has a .ptr attribute added to it, that contains
         the associated Python object
 
         used_args are the names of parameters that are used, and should not be pruned.
+
+        callee_annotations_by_name, when provided, maps callee parameter name to its declared type.
+        Drives field iteration so a caller-side dataclass that is a structural superset of the
+        callee's declared dataclass is silently narrowed to the callee's expected fields.
         """
         kwargs_new = []
         added_kwargs = []
         for i, kwarg in enumerate(kwargs):
             val = kwarg.ptr[kwarg.arg]
             if dataclasses.is_dataclass(val) and isinstance(val, type):
-                dataclass_type = val
+                callee_t = None
+                if callee_annotations_by_name is not None:
+                    cand = callee_annotations_by_name.get(kwarg.arg)
+                    if dataclasses.is_dataclass(cand) and isinstance(cand, type):
+                        callee_t = cand
+                dataclass_type = callee_t if callee_t is not None else val
                 for field in dataclasses.fields(dataclass_type):
                     src_name = create_flat_name(kwarg.value.id, field.name)
                     child_name = create_flat_name(kwarg.arg, field.name)
@@ -254,7 +277,10 @@ class CallTransformer:
                     if dataclasses.is_dataclass(field.type):
                         kwarg_node.ptr = {child_name: field.type}
                         _added_kwargs, _kwargs_new = CallTransformer._expand_Call_dataclass_kwargs(
-                            ctx, [kwarg_node], used_args
+                            ctx,
+                            [kwarg_node],
+                            used_args,
+                            callee_annotations_by_name={child_name: field.type},
                         )
                         kwargs_new.extend(_kwargs_new)
                         added_kwargs.extend(_added_kwargs)
@@ -290,8 +316,22 @@ class CallTransformer:
             called_func_id_ = func.wrapper.func_id  # type: ignore
             called_needed = pruning.used_vars_by_func_id[called_func_id_]
 
-        added_args, node_args = CallTransformer._expand_Call_dataclass_args(ctx, node.args)
-        added_keywords, node_keywords = CallTransformer._expand_Call_dataclass_kwargs(ctx, node.keywords, called_needed)
+        callee_pos_annotations: tuple[Any, ...] | None = None
+        callee_kw_annotations: dict[str, Any] | None = None
+        if is_func_base_wrapper:
+            callee_arg_metas = getattr(func.wrapper, "arg_metas", None)
+            if callee_arg_metas is not None:
+                skip = 1 if func_type is BoundQuadrantsCallable else 0
+                visible_metas = callee_arg_metas[skip:]
+                callee_pos_annotations = tuple(m.annotation for m in visible_metas)
+                callee_kw_annotations = {m.name: m.annotation for m in visible_metas}
+
+        added_args, node_args = CallTransformer._expand_Call_dataclass_args(
+            ctx, node.args, callee_annotations=callee_pos_annotations
+        )
+        added_keywords, node_keywords = CallTransformer._expand_Call_dataclass_kwargs(
+            ctx, node.keywords, called_needed, callee_annotations_by_name=callee_kw_annotations
+        )
 
         # Create variables for the now-expanded dataclass members.
         # We don't want to include these now-expanded dataclass members in

@@ -2511,3 +2511,65 @@ def test_pruning_iterate_function_no_iterate() -> None:
     assert my_struct._f1[0, 0] == 101
     assert my_struct._f2[0, 0] == 102
     assert kernel_args_count_by_type[KernelBatchedArgType.QD_ARRAY] == 3
+
+
+@test_utils.test()
+def test_func_accepts_dataclass_with_extra_fields() -> None:
+    @dataclass
+    class FooSmall:
+        pos: qd.types.NDArray[qd.i32, 1]
+
+    @dataclass
+    class FooBig:
+        pos: qd.types.NDArray[qd.i32, 1]
+        extra: qd.types.NDArray[qd.i32, 1]
+
+    @qd.func
+    def first(foo: FooSmall) -> qd.i32:
+        return foo.pos[0]
+
+    @qd.kernel
+    def k_small(
+        foo: FooSmall,
+        out: qd.types.NDArray[qd.i32, 1],
+    ) -> None:
+        out[0] = first(foo)
+
+    @qd.kernel
+    def k_big(
+        foo: FooBig,
+        out: qd.types.NDArray[qd.i32, 1],
+    ) -> None:
+        out[0] = first(foo)
+
+    @qd.kernel
+    def k_big_kwargs(
+        foo: FooBig,
+        out: qd.types.NDArray[qd.i32, 1],
+    ) -> None:
+        out[0] = first(foo=foo)
+
+    pos_s = qd.ndarray(dtype=qd.i32, shape=(4,))
+    pos_b = qd.ndarray(dtype=qd.i32, shape=(4,))
+    extra = qd.ndarray(dtype=qd.i32, shape=(4,))
+    out = qd.ndarray(dtype=qd.i32, shape=(1,))
+
+    @qd.kernel
+    def fill(t: qd.types.NDArray[qd.i32, 1], base: qd.i32) -> None:
+        for i in range(4):
+            t[i] = base + i
+
+    fill(pos_s, 10)
+    fill(pos_b, 100)
+    fill(extra, 0)
+
+    k_small(FooSmall(pos=pos_s), out)
+    assert out[0] == 10
+
+    out[0] = 0
+    k_big(FooBig(pos=pos_b, extra=extra), out)
+    assert out[0] == 100
+
+    out[0] = 0
+    k_big_kwargs(FooBig(pos=pos_b, extra=extra), out)
+    assert out[0] == 100
