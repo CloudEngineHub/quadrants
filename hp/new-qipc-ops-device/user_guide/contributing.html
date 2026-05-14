@@ -505,23 +505,23 @@
 <h3>Pre-commit / linters (<code class="docutils literal notranslate"><span class="pre">linters.yml</span></code>)<a class="headerlink" href="#pre-commit-linters-linters-yml" title="Link to this heading">#</a></h3>
 <p>Runs <code class="docutils literal notranslate"><span class="pre">pre-commit</span> <span class="pre">run</span> <span class="pre">-a</span></code> which enforces:</p>
 <ul class="simple">
-<li><p><strong>black</strong> - Python formatting with a 120-character line limit</p></li>
-<li><p><strong>clang-format</strong> - C/C++ formatting</p></li>
-<li><p><strong>trailing-whitespace</strong> and <strong>end-of-file-fixer</strong> - whitespace hygiene</p></li>
-<li><p><strong>ruff</strong> - Python linting</p></li>
-<li><p><strong>pylint</strong> - additional Python linting (scoped to <code class="docutils literal notranslate"><span class="pre">python/quadrants/</span></code>)</p></li>
+<li><p><strong>black</strong> — Python formatting with a 120-character line limit</p></li>
+<li><p><strong>clang-format</strong> — C/C++ formatting</p></li>
+<li><p><strong>trailing-whitespace</strong> and <strong>end-of-file-fixer</strong> — whitespace hygiene</p></li>
+<li><p><strong>ruff</strong> — Python linting</p></li>
+<li><p><strong>pylint</strong> — additional Python linting (scoped to <code class="docutils literal notranslate"><span class="pre">python/quadrants/</span></code>)</p></li>
 </ul>
 <p>You can run these locally with <code class="docutils literal notranslate"><span class="pre">pre-commit</span> <span class="pre">run</span> <span class="pre">-a</span></code> after <code class="docutils literal notranslate"><span class="pre">pip</span> <span class="pre">install</span> <span class="pre">pre-commit</span></code>.</p>
 </section>
 <section id="other-ci-jobs">
 <h3>Other CI jobs<a class="headerlink" href="#other-ci-jobs" title="Link to this heading">#</a></h3>
 <ul class="simple">
-<li><p><strong>pyright</strong> (<code class="docutils literal notranslate"><span class="pre">pyright_linter.yml</span></code>) - Python type checking</p></li>
-<li><p><strong>clang-tidy</strong> (<code class="docutils literal notranslate"><span class="pre">clang_tidy.yml</span></code>) - C++ static analysis</p></li>
-<li><p><strong>check-markup-links</strong> (<code class="docutils literal notranslate"><span class="pre">check_markup_links.yml</span></code>) - validates links in documentation</p></li>
-<li><p><strong>linux / macosx / win</strong> - build and test on each platform</p></li>
-<li><p><strong>test-gpu</strong> - GPU-specific tests</p></li>
-<li><p><strong>coverage report</strong> - a one-line diff coverage summary is posted as a PR comment on each push, linking to the full annotated report. This includes kernel-level branch coverage. See <a class="reference internal" href="kernel_coverage.html"><span class="std std-doc">Kernel code coverage</span></a> for details.</p></li>
+<li><p><strong>pyright</strong> (<code class="docutils literal notranslate"><span class="pre">pyright_linter.yml</span></code>) — Python type checking</p></li>
+<li><p><strong>clang-tidy</strong> (<code class="docutils literal notranslate"><span class="pre">clang_tidy.yml</span></code>) — C++ static analysis</p></li>
+<li><p><strong>check-markup-links</strong> (<code class="docutils literal notranslate"><span class="pre">check_markup_links.yml</span></code>) — validates links in documentation</p></li>
+<li><p><strong>linux / macosx / win</strong> — build and test on each platform</p></li>
+<li><p><strong>test-gpu</strong> — GPU-specific tests</p></li>
+<li><p><strong>coverage report</strong> — a one-line diff coverage summary is posted as a PR comment on each push, linking to the full annotated report. This includes kernel-level branch coverage. See <a class="reference internal" href="kernel_coverage.html"><span class="std std-doc">Kernel code coverage</span></a> for details.</p></li>
 </ul>
 </section>
 <section id="line-wrapping-check-check-wrapping-yml">
@@ -543,7 +543,7 @@
 </section>
 <section id="feature-factorization-check-check-feature-factorization-yml">
 <h3>Feature factorization check (<code class="docutils literal notranslate"><span class="pre">check_feature_factorization.yml</span></code>)<a class="headerlink" href="#feature-factorization-check-check-feature-factorization-yml" title="Link to this heading">#</a></h3>
-<p>Uses an AI agent to flag feature-specific code being piled into heavily-tracked core files when it could live in its own feature-specific file instead. The concern is not that the new code is in the “wrong” place semantically - it is usually topically related to the host file - but that the host file is already a hot, central, frequently-edited file, and adding more self-contained feature code to it makes review, merge conflicts, and future churn worse. The fix is almost always to extract the feature-specific block (top-level function, class, large block, or even a cluster of new methods on an existing class) into its own module, with the host file delegating to it via a narrow interface.</p>
+<p>Uses an AI agent to flag feature-specific code being piled into heavily-tracked core files when it could live in its own feature-specific file instead. The concern is not that the new code is in the “wrong” place semantically — it is usually topically related to the host file — but that the host file is already a hot, central, frequently-edited file, and adding more self-contained feature code to it makes review, merge conflicts, and future churn worse. The fix is almost always to extract the feature-specific block (top-level function, class, large block, or even a cluster of new methods on an existing class) into its own module, with the host file delegating to it via a narrow interface.</p>
 <p>The agent reports up to 5 violations, each annotated with the host file’s hotness numbers (commits / authors / size). This check is delayed by 30 minutes, to avoid running repeatedly if multiple commits pushed with a short delay between each.</p>
 </section>
 <section id="pr-change-report-pr-change-report-yml">

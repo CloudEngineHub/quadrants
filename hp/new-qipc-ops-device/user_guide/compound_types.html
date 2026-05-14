@@ -412,9 +412,9 @@
 <p>It can be useful to combine multiple ndarrays or fields together into a single struct-like object that can be passed into kernels, and into &#64;qd.func’s.</p>
 <p>The following compound types are available:</p>
 <ul class="simple">
-<li><p><code class="docutils literal notranslate"><span class="pre">dataclasses.dataclass</span></code> - <strong>recommended</strong></p></li>
-<li><p><code class="docutils literal notranslate"><span class="pre">&#64;qd.data_oriented</span></code> - for classes that define <code class="docutils literal notranslate"><span class="pre">&#64;qd.kernel</span></code> methods, cannot contain ndarrays</p></li>
-<li><p><code class="docutils literal notranslate"><span class="pre">&#64;qd.struct</span></code> / <code class="docutils literal notranslate"><span class="pre">&#64;qd.dataclass</span></code> - legacy, field-only</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">dataclasses.dataclass</span></code> — <strong>recommended</strong></p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">&#64;qd.data_oriented</span></code> — for classes that define <code class="docutils literal notranslate"><span class="pre">&#64;qd.kernel</span></code> methods, cannot contain ndarrays</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">&#64;qd.struct</span></code> / <code class="docutils literal notranslate"><span class="pre">&#64;qd.dataclass</span></code> — legacy, field-only</p></li>
 </ul>
 <div class="pst-scrollable-table-container"><table class="table">
 <thead>
@@ -458,7 +458,7 @@
 </section>
 <section id="recommendation">
 <h2>Recommendation<a class="headerlink" href="#recommendation" title="Link to this heading">#</a></h2>
-<p><strong>Use <code class="docutils literal notranslate"><span class="pre">dataclasses.dataclass</span></code> for new code.</strong> It supports both fields and ndarrays, can be nested, and uses standard Python - no Quadrants-specific decorator needed.</p>
+<p><strong>Use <code class="docutils literal notranslate"><span class="pre">dataclasses.dataclass</span></code> for new code.</strong> It supports both fields and ndarrays, can be nested, and uses standard Python — no Quadrants-specific decorator needed.</p>
 <p>The other compound types exist for historical reasons.</p>
 </section>
 <section id="dataclasses-dataclass">

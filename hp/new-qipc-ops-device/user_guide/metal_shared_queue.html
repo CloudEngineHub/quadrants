@@ -424,14 +424,14 @@
 </div>
 <p>Two flags work together:</p>
 <ul class="simple">
-<li><p><code class="docutils literal notranslate"><span class="pre">external_metal_command_queue</span></code> - the raw <code class="docutils literal notranslate"><span class="pre">MTLCommandQueue*</span></code> pointer. Quadrants dispatches all GPU work on this queue instead of creating its own.</p></li>
-<li><p><code class="docutils literal notranslate"><span class="pre">external_metal_command_queue_is_torch_queue</span></code> - set to <code class="docutils literal notranslate"><span class="pre">True</span></code> when the queue comes from PyTorch MPS. This tells Quadrants that PyTorch shares the same queue, so the explicit interop syncs can be safely skipped. Defaults to <code class="docutils literal notranslate"><span class="pre">False</span></code>, which preserves the sync calls even when an external queue is provided (useful when the external queue belongs to a non-PyTorch framework).</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">external_metal_command_queue</span></code> — the raw <code class="docutils literal notranslate"><span class="pre">MTLCommandQueue*</span></code> pointer. Quadrants dispatches all GPU work on this queue instead of creating its own.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">external_metal_command_queue_is_torch_queue</span></code> — set to <code class="docutils literal notranslate"><span class="pre">True</span></code> when the queue comes from PyTorch MPS. This tells Quadrants that PyTorch shares the same queue, so the explicit interop syncs can be safely skipped. Defaults to <code class="docutils literal notranslate"><span class="pre">False</span></code>, which preserves the sync calls even when an external queue is provided (useful when the external queue belongs to a non-PyTorch framework).</p></li>
 </ul>
 <p>Once initialised with both flags:</p>
 <ul class="simple">
 <li><p><code class="docutils literal notranslate"><span class="pre">to_torch(copy=False)</span></code> no longer calls <code class="docutils literal notranslate"><span class="pre">qd.sync()</span></code> internally.</p></li>
 <li><p><code class="docutils literal notranslate"><span class="pre">to_torch(copy=True)</span></code> no longer calls <code class="docutils literal notranslate"><span class="pre">torch.mps.synchronize()</span></code> after the copy.</p></li>
-<li><p>GPU work submitted by Quadrants and by PyTorch executes in the order it was committed - no manual sync needed between the two.</p></li>
+<li><p>GPU work submitted by Quadrants and by PyTorch executes in the order it was committed — no manual sync needed between the two.</p></li>
 </ul>
 <p>You can still call <code class="docutils literal notranslate"><span class="pre">qd.sync()</span></code> when you need to read results back to the CPU (e.g. <code class="docutils literal notranslate"><span class="pre">to_numpy()</span></code>); what changes is that you no longer need <em>both</em> <code class="docutils literal notranslate"><span class="pre">qd.sync()</span></code> and <code class="docutils literal notranslate"><span class="pre">torch.mps.synchronize()</span></code> at every framework boundary.</p>
 </section>
@@ -484,7 +484,7 @@
 </tr>
 <tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">f.to_numpy()</span></code></p></td>
 <td><p><code class="docutils literal notranslate"><span class="pre">qd.sync()</span></code> (always needed for CPU readback)</p></td>
-<td><p><code class="docutils literal notranslate"><span class="pre">qd.sync()</span></code> (still needed - the kernel-copy path is Quadrants-internal, not routed through MPS)</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">qd.sync()</span></code> (still needed — the kernel-copy path is Quadrants-internal, not routed through MPS)</p></td>
 </tr>
 </tbody>
 </table>

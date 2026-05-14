@@ -435,7 +435,7 @@
 </tbody>
 </table>
 </div>
-<p>On backends without native stream support, stream operations are no-ops and for loops run serially. Code using streams is portable across all backends - it will run without modifications, but serially.</p>
+<p>On backends without native stream support, stream operations are no-ops and for loops run serially. Code using streams is portable across all backends — it will run without modifications, but serially.</p>
 </section>
 <section id="stream-parallelism">
 <h2>Stream parallelism<a class="headerlink" href="#stream-parallelism" title="Link to this heading">#</a></h2>
@@ -464,7 +464,7 @@
         <span class="n">c</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="o">=</span> <span class="n">a</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="o">+</span> <span class="n">b</span><span class="p">[</span><span class="n">i</span><span class="p">]</span>
 
 <span class="n">compute_ab</span><span class="p">()</span>  <span class="c1"># the two stream_parallel blocks run concurrently</span>
-<span class="n">combine</span><span class="p">()</span>     <span class="c1"># runs after compute_ab() returns - a[] and b[] are ready</span>
+<span class="n">combine</span><span class="p">()</span>     <span class="c1"># runs after compute_ab() returns — a[] and b[] are ready</span>
 </pre></div>
 </div>
 <p>Consecutive <code class="docutils literal notranslate"><span class="pre">with</span> <span class="pre">qd.stream_parallel():</span></code> blocks run concurrently. Multiple for loops within a single block share a stream and run serially on it. All streams are synchronized before the kernel returns.</p>
@@ -478,10 +478,10 @@
 </section>
 <section id="explicit-streams">
 <h2>Explicit streams<a class="headerlink" href="#explicit-streams" title="Link to this heading">#</a></h2>
-<p>For cases that require manual control - such as launching separate kernels on different streams or interoperating with PyTorch - you can create and manage streams directly.</p>
+<p>For cases that require manual control — such as launching separate kernels on different streams or interoperating with PyTorch — you can create and manage streams directly.</p>
 <section id="creating-and-using-streams">
 <h3>Creating and using streams<a class="headerlink" href="#creating-and-using-streams" title="Link to this heading">#</a></h3>
-<p>Any <code class="docutils literal notranslate"><span class="pre">&#64;qd.kernel</span></code> function accepts a special <code class="docutils literal notranslate"><span class="pre">qd_stream</span></code> keyword argument - you do not need to declare it in the kernel signature. The <code class="docutils literal notranslate"><span class="pre">&#64;qd.kernel</span></code> decorator handles it automatically.</p>
+<p>Any <code class="docutils literal notranslate"><span class="pre">&#64;qd.kernel</span></code> function accepts a special <code class="docutils literal notranslate"><span class="pre">qd_stream</span></code> keyword argument — you do not need to declare it in the kernel signature. The <code class="docutils literal notranslate"><span class="pre">&#64;qd.kernel</span></code> decorator handles it automatically.</p>
 <div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="nd">@qd</span><span class="o">.</span><span class="n">kernel</span>
 <span class="k">def</span><span class="w"> </span><span class="nf">my_kernel</span><span class="p">():</span>
     <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">N</span><span class="p">):</span>
@@ -524,7 +524,7 @@
 <span class="n">e</span><span class="o">.</span><span class="n">record</span><span class="p">(</span><span class="n">s1</span><span class="p">)</span>       <span class="c1"># record when s1 finishes produce()</span>
 <span class="n">e</span><span class="o">.</span><span class="n">wait</span><span class="p">(</span><span class="n">qd_stream</span><span class="o">=</span><span class="n">s2</span><span class="p">)</span>  <span class="c1"># s2 waits for that event before proceeding</span>
 
-<span class="n">consume</span><span class="p">(</span><span class="n">qd_stream</span><span class="o">=</span><span class="n">s2</span><span class="p">)</span>  <span class="c1"># safe to read a[] - produce() is guaranteed complete</span>
+<span class="n">consume</span><span class="p">(</span><span class="n">qd_stream</span><span class="o">=</span><span class="n">s2</span><span class="p">)</span>  <span class="c1"># safe to read a[] — produce() is guaranteed complete</span>
 <span class="n">s2</span><span class="o">.</span><span class="n">synchronize</span><span class="p">()</span>
 
 <span class="n">e</span><span class="o">.</span><span class="n">destroy</span><span class="p">()</span>
@@ -539,7 +539,7 @@
 <p>Streams and events support <code class="docutils literal notranslate"><span class="pre">with</span></code> blocks for automatic cleanup:</p>
 <div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="k">with</span> <span class="n">qd</span><span class="o">.</span><span class="n">create_stream</span><span class="p">()</span> <span class="k">as</span> <span class="n">s</span><span class="p">:</span>
     <span class="n">some_func1</span><span class="p">(</span><span class="n">qd_stream</span><span class="o">=</span><span class="n">s</span><span class="p">)</span>
-<span class="c1"># s.destroy() called automatically - waits for in-flight work</span>
+<span class="c1"># s.destroy() called automatically — waits for in-flight work</span>
 </pre></div>
 </div>
 </section>

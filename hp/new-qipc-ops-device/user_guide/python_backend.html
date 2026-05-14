@@ -438,12 +438,12 @@
 <section id="supported-features">
 <h2>Supported features<a class="headerlink" href="#supported-features" title="Link to this heading">#</a></h2>
 <ul class="simple">
-<li><p><code class="docutils literal notranslate"><span class="pre">&#64;qd.kernel</span></code> and <code class="docutils literal notranslate"><span class="pre">&#64;qd.func</span></code> - executed directly as Python functions</p></li>
-<li><p><code class="docutils literal notranslate"><span class="pre">qd.field()</span></code> - scalar, vector, and matrix fields</p></li>
-<li><p><code class="docutils literal notranslate"><span class="pre">qd.ndarray()</span></code> - scalar, vector, and matrix ndarrays</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">&#64;qd.kernel</span></code> and <code class="docutils literal notranslate"><span class="pre">&#64;qd.func</span></code> — executed directly as Python functions</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">qd.field()</span></code> — scalar, vector, and matrix fields</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">qd.ndarray()</span></code> — scalar, vector, and matrix ndarrays</p></li>
 <li><p>Struct fields (<code class="docutils literal notranslate"><span class="pre">qd.types.struct</span></code>)</p></li>
 <li><p>Atomics (<code class="docutils literal notranslate"><span class="pre">atomic_add</span></code>, <code class="docutils literal notranslate"><span class="pre">atomic_sub</span></code>, <code class="docutils literal notranslate"><span class="pre">atomic_mul</span></code>, <code class="docutils literal notranslate"><span class="pre">atomic_min</span></code>, <code class="docutils literal notranslate"><span class="pre">atomic_max</span></code>, <code class="docutils literal notranslate"><span class="pre">atomic_and</span></code>, <code class="docutils literal notranslate"><span class="pre">atomic_or</span></code>, <code class="docutils literal notranslate"><span class="pre">atomic_xor</span></code>)</p></li>
-<li><p><code class="docutils literal notranslate"><span class="pre">qd.grouped(field)</span></code> - struct-for iteration over field indices</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">qd.grouped(field)</span></code> — struct-for iteration over field indices</p></li>
 <li><p><code class="docutils literal notranslate"><span class="pre">qd.ndrange()</span></code></p></li>
 <li><p><code class="docutils literal notranslate"><span class="pre">qd.static()</span></code></p></li>
 <li><p><code class="docutils literal notranslate"><span class="pre">qd.cast()</span></code></p></li>
@@ -466,8 +466,8 @@
 <h3>Batch shape vs real shape<a class="headerlink" href="#batch-shape-vs-real-shape" title="Link to this heading">#</a></h3>
 <p>The <code class="docutils literal notranslate"><span class="pre">.shape</span></code> property returns the <strong>batch dimensions only</strong>, consistent with how Quadrants kernels index fields. For example, a <code class="docutils literal notranslate"><span class="pre">vec3</span></code> field of shape <code class="docutils literal notranslate"><span class="pre">(10,)</span></code> reports <code class="docutils literal notranslate"><span class="pre">.shape</span> <span class="pre">==</span> <span class="pre">(10,)</span></code> even though the underlying tensor has size <code class="docutils literal notranslate"><span class="pre">(10,</span> <span class="pre">3)</span></code>. Use <code class="docutils literal notranslate"><span class="pre">.size()</span></code> to get the full torch shape.</p>
 <div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">f</span> <span class="o">=</span> <span class="n">qd</span><span class="o">.</span><span class="n">field</span><span class="p">(</span><span class="n">qd</span><span class="o">.</span><span class="n">math</span><span class="o">.</span><span class="n">vec3</span><span class="p">,</span> <span class="n">shape</span><span class="o">=</span><span class="p">(</span><span class="mi">10</span><span class="p">,))</span>
-<span class="n">f</span><span class="o">.</span><span class="n">shape</span>     <span class="c1"># torch.Size([10])    - batch dims, what kernels see</span>
-<span class="n">f</span><span class="o">.</span><span class="n">size</span><span class="p">()</span>    <span class="c1"># torch.Size([10, 3]) - real tensor shape</span>
+<span class="n">f</span><span class="o">.</span><span class="n">shape</span>     <span class="c1"># torch.Size([10])    — batch dims, what kernels see</span>
+<span class="n">f</span><span class="o">.</span><span class="n">size</span><span class="p">()</span>    <span class="c1"># torch.Size([10, 3]) — real tensor shape</span>
 </pre></div>
 </div>
 </section>

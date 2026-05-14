@@ -535,7 +535,7 @@
 <h3>Control flow restrictions<a class="headerlink" href="#control-flow-restrictions" title="Link to this heading">#</a></h3>
 <ul class="simple">
 <li><p><strong><code class="docutils literal notranslate"><span class="pre">return</span></code> inside non-static <code class="docutils literal notranslate"><span class="pre">if</span></code>/<code class="docutils literal notranslate"><span class="pre">for</span></code></strong>: not allowed in <code class="docutils literal notranslate"><span class="pre">&#64;qd.func</span></code> (allowed in <code class="docutils literal notranslate"><span class="pre">&#64;qd.real_func</span></code>)</p></li>
-<li><p><strong><code class="docutils literal notranslate"><span class="pre">break</span></code> in the outermost (parallelized) for loop</strong>: not allowed - the outermost loop is mapped to GPU threads</p></li>
+<li><p><strong><code class="docutils literal notranslate"><span class="pre">break</span></code> in the outermost (parallelized) for loop</strong>: not allowed — the outermost loop is mapped to GPU threads</p></li>
 <li><p><strong><code class="docutils literal notranslate"><span class="pre">break</span></code>/<code class="docutils literal notranslate"><span class="pre">continue</span></code> in a static <code class="docutils literal notranslate"><span class="pre">for</span></code> inside a non-static <code class="docutils literal notranslate"><span class="pre">if</span></code></strong>: not allowed</p></li>
 <li><p><strong>Reassigning kernel arguments</strong>: kernel parameters are immutable; create a local copy instead</p></li>
 </ul>

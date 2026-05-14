@@ -425,7 +425,7 @@ A field member is a Python Expr wrapping a C++ FieldExpression.</p>
 <p>Mirrors <code class="xref py py-attr docutils literal notranslate"><span class="pre">Ndarray.layout</span></code>: returns the same value the caller passed to <code class="docutils literal notranslate"><span class="pre">qd.tensor(...,</span> <span class="pre">layout=...)</span></code>
 (or <code class="docutils literal notranslate"><span class="pre">None</span></code> if that kwarg was omitted / was the identity permutation). Lets downstream code introspect the
 physical layout without having to know which backend produced the tensor.</p>
-<p>Fields constructed directly via <code class="docutils literal notranslate"><span class="pre">qd.field(...,</span> <span class="pre">order=...)</span></code> also report their layout here - the <code class="docutils literal notranslate"><span class="pre">order=</span></code>
+<p>Fields constructed directly via <code class="docutils literal notranslate"><span class="pre">qd.field(...,</span> <span class="pre">order=...)</span></code> also report their layout here — the <code class="docutils literal notranslate"><span class="pre">order=</span></code>
 axis-string is translated into an integer permutation and stashed on the same <code class="docutils literal notranslate"><span class="pre">_qd_layout</span></code> attribute that
 layout-tagged ndarrays use.</p>
 </dd></dl>

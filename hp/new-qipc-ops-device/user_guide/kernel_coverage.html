@@ -407,7 +407,7 @@
                   
   <section class="tex2jax_ignore mathjax_ignore" id="kernel-code-coverage">
 <h1>Kernel code coverage<a class="headerlink" href="#kernel-code-coverage" title="Link to this heading">#</a></h1>
-<p>Standard Python coverage tools only measure host-side code. Quadrants kernel coverage goes further - it tracks which lines actually execute <em>inside</em> compiled kernels on the device (CPU or GPU), including which branches of <code class="docutils literal notranslate"><span class="pre">if</span></code>/<code class="docutils literal notranslate"><span class="pre">else</span></code> blocks are taken at runtime.</p>
+<p>Standard Python coverage tools only measure host-side code. Quadrants kernel coverage goes further — it tracks which lines actually execute <em>inside</em> compiled kernels on the device (CPU or GPU), including which branches of <code class="docutils literal notranslate"><span class="pre">if</span></code>/<code class="docutils literal notranslate"><span class="pre">else</span></code> blocks are taken at runtime.</p>
 <p>The coverage data is written in the standard <code class="docutils literal notranslate"><span class="pre">coverage.py</span></code> format, so it works with <code class="docutils literal notranslate"><span class="pre">coverage</span> <span class="pre">report</span></code>, <code class="docutils literal notranslate"><span class="pre">pytest-cov</span></code>, <code class="docutils literal notranslate"><span class="pre">diff-cover</span></code>, and IDE coverage viewers out of the box.</p>
 <section id="prerequisites">
 <h2>Prerequisites<a class="headerlink" href="#prerequisites" title="Link to this heading">#</a></h2>
@@ -420,7 +420,7 @@
 <h2>Enabling kernel coverage<a class="headerlink" href="#enabling-kernel-coverage" title="Link to this heading">#</a></h2>
 <section id="automatic-with-pytest-cov">
 <h3>Automatic with pytest-cov<a class="headerlink" href="#automatic-with-pytest-cov" title="Link to this heading">#</a></h3>
-<p>If you use <code class="docutils literal notranslate"><span class="pre">pytest-cov</span></code>, kernel coverage is enabled automatically - no configuration needed. Quadrants ships a pytest plugin that detects <code class="docutils literal notranslate"><span class="pre">--cov</span></code> and sets <code class="docutils literal notranslate"><span class="pre">QD_KERNEL_COVERAGE=1</span></code> for you. Just run:</p>
+<p>If you use <code class="docutils literal notranslate"><span class="pre">pytest-cov</span></code>, kernel coverage is enabled automatically — no configuration needed. Quadrants ships a pytest plugin that detects <code class="docutils literal notranslate"><span class="pre">--cov</span></code> and sets <code class="docutils literal notranslate"><span class="pre">QD_KERNEL_COVERAGE=1</span></code> for you. Just run:</p>
 <div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>pytest<span class="w"> </span>--cov<span class="o">=</span>my_package<span class="w"> </span>--cov-branch<span class="w"> </span>tests/
 </pre></div>
 </div>
@@ -435,7 +435,7 @@
 <div class="highlight-bash notranslate"><div class="highlight"><pre><span></span><span class="nv">QD_KERNEL_COVERAGE</span><span class="o">=</span><span class="m">1</span><span class="w"> </span>python<span class="w"> </span>my_simulation.py
 </pre></div>
 </div>
-<p>This works with any script that uses quadrants kernels - no changes to your code are needed.</p>
+<p>This works with any script that uses quadrants kernels — no changes to your code are needed.</p>
 <p>When the process exits, quadrants writes one or more <code class="docutils literal notranslate"><span class="pre">_qd_kcov.&lt;pid&gt;</span></code> files in the working directory containing the collected coverage data.</p>
 </section>
 </section>
@@ -467,7 +467,7 @@ coverage<span class="w"> </span>html
 <h2>Key properties<a class="headerlink" href="#key-properties" title="Link to this heading">#</a></h2>
 <ul class="simple">
 <li><p><strong>Zero overhead when disabled.</strong> The coverage module is never imported unless <code class="docutils literal notranslate"><span class="pre">QD_KERNEL_COVERAGE=1</span></code> is set. There is no cost in normal operation.</p></li>
-<li><p><strong>Branch coverage.</strong> Probes inside <code class="docutils literal notranslate"><span class="pre">if</span></code>/<code class="docutils literal notranslate"><span class="pre">else</span></code> bodies only fire when that branch is taken, giving true runtime branch coverage - not just kernel-level coverage, or static conditional coverage.</p></li>
+<li><p><strong>Branch coverage.</strong> Probes inside <code class="docutils literal notranslate"><span class="pre">if</span></code>/<code class="docutils literal notranslate"><span class="pre">else</span></code> bodies only fire when that branch is taken, giving true runtime branch coverage — not just kernel-level coverage, or static conditional coverage.</p></li>
 <li><p><strong>Works with pytest-xdist.</strong> Each worker writes to a separate file; combine them afterward.</p></li>
 <li><p><strong>Survives <code class="docutils literal notranslate"><span class="pre">qd.init()</span></code> resets.</strong> Coverage data is accumulated across multiple <code class="docutils literal notranslate"><span class="pre">qd.init()</span></code> calls within the same process.</p></li>
 </ul>
@@ -476,7 +476,7 @@ coverage<span class="w"> </span>html
 <h2>Advanced usage<a class="headerlink" href="#advanced-usage" title="Link to this heading">#</a></h2>
 <section id="probe-capacity">
 <h3>Probe capacity<a class="headerlink" href="#probe-capacity" title="Link to this heading">#</a></h3>
-<p>There is a limit of 100,000 coverage probes per process (one probe per unique source line per kernel/func). If you hit the limit - for example in a very large codebase with many kernels - increase it via the environment variable:</p>
+<p>There is a limit of 100,000 coverage probes per process (one probe per unique source line per kernel/func). If you hit the limit — for example in a very large codebase with many kernels — increase it via the environment variable:</p>
 <div class="highlight-bash notranslate"><div class="highlight"><pre><span></span><span class="nv">QD_COVERAGE_MAX_PROBES</span><span class="o">=</span><span class="m">500000</span><span class="w"> </span><span class="nv">QD_KERNEL_COVERAGE</span><span class="o">=</span><span class="m">1</span><span class="w"> </span>python<span class="w"> </span>my_simulation.py
 </pre></div>
 </div>
@@ -484,7 +484,7 @@ coverage<span class="w"> </span>html
 </section>
 <section id="coverage-and-autodiff">
 <h2>Coverage and autodiff<a class="headerlink" href="#coverage-and-autodiff" title="Link to this heading">#</a></h2>
-<p>The forward pass is covered. The backward pass is not, because instrumenting it would interfere with gradient computation. This is normally fine - the backward pass is auto-generated and replays the same control flow, so forward coverage is sufficient.</p>
+<p>The forward pass is covered. The backward pass is not, because instrumenting it would interfere with gradient computation. This is normally fine — the backward pass is auto-generated and replays the same control flow, so forward coverage is sufficient.</p>
 <p>One edge case: kernel calls inside a <code class="docutils literal notranslate"><span class="pre">qd.ad.Tape</span></code> with <code class="docutils literal notranslate"><span class="pre">validation=True</span></code> will not be covered.</p>
 </section>
 <section id="offline-cache-interaction">

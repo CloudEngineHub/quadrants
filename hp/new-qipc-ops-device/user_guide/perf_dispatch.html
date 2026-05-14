@@ -410,7 +410,7 @@
 <p><code class="docutils literal notranslate"><span class="pre">&#64;qd.perf_dispatch</span></code> is a decorator that automatically selects the fastest implementation of a function at runtime. When you have multiple implementations of the same operation (e.g. different algorithmic strategies, or platform-specific kernels), <code class="docutils literal notranslate"><span class="pre">perf_dispatch</span></code> benchmarks them and picks the winner.</p>
 <section id="basic-usage">
 <h2>Basic usage<a class="headerlink" href="#basic-usage" title="Link to this heading">#</a></h2>
-<p>Define a meta-function with <code class="docutils literal notranslate"><span class="pre">&#64;qd.perf_dispatch</span></code>. The function body should be empty - it serves only as a prototype declaring the signature and geometry hash:</p>
+<p>Define a meta-function with <code class="docutils literal notranslate"><span class="pre">&#64;qd.perf_dispatch</span></code>. The function body should be empty — it serves only as a prototype declaring the signature and geometry hash:</p>
 <div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="nd">@qd</span><span class="o">.</span><span class="n">perf_dispatch</span><span class="p">(</span><span class="n">get_geometry_hash</span><span class="o">=</span><span class="k">lambda</span> <span class="n">a</span><span class="p">,</span> <span class="n">b</span><span class="p">:</span> <span class="nb">hash</span><span class="p">(</span><span class="n">a</span><span class="o">.</span><span class="n">shape</span> <span class="o">+</span> <span class="n">b</span><span class="o">.</span><span class="n">shape</span><span class="p">))</span>
 <span class="k">def</span><span class="w"> </span><span class="nf">my_op</span><span class="p">(</span><span class="n">a</span><span class="p">:</span> <span class="n">qd</span><span class="o">.</span><span class="n">types</span><span class="o">.</span><span class="n">NDArray</span><span class="p">[</span><span class="n">qd</span><span class="o">.</span><span class="n">f32</span><span class="p">,</span> <span class="mi">1</span><span class="p">],</span> <span class="n">b</span><span class="p">:</span> <span class="n">qd</span><span class="o">.</span><span class="n">types</span><span class="o">.</span><span class="n">NDArray</span><span class="p">[</span><span class="n">qd</span><span class="o">.</span><span class="n">f32</span><span class="p">,</span> <span class="mi">1</span><span class="p">]):</span> <span class="o">...</span>
 </pre></div>
@@ -445,7 +445,7 @@
 <span class="nd">@qd</span><span class="o">.</span><span class="n">kernel</span>
 <span class="k">def</span><span class="w"> </span><span class="nf">impl</span><span class="p">(</span><span class="o">...</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span> <span class="o">...</span>
 
-<span class="c1"># Wrong - will raise QuadrantsSyntaxError</span>
+<span class="c1"># Wrong — will raise QuadrantsSyntaxError</span>
 <span class="nd">@qd</span><span class="o">.</span><span class="n">kernel</span>
 <span class="nd">@my_op</span><span class="o">.</span><span class="n">register</span>
 <span class="k">def</span><span class="w"> </span><span class="nf">impl</span><span class="p">(</span><span class="o">...</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span> <span class="o">...</span>
@@ -502,7 +502,7 @@
 </div>
 <p>Guidelines for <code class="docutils literal notranslate"><span class="pre">get_geometry_hash</span></code>:</p>
 <ul class="simple">
-<li><p>Return a constant (e.g. <code class="docutils literal notranslate"><span class="pre">0</span></code>) if all inputs have the same performance characteristics - a single winner will be chosen.</p></li>
+<li><p>Return a constant (e.g. <code class="docutils literal notranslate"><span class="pre">0</span></code>) if all inputs have the same performance characteristics — a single winner will be chosen.</p></li>
 <li><p>Hash input shapes when different shapes may favor different implementations.</p></li>
 <li><p><strong>Avoid reading GPU data</strong> in the hash function, as this creates a GPU sync point and will severely degrade performance. Prefer metadata like <code class="docutils literal notranslate"><span class="pre">.shape</span></code> which is available on the CPU.</p></li>
 </ul>
@@ -591,7 +591,7 @@
 <section id="important-notes">
 <h2>Important notes<a class="headerlink" href="#important-notes" title="Link to this heading">#</a></h2>
 <ul class="simple">
-<li><p>All registered implementations <strong>must produce identical results</strong>, including side effects. <code class="docutils literal notranslate"><span class="pre">perf_dispatch</span></code> does not verify this - incorrect results will be silently returned if implementations disagree.</p></li>
+<li><p>All registered implementations <strong>must produce identical results</strong>, including side effects. <code class="docutils literal notranslate"><span class="pre">perf_dispatch</span></code> does not verify this — incorrect results will be silently returned if implementations disagree.</p></li>
 <li><p>Only one implementation runs per call. Implementations do not need to be idempotent.</p></li>
 <li><p><code class="docutils literal notranslate"><span class="pre">perf_dispatch</span></code> is <strong>not thread-safe</strong>. Do not call the same meta-function concurrently from multiple threads.</p></li>
 <li><p>Set <code class="docutils literal notranslate"><span class="pre">QD_PERFDISPATCH_PRINT_DEBUG=1</span></code> to print debug messages showing which implementation was registered and which was selected.</p></li>

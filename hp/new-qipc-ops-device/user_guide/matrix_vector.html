@@ -407,7 +407,7 @@
                   
   <section class="tex2jax_ignore mathjax_ignore" id="matrix-and-vector">
 <h1>Matrix and Vector<a class="headerlink" href="#matrix-and-vector" title="Link to this heading">#</a></h1>
-<p>Quadrants provides <code class="docutils literal notranslate"><span class="pre">qd.Matrix</span></code> and <code class="docutils literal notranslate"><span class="pre">qd.Vector</span></code> types for small, fixed-size linear algebra inside kernels. These are stored in GPU registers and are unrolled at compile time, so they are fast - but should be kept small for best performance (more than 32 elements total will trigger a warning).</p>
+<p>Quadrants provides <code class="docutils literal notranslate"><span class="pre">qd.Matrix</span></code> and <code class="docutils literal notranslate"><span class="pre">qd.Vector</span></code> types for small, fixed-size linear algebra inside kernels. These are stored in GPU registers and are unrolled at compile time, so they are fast — but should be kept small for best performance (more than 32 elements total will trigger a warning).</p>
 <p><code class="docutils literal notranslate"><span class="pre">qd.Vector</span></code> is a special case of <code class="docutils literal notranslate"><span class="pre">qd.Matrix</span></code> with one column.</p>
 <section id="creating-vectors-and-matrices-in-kernels">
 <h2>Creating vectors and matrices in kernels<a class="headerlink" href="#creating-vectors-and-matrices-in-kernels" title="Link to this heading">#</a></h2>
@@ -556,8 +556,8 @@
 <section id="other-operations">
 <h3>Other operations<a class="headerlink" href="#other-operations" title="Link to this heading">#</a></h3>
 <ul class="simple">
-<li><p><code class="docutils literal notranslate"><span class="pre">qd.Matrix.diag(dim,</span> <span class="pre">val)</span></code> - create a diagonal matrix</p></li>
-<li><p><code class="docutils literal notranslate"><span class="pre">a.outer_product(b)</span></code> - outer product of two vectors</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">qd.Matrix.diag(dim,</span> <span class="pre">val)</span></code> — create a diagonal matrix</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">a.outer_product(b)</span></code> — outer product of two vectors</p></li>
 </ul>
 </section>
 </section>

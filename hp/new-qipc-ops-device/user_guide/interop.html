@@ -521,7 +521,7 @@
 </tbody>
 </table>
 </div>
-<p>The default <code class="docutils literal notranslate"><span class="pre">copy=True</span></code> always returns a buffer that is safe to mutate without affecting the field/ndarray. Use <code class="docutils literal notranslate"><span class="pre">copy=None</span></code> when you want zero-copy as a best-effort optimisation without having to handle exceptions - it gives you a view when possible and a safe copy otherwise.</p>
+<p>The default <code class="docutils literal notranslate"><span class="pre">copy=True</span></code> always returns a buffer that is safe to mutate without affecting the field/ndarray. Use <code class="docutils literal notranslate"><span class="pre">copy=None</span></code> when you want zero-copy as a best-effort optimisation without having to handle exceptions — it gives you a view when possible and a safe copy otherwise.</p>
 </section>
 <section id="examples">
 <h3>Examples<a class="headerlink" href="#examples" title="Link to this heading">#</a></h3>
@@ -625,7 +625,7 @@
 <span class="n">t</span> <span class="o">=</span> <span class="n">torch</span><span class="o">.</span><span class="n">utils</span><span class="o">.</span><span class="n">dlpack</span><span class="o">.</span><span class="n">from_dlpack</span><span class="p">(</span><span class="n">capsule</span><span class="p">)</span>                <span class="c1"># zero-copy torch tensor</span>
 </pre></div>
 </div>
-<p>For NumPy, prefer <code class="docutils literal notranslate"><span class="pre">to_numpy(copy=False)</span></code> which handles the DLPack protocol adapter internally. If you need a raw v1 capsule for another consumer, use <code class="docutils literal notranslate"><span class="pre">f.to_dlpack(versioned=True)</span></code>. Note that <code class="docutils literal notranslate"><span class="pre">np.from_dlpack</span></code> does not accept raw <code class="docutils literal notranslate"><span class="pre">PyCapsule</span></code> objects - it requires an object exposing <code class="docutils literal notranslate"><span class="pre">__dlpack__()</span></code> and <code class="docutils literal notranslate"><span class="pre">__dlpack_device__()</span></code>, which <code class="docutils literal notranslate"><span class="pre">to_numpy(copy=False)</span></code> provides via an internal adapter.</p>
+<p>For NumPy, prefer <code class="docutils literal notranslate"><span class="pre">to_numpy(copy=False)</span></code> which handles the DLPack protocol adapter internally. If you need a raw v1 capsule for another consumer, use <code class="docutils literal notranslate"><span class="pre">f.to_dlpack(versioned=True)</span></code>. Note that <code class="docutils literal notranslate"><span class="pre">np.from_dlpack</span></code> does not accept raw <code class="docutils literal notranslate"><span class="pre">PyCapsule</span></code> objects — it requires an object exposing <code class="docutils literal notranslate"><span class="pre">__dlpack__()</span></code> and <code class="docutils literal notranslate"><span class="pre">__dlpack_device__()</span></code>, which <code class="docutils literal notranslate"><span class="pre">to_numpy(copy=False)</span></code> provides via an internal adapter.</p>
 <p>The <code class="docutils literal notranslate"><span class="pre">versioned</span></code> parameter selects the DLPack protocol version:</p>
 <div class="pst-scrollable-table-container"><table class="table">
 <thead>
@@ -649,7 +649,7 @@
 </tbody>
 </table>
 </div>
-<p>The same backend, dtype, and layout restrictions that apply to <code class="docutils literal notranslate"><span class="pre">to_torch(copy=False)</span></code> / <code class="docutils literal notranslate"><span class="pre">to_numpy(copy=False)</span></code> apply here - <code class="docutils literal notranslate"><span class="pre">to_dlpack()</span></code> is the underlying mechanism. The caller is responsible for calling <code class="docutils literal notranslate"><span class="pre">qd.sync()</span></code> between modifying the field and consuming the capsule.</p>
+<p>The same backend, dtype, and layout restrictions that apply to <code class="docutils literal notranslate"><span class="pre">to_torch(copy=False)</span></code> / <code class="docutils literal notranslate"><span class="pre">to_numpy(copy=False)</span></code> apply here — <code class="docutils literal notranslate"><span class="pre">to_dlpack()</span></code> is the underlying mechanism. The caller is responsible for calling <code class="docutils literal notranslate"><span class="pre">qd.sync()</span></code> between modifying the field and consuming the capsule.</p>
 </section>
 </section>
 <section id="direct-torch-tensor-pass-through">

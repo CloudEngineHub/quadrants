@@ -880,7 +880,7 @@
 
     <span class="n">impl</span><span class="o">.</span><span class="n">get_runtime</span><span class="p">()</span><span class="o">.</span><span class="n">_arch</span> <span class="o">=</span> <span class="n">cfg</span><span class="o">.</span><span class="n">arch</span>
 
-    <span class="c1"># create a new program (skip for python backend - no C++ runtime needed):</span>
+    <span class="c1"># create a new program (skip for python backend — no C++ runtime needed):</span>
     <span class="k">if</span> <span class="n">cfg</span><span class="o">.</span><span class="n">arch</span> <span class="o">!=</span> <span class="n">_qd_core</span><span class="o">.</span><span class="n">python</span><span class="p">:</span>
         <span class="n">impl</span><span class="o">.</span><span class="n">get_runtime</span><span class="p">()</span><span class="o">.</span><span class="n">create_program</span><span class="p">()</span>
         <span class="n">_logging</span><span class="o">.</span><span class="n">trace</span><span class="p">(</span><span class="s2">&quot;Materializing runtime...&quot;</span><span class="p">)</span>

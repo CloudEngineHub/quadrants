@@ -410,7 +410,7 @@
 <p>Graphs reduce kernel launch overhead by capturing a sequence of GPU operations into a graph, then replaying it in a single launch.</p>
 <section id="backend-support">
 <h2>Backend support<a class="headerlink" href="#backend-support" title="Link to this heading">#</a></h2>
-<p>Both features run on every backend. They are only <em>hardware accelerated</em> on CUDA (and <code class="docutils literal notranslate"><span class="pre">graph_do_while</span></code> additionally requires SM 9.0+ / Hopper). On other backends, <code class="docutils literal notranslate"><span class="pre">graph=True</span></code> is silently ignored and the kernel runs via the normal launch path, and <code class="docutils literal notranslate"><span class="pre">graph_do_while</span></code> falls back to a host-side do-while loop that copies the condition value GPU → host each iteration (causing a pipeline stall - see <a class="reference internal" href="#caveats">Caveats</a>).</p>
+<p>Both features run on every backend. They are only <em>hardware accelerated</em> on CUDA (and <code class="docutils literal notranslate"><span class="pre">graph_do_while</span></code> additionally requires SM 9.0+ / Hopper). On other backends, <code class="docutils literal notranslate"><span class="pre">graph=True</span></code> is silently ignored and the kernel runs via the normal launch path, and <code class="docutils literal notranslate"><span class="pre">graph_do_while</span></code> falls back to a host-side do-while loop that copies the condition value GPU → host each iteration (causing a pipeline stall — see <a class="reference internal" href="#caveats">Caveats</a>).</p>
 <div class="pst-scrollable-table-container"><table class="table">
 <thead>
 <tr class="row-odd"><th class="head"><p>Feature</p></th>
@@ -458,7 +458,7 @@
 </pre></div>
 </div>
 <p>The top level for-loops will be compiled into a single graph. The parallelism is the same as before, but the launch latency much reduced.</p>
-<p>The kernel is used normally - no other API changes are needed:</p>
+<p>The kernel is used normally — no other API changes are needed:</p>
 <div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">x</span> <span class="o">=</span> <span class="n">qd</span><span class="o">.</span><span class="n">ndarray</span><span class="p">(</span><span class="n">qd</span><span class="o">.</span><span class="n">f32</span><span class="p">,</span> <span class="n">shape</span><span class="o">=</span><span class="p">(</span><span class="mi">1024</span><span class="p">,))</span>
 <span class="n">y</span> <span class="o">=</span> <span class="n">qd</span><span class="o">.</span><span class="n">ndarray</span><span class="p">(</span><span class="n">qd</span><span class="o">.</span><span class="n">f32</span><span class="p">,</span> <span class="n">shape</span><span class="o">=</span><span class="p">(</span><span class="mi">1024</span><span class="p">,))</span>
 
@@ -475,7 +475,7 @@
 </section>
 <section id="passing-different-arguments">
 <h3>Passing different arguments<a class="headerlink" href="#passing-different-arguments" title="Link to this heading">#</a></h3>
-<p>You can pass different ndarrays to the same kernel on subsequent calls. The cached graph is replayed with the updated arguments - no graph rebuild occurs:</p>
+<p>You can pass different ndarrays to the same kernel on subsequent calls. The cached graph is replayed with the updated arguments — no graph rebuild occurs:</p>
 <div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">x1</span> <span class="o">=</span> <span class="n">qd</span><span class="o">.</span><span class="n">ndarray</span><span class="p">(</span><span class="n">qd</span><span class="o">.</span><span class="n">f32</span><span class="p">,</span> <span class="n">shape</span><span class="o">=</span><span class="p">(</span><span class="mi">1024</span><span class="p">,))</span>
 <span class="n">y1</span> <span class="o">=</span> <span class="n">qd</span><span class="o">.</span><span class="n">ndarray</span><span class="p">(</span><span class="n">qd</span><span class="o">.</span><span class="n">f32</span><span class="p">,</span> <span class="n">shape</span><span class="o">=</span><span class="p">(</span><span class="mi">1024</span><span class="p">,))</span>
 <span class="n">my_kernel</span><span class="p">(</span><span class="n">x1</span><span class="p">,</span> <span class="n">y1</span><span class="p">)</span>  <span class="c1"># builds graph</span>
@@ -512,7 +512,7 @@
 </div>
 <p>The argument to <code class="docutils literal notranslate"><span class="pre">qd.graph_do_while()</span></code> must be the name of a scalar <code class="docutils literal notranslate"><span class="pre">qd.i32</span></code> ndarray parameter. The loop body repeats while this value is non-zero.</p>
 <ul class="simple">
-<li><p>On SM 9.0+ (Hopper), this uses CUDA conditional while nodes - the entire iteration runs on the GPU with no host involvement.</p></li>
+<li><p>On SM 9.0+ (Hopper), this uses CUDA conditional while nodes — the entire iteration runs on the GPU with no host involvement.</p></li>
 <li><p>On older CUDA GPUs and non-CUDA backends, it falls back to a host-side do-while loop.</p></li>
 </ul>
 <section id="patterns">

@@ -327,8 +327,18 @@
 <span class="kn">from</span><span class="w"> </span><span class="nn">quadrants.lang</span><span class="w"> </span><span class="kn">import</span> <span class="n">ops</span> <span class="k">as</span> <span class="n">_ops</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">quadrants.lang.expr</span><span class="w"> </span><span class="kn">import</span> <span class="n">make_expr_group</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">quadrants.lang.kernel_impl</span><span class="w"> </span><span class="kn">import</span> <span class="n">func</span> <span class="k">as</span> <span class="n">_func</span>
-<span class="kn">from</span><span class="w"> </span><span class="nn">quadrants.lang.simt</span><span class="w"> </span><span class="kn">import</span> <span class="n">subgroup</span> <span class="k">as</span> <span class="n">_subgroup</span>
-<span class="kn">from</span><span class="w"> </span><span class="nn">quadrants.lang.simt.subgroup</span><span class="w"> </span><span class="kn">import</span> <span class="n">_bin_add</span><span class="p">,</span> <span class="n">_bin_max</span><span class="p">,</span> <span class="n">_bin_min</span>
+
+<span class="c1"># Import order matters: ``subgroup`` must come before ``reductions``.  ``reductions.py`` does ``from</span>
+<span class="c1"># quadrants.lang.simt.subgroup import (ballot, invocation_id, ...)`` at its top, and ``subgroup.py`` does ``from</span>
+<span class="c1"># quadrants.lang.simt.reductions import *`` at its bottom.  If ``reductions`` is imported here first, it triggers a</span>
+<span class="c1"># circular load that leaves ``subgroup``&#39;s wildcard re-export running while ``reductions.__all__`` isn&#39;t yet defined,</span>
+<span class="c1"># so ``subgroup.reduce_add_tiled`` etc. silently end up missing.  Importing ``subgroup`` first (which then drives</span>
+<span class="c1"># ``reductions`` to completion via the wildcard) keeps the fully-loaded layout downstream callers expect.  ``isort:</span>
+<span class="c1"># skip_file`` would disable sorting for the whole file; the local ``noqa`` comments below scope the override to just</span>
+<span class="c1"># these two lines.</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">quadrants.lang.simt</span><span class="w"> </span><span class="kn">import</span> <span class="n">subgroup</span> <span class="k">as</span> <span class="n">_subgroup</span>  <span class="c1"># noqa: I001  isort: skip</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">quadrants.lang.simt</span><span class="w"> </span><span class="kn">import</span> <span class="n">reductions</span> <span class="k">as</span> <span class="n">_reductions</span>  <span class="c1"># noqa: I001</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">quadrants.lang.simt.reductions</span><span class="w"> </span><span class="kn">import</span> <span class="n">_bin_add</span><span class="p">,</span> <span class="n">_bin_max</span><span class="p">,</span> <span class="n">_bin_min</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">quadrants.lang.util</span><span class="w"> </span><span class="kn">import</span> <span class="n">quadrants_scope</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">quadrants.types.annotations</span><span class="w"> </span><span class="kn">import</span> <span class="n">template</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">quadrants.types.primitive_types</span><span class="w"> </span><span class="kn">import</span> <span class="n">i32</span> <span class="k">as</span> <span class="n">_i32</span>
@@ -492,9 +502,10 @@
 <span class="c1"># `block.sync` + (NUM_SUBGROUPS - 1) ops on thread 0.  The subgroup size is read from `subgroup.group_size()` (a</span>
 <span class="c1"># compile-time Python int) at the top of every block op, so callers never plumb it in.</span>
 <span class="c1">#</span>
-<span class="c1"># The per-subgroup step delegates to `subgroup._reduce_tiled`, the generic-op private helper that mirrors</span>
-<span class="c1"># `subgroup.reduce_add_tiled` / `_min_tiled` / `_max_tiled` but takes a caller-supplied template operator -- so the</span>
-<span class="c1"># same block skeleton covers add / min / max / mul / bitwise / custom monoids.</span>
+<span class="c1"># The per-subgroup step delegates to `reductions._reduce_tiled`, the generic-op private helper (alongside</span>
+<span class="c1"># `reductions._inclusive_scan_tiled` / `_exclusive_scan_tiled`) that mirrors `subgroup.reduce_add_tiled` / `_min_tiled`</span>
+<span class="c1"># / `_max_tiled` but takes a caller-supplied template operator -- so the same block skeleton covers add / min / max /</span>
+<span class="c1"># mul / bitwise / custom monoids.</span>
 
 
 <span class="nd">@_func</span>
@@ -525,7 +536,7 @@
     <span class="p">)</span>
     <span class="n">NUM_SUBGROUPS</span> <span class="o">=</span> <span class="n">impl</span><span class="o">.</span><span class="n">static</span><span class="p">(</span><span class="n">block_dim</span> <span class="o">//</span> <span class="n">SUBGROUP_SIZE</span><span class="p">)</span>
 
-    <span class="n">subgroup_agg</span> <span class="o">=</span> <span class="n">_subgroup</span><span class="o">.</span><span class="n">_reduce_tiled</span><span class="p">(</span><span class="n">value</span><span class="p">,</span> <span class="n">op</span><span class="p">,</span> <span class="n">log2_subgroup</span><span class="p">)</span>
+    <span class="n">subgroup_agg</span> <span class="o">=</span> <span class="n">_reductions</span><span class="o">.</span><span class="n">_reduce_tiled</span><span class="p">(</span><span class="n">value</span><span class="p">,</span> <span class="n">op</span><span class="p">,</span> <span class="n">log2_subgroup</span><span class="p">)</span>
 
     <span class="k">if</span> <span class="n">impl</span><span class="o">.</span><span class="n">static</span><span class="p">(</span><span class="n">NUM_SUBGROUPS</span> <span class="o">==</span> <span class="mi">1</span><span class="p">):</span>
         <span class="k">return</span> <span class="n">subgroup_agg</span>
@@ -622,7 +633,7 @@
 
 <span class="c1"># --- Block scans -----------------------------------------------------------------------</span>
 <span class="c1">#</span>
-<span class="c1"># Two-stage block scan.  Each subgroup does a Hillis-Steele scan via `subgroup.{_inclusive_scan_tiled,</span>
+<span class="c1"># Two-stage block scan.  Each subgroup does a Hillis-Steele scan via `reductions.{_inclusive_scan_tiled,</span>
 <span class="c1"># _exclusive_scan_tiled}`, the last lane of every subgroup publishes the subgroup aggregate to shared memory, then</span>
 <span class="c1"># every thread sequentially folds the subgroup prefixes and applies its own subgroup&#39;s prefix to its scan value.</span>
 <span class="c1"># All threads receive a valid result; cost: one subgroup scan + 1 shared-mem write/read per subgroup + 1</span>
@@ -661,7 +672,7 @@
     <span class="p">)</span>
     <span class="n">NUM_SUBGROUPS</span> <span class="o">=</span> <span class="n">impl</span><span class="o">.</span><span class="n">static</span><span class="p">(</span><span class="n">block_dim</span> <span class="o">//</span> <span class="n">SUBGROUP_SIZE</span><span class="p">)</span>
 
-    <span class="n">inclusive</span> <span class="o">=</span> <span class="n">_subgroup</span><span class="o">.</span><span class="n">_inclusive_scan_tiled</span><span class="p">(</span><span class="n">value</span><span class="p">,</span> <span class="n">op</span><span class="p">,</span> <span class="n">log2_subgroup</span><span class="p">)</span>
+    <span class="n">inclusive</span> <span class="o">=</span> <span class="n">_reductions</span><span class="o">.</span><span class="n">_inclusive_scan_tiled</span><span class="p">(</span><span class="n">value</span><span class="p">,</span> <span class="n">op</span><span class="p">,</span> <span class="n">log2_subgroup</span><span class="p">)</span>
 
     <span class="k">if</span> <span class="n">impl</span><span class="o">.</span><span class="n">static</span><span class="p">(</span><span class="n">NUM_SUBGROUPS</span> <span class="o">==</span> <span class="mi">1</span><span class="p">):</span>
         <span class="k">return</span> <span class="n">inclusive</span>
@@ -712,7 +723,7 @@
     <span class="p">)</span>
     <span class="n">NUM_SUBGROUPS</span> <span class="o">=</span> <span class="n">impl</span><span class="o">.</span><span class="n">static</span><span class="p">(</span><span class="n">block_dim</span> <span class="o">//</span> <span class="n">SUBGROUP_SIZE</span><span class="p">)</span>
 
-    <span class="n">exclusive</span> <span class="o">=</span> <span class="n">_subgroup</span><span class="o">.</span><span class="n">_exclusive_scan_tiled</span><span class="p">(</span><span class="n">value</span><span class="p">,</span> <span class="n">op</span><span class="p">,</span> <span class="n">identity</span><span class="p">,</span> <span class="n">log2_subgroup</span><span class="p">)</span>
+    <span class="n">exclusive</span> <span class="o">=</span> <span class="n">_reductions</span><span class="o">.</span><span class="n">_exclusive_scan_tiled</span><span class="p">(</span><span class="n">value</span><span class="p">,</span> <span class="n">op</span><span class="p">,</span> <span class="n">identity</span><span class="p">,</span> <span class="n">log2_subgroup</span><span class="p">)</span>
 
     <span class="k">if</span> <span class="n">impl</span><span class="o">.</span><span class="n">static</span><span class="p">(</span><span class="n">NUM_SUBGROUPS</span> <span class="o">==</span> <span class="mi">1</span><span class="p">):</span>
         <span class="k">return</span> <span class="n">exclusive</span>
@@ -787,7 +798,7 @@
 <span class="c1"># Plain Python wrappers (not ``@func``): the identity for an exclusive min / max scan is uniquely determined by</span>
 <span class="c1"># ``value``&#39;s dtype, so we introspect it at compile time and emit a typed-constant identity Expr rather than asking</span>
 <span class="c1"># callers to provide one.  Mirrors the subgroup convention (``subgroup.exclusive_min`` and friends).  The identity</span>
-<span class="c1"># helpers (``_typed_min_identity`` / ``_typed_max_identity``) are reused from ``subgroup.py`` so the per-dtype</span>
+<span class="c1"># helpers (``_typed_min_identity`` / ``_typed_max_identity``) are reused from ``reductions.py`` so the per-dtype</span>
 <span class="c1"># sentinel choices stay consistent across the two scopes.</span>
 <div class="viewcode-block" id="exclusive_min">
 <a class="viewcode-back" href="../../../../autoapi/quadrants/lang/simt/block/index.html#quadrants.lang.simt.block.exclusive_min">[docs]</a>
@@ -796,7 +807,7 @@
 <span class="sd">    thread 0 holds the dtype-derived identity: ``+inf`` for real dtypes, ``np.iinfo(dtype).max`` for integer dtypes</span>
 <span class="sd">    (``UINT_MAX`` for unsigned, ``INT_MAX`` for signed).  See `exclusive_scan` for the underlying contract.</span>
 <span class="sd">    &quot;&quot;&quot;</span>
-    <span class="k">return</span> <span class="n">exclusive_scan</span><span class="p">(</span><span class="n">value</span><span class="p">,</span> <span class="n">block_dim</span><span class="p">,</span> <span class="n">_bin_min</span><span class="p">,</span> <span class="n">_subgroup</span><span class="o">.</span><span class="n">_typed_min_identity</span><span class="p">(</span><span class="n">value</span><span class="p">),</span> <span class="n">dtype</span><span class="p">)</span></div>
+    <span class="k">return</span> <span class="n">exclusive_scan</span><span class="p">(</span><span class="n">value</span><span class="p">,</span> <span class="n">block_dim</span><span class="p">,</span> <span class="n">_bin_min</span><span class="p">,</span> <span class="n">_reductions</span><span class="o">.</span><span class="n">_typed_min_identity</span><span class="p">(</span><span class="n">value</span><span class="p">),</span> <span class="n">dtype</span><span class="p">)</span></div>
 
 
 
@@ -807,7 +818,7 @@
 <span class="sd">    thread 0 holds the dtype-derived identity: ``-inf`` for real dtypes, ``np.iinfo(dtype).min`` for signed integer</span>
 <span class="sd">    dtypes, ``0`` for unsigned and bool.  See `exclusive_scan` for the underlying contract.</span>
 <span class="sd">    &quot;&quot;&quot;</span>
-    <span class="k">return</span> <span class="n">exclusive_scan</span><span class="p">(</span><span class="n">value</span><span class="p">,</span> <span class="n">block_dim</span><span class="p">,</span> <span class="n">_bin_max</span><span class="p">,</span> <span class="n">_subgroup</span><span class="o">.</span><span class="n">_typed_max_identity</span><span class="p">(</span><span class="n">value</span><span class="p">),</span> <span class="n">dtype</span><span class="p">)</span></div>
+    <span class="k">return</span> <span class="n">exclusive_scan</span><span class="p">(</span><span class="n">value</span><span class="p">,</span> <span class="n">block_dim</span><span class="p">,</span> <span class="n">_bin_max</span><span class="p">,</span> <span class="n">_reductions</span><span class="o">.</span><span class="n">_typed_max_identity</span><span class="p">(</span><span class="n">value</span><span class="p">),</span> <span class="n">dtype</span><span class="p">)</span></div>
 
 
 

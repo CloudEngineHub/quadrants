@@ -631,9 +631,9 @@
 
 <span class="sd">        Handles both forms a single subscript can take inside a kernel:</span>
 
-<span class="sd">        - ``Matrix`` (Python class) - produced when the kernel runs on the python backend, e.g. ``qd.grouped(field)``</span>
+<span class="sd">        - ``Matrix`` (Python class) — produced when the kernel runs on the python backend, e.g. ``qd.grouped(field)``</span>
 <span class="sd">          returning a ``[Matrix([i, j])]`` list.</span>
-<span class="sd">        - ``Expr`` with tensor shape ``(N,)`` - produced by ``matrix.make_matrix(loop_indices, ...)`` in</span>
+<span class="sd">        - ``Expr`` with tensor shape ``(N,)`` — produced by ``matrix.make_matrix(loop_indices, ...)`` in</span>
 <span class="sd">          :func:`build_struct_for` / :func:`build_grouped_ndrange_for`, which is what real kernels see for</span>
 <span class="sd">          ``for I in qd.grouped(...)``.</span>
 <span class="sd">        &quot;&quot;&quot;</span>
@@ -660,14 +660,14 @@
         <span class="c1"># Both backends use the same attribute name (``_qd_layout``) and the same storage contract: the underlying</span>
         <span class="c1"># buffer is allocated at the permuted physical shape (``[shape[a] for a in layout]``) with natural axis order,</span>
         <span class="c1"># and the rewrite here translates each user-supplied canonical index tuple ``(i0, ..., i_{N-1})`` into</span>
-        <span class="c1"># ``(i_{layout[0]}, ..., i_{layout[N-1]})`` - the physical index tuple that the flat rank-N SNode / Ndarray</span>
+        <span class="c1"># ``(i_{layout[0]}, ..., i_{layout[N-1]})`` — the physical index tuple that the flat rank-N SNode / Ndarray</span>
         <span class="c1"># expects.</span>
         <span class="c1">#</span>
         <span class="c1"># Two indexing forms must be permuted:</span>
         <span class="c1"># 1. Multi-arg subscript ``x[i, j, ...]``: ``node.slice.ptr`` is already a list of N scalars; permute by axis.</span>
         <span class="c1"># 2. Single-Vector subscript ``x[I]`` where I is a rank-N Matrix coming from ``qd.grouped(...)``: unpack into N</span>
         <span class="c1">#    scalars first, then permute. Without this, ``x[I]`` writes at canonical indices into the smaller physical</span>
-        <span class="c1">#    buffer - silently OOB on permuted layouts.</span>
+        <span class="c1">#    buffer — silently OOB on permuted layouts.</span>
         <span class="n">layout</span> <span class="o">=</span> <span class="nb">getattr</span><span class="p">(</span><span class="n">node</span><span class="o">.</span><span class="n">value</span><span class="o">.</span><span class="n">ptr</span><span class="p">,</span> <span class="s2">&quot;_qd_layout&quot;</span><span class="p">,</span> <span class="kc">None</span><span class="p">)</span>
         <span class="k">if</span> <span class="n">layout</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
             <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">node</span><span class="o">.</span><span class="n">slice</span><span class="o">.</span><span class="n">ptr</span><span class="p">)</span> <span class="o">==</span> <span class="mi">1</span><span class="p">:</span>

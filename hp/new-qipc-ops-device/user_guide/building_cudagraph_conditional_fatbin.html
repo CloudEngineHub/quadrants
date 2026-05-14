@@ -414,14 +414,14 @@ conditional nodes require SM 9.0+ (Hopper or later); on older GPUs,
 <code class="docutils literal notranslate"><span class="pre">graph_do_while</span></code> falls back to a host-side loop automatically.</p>
 <p>There are three distinct phases:</p>
 <ol class="arabic simple">
-<li><p><strong>Fatbin generation</strong> (rare, manual) - A developer runs
+<li><p><strong>Fatbin generation</strong> (rare, manual) — A developer runs
 <code class="docutils literal notranslate"><span class="pre">scripts/build_condition_kernel_fatbin.py</span></code>, which compiles the kernel and
 device-links it with <code class="docutils literal notranslate"><span class="pre">libcudadevrt.a</span></code> to resolve <code class="docutils literal notranslate"><span class="pre">cudaGraphSetConditional</span></code>.
 The output is a self-contained fatbin, committed to git as a C header.
 Requires <code class="docutils literal notranslate"><span class="pre">nvcc</span></code> and the CUDA toolkit.</p></li>
-<li><p><strong>Quadrants build</strong> (CI / developers) - The C header is <code class="docutils literal notranslate"><span class="pre">#include</span></code>d as a
+<li><p><strong>Quadrants build</strong> (CI / developers) — The C header is <code class="docutils literal notranslate"><span class="pre">#include</span></code>d as a
 plain byte array. No CUDA toolkit needed.</p></li>
-<li><p><strong>Runtime</strong> (end users) - The fatbin is loaded via <code class="docutils literal notranslate"><span class="pre">cuModuleLoadData</span></code>.
+<li><p><strong>Runtime</strong> (end users) — The fatbin is loaded via <code class="docutils literal notranslate"><span class="pre">cuModuleLoadData</span></code>.
 No CUDA toolkit needed.</p></li>
 </ol>
 <p>This page documents phase 1: regenerating the pre-built fatbin.</p>
