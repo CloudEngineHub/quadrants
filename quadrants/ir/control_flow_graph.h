@@ -1,5 +1,6 @@
 #pragma once
 
+#include <filesystem>
 #include <optional>
 #include <unordered_set>
 
@@ -195,8 +196,18 @@ class ControlFlowGraph {
   //       cannot canonicalise (O(V+E)).
   // Called from each public driver. Always-on (release builds too); the cost is dominated by the
   // analyses that follow and the alternative on violation is silent corruption / a segfault deep
-  // in worklist processing.
+  // in worklist processing. On any violation, dumps the current CFG state to a temp file (see
+  // `dump_invariant_failure_to_temp_path`) and includes the path in the assertion message.
   void assert_structural_invariants() const;
+
+  // Best-effort dump of the current CFG state to a unique file under
+  // <tmp>/cfg_invariant_failures/<reason>_<ns>.txt. Called from `assert_structural_invariants`
+  // when a violation is about to fire, so the dump runs against possibly-corrupt state -- the
+  // dump is deliberately tolerant of nulls, dangling edges, and broken back-pointers (it
+  // prints placeholders and continues, rather than segfaulting). Catches and swallows all
+  // exceptions; the caller is about to abort. Returns the dump path on success, or an empty
+  // path if the dump itself failed.
+  std::filesystem::path dump_invariant_failure_to_temp_path(const std::string &reason) const;
 
  public:
   struct LiveVarAnalysisConfig {
