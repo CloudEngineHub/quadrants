@@ -477,43 +477,59 @@ struct AdStackDPResult {
   bool has_positive_loop;
 };
 
+// Bundle of "graph-shape" inputs to the per-stack DP: same for every stack, computed once before
+// the loop. Named-field aggregate construction (designated initializers at the call site) makes
+// it a compile error to swap, e.g. `next_ids_intra_fwd` and `next_ids_intra_back` -- the highest-
+// risk swap surface in the old 11-positional-int-arg signature this struct replaces.
+struct AdStackDPGraph {
+  int start_node;
+  int num_sccs;
+  const std::vector<std::vector<int>> &scc_nodes;
+  const std::vector<char> &scc_is_cyclic;
+  const std::vector<std::vector<int>> &scc_topo;
+  const std::vector<std::vector<int>> &next_ids_intra_fwd;
+  const std::vector<std::vector<int>> &next_ids_intra_back;
+  const std::vector<std::vector<int>> &next_ids_inter;
+};
+
+// Bundle of per-stack per-node values for one DP representative. Same shape as the graph
+// (`increased_size[i]` and `max_increased_size[i]` are the deltas for CFG node i). Bundling them
+// together keeps `(increased_size, max_increased_size)` named at the call site -- before this
+// struct, both were `const std::vector<int> &` and trivial to swap.
+struct AdStackPerNodeRow {
+  const std::vector<int> &increased_size;      // net (pushes - pops) inside each node
+  const std::vector<int> &max_increased_size;  // max running (pushes - pops) prefix inside each node
+};
+
 // Run the per-representative DP. Walks the SCC condensation in topological order (sources first,
 // since Tarjan emits SCCs in reverse-topological order so source SCCs end up at the largest
 // indices). `max_size_at_node_begin` is taken by reference as a scratch buffer reused across reps
 // to avoid reallocating per iteration.
-AdStackDPResult run_ad_stack_size_dp_for_representative(int start_node,
-                                                        int num_sccs,
-                                                        const std::vector<int> &is_for_stack,
-                                                        const std::vector<int> &mis_for_stack,
-                                                        const std::vector<std::vector<int>> &scc_nodes,
-                                                        const std::vector<char> &scc_is_cyclic,
-                                                        const std::vector<std::vector<int>> &scc_topo,
-                                                        const std::vector<std::vector<int>> &next_ids_intra_fwd,
-                                                        const std::vector<std::vector<int>> &next_ids_intra_back,
-                                                        const std::vector<std::vector<int>> &next_ids_inter,
+AdStackDPResult run_ad_stack_size_dp_for_representative(const AdStackDPGraph &graph,
+                                                        const AdStackPerNodeRow &row,
                                                         std::vector<int> &max_size_at_node_begin) {
   std::fill(max_size_at_node_begin.begin(), max_size_at_node_begin.end(), -1);
-  max_size_at_node_begin[start_node] = 0;
+  max_size_at_node_begin[graph.start_node] = 0;
   int max_size = 0;
-  for (int s = num_sccs - 1; s >= 0; s--) {
-    const auto &nodes_in_s = scc_nodes[s];
-    if (scc_is_cyclic[s]) {
-      switch (classify_cyclic_scc_fast_path(nodes_in_s, is_for_stack)) {
+  for (int s = graph.num_sccs - 1; s >= 0; s--) {
+    const auto &nodes_in_s = graph.scc_nodes[s];
+    if (graph.scc_is_cyclic[s]) {
+      switch (classify_cyclic_scc_fast_path(nodes_in_s, row.increased_size)) {
         case CyclicSccFastPath::kPositiveCycle:
           return {max_size, /*has_positive_loop=*/true};
         case CyclicSccFastPath::kZeroSpread:
           spread_max_begin_over_zero_scc(nodes_in_s, max_size_at_node_begin);
           break;
         case CyclicSccFastPath::kFallback:
-          if (dp_mixed_sign_cyclic_scc(scc_topo[s], nodes_in_s, is_for_stack, next_ids_intra_fwd, next_ids_intra_back,
-                                       max_size_at_node_begin)) {
+          if (dp_mixed_sign_cyclic_scc(graph.scc_topo[s], nodes_in_s, row.increased_size, graph.next_ids_intra_fwd,
+                                       graph.next_ids_intra_back, max_size_at_node_begin)) {
             return {max_size, /*has_positive_loop=*/true};
           }
           break;
       }
     }
-    update_global_max_and_relax_inter_scc(nodes_in_s, is_for_stack, mis_for_stack, next_ids_inter,
-                                          max_size_at_node_begin, max_size);
+    update_global_max_and_relax_inter_scc(nodes_in_s, row.increased_size, row.max_increased_size,
+                                          graph.next_ids_inter, max_size_at_node_begin, max_size);
   }
   return {max_size, /*has_positive_loop=*/false};
 }
@@ -624,11 +640,22 @@ void ControlFlowGraph::determine_ad_stack_size() {
   std::vector<int> max_size_at_node_begin(num_nodes);
   std::unordered_map<int, AdStackDPResult> rep_results;
   rep_results.reserve(groups.rep_stack_ids.size());
+  const AdStackDPGraph graph{
+      .start_node = start_node,
+      .num_sccs = num_sccs,
+      .scc_nodes = tarjan.scc_nodes,
+      .scc_is_cyclic = cyc.scc_is_cyclic,
+      .scc_topo = cyc.scc_topo,
+      .next_ids_intra_fwd = edges.next_ids_intra_fwd,
+      .next_ids_intra_back = edges.next_ids_intra_back,
+      .next_ids_inter = edges.next_ids_inter,
+  };
   for (int rep_sid : groups.rep_stack_ids) {
-    rep_results[rep_sid] = run_ad_stack_size_dp_for_representative(
-        start_node, num_sccs, sizes.increased_size[rep_sid], sizes.max_increased_size[rep_sid], tarjan.scc_nodes,
-        cyc.scc_is_cyclic, cyc.scc_topo, edges.next_ids_intra_fwd, edges.next_ids_intra_back, edges.next_ids_inter,
-        max_size_at_node_begin);
+    const AdStackPerNodeRow row{
+        .increased_size = sizes.increased_size[rep_sid],
+        .max_increased_size = sizes.max_increased_size[rep_sid],
+    };
+    rep_results[rep_sid] = run_ad_stack_size_dp_for_representative(graph, row, max_size_at_node_begin);
   }
 
   apply_ad_stack_dp_results(idx.stacks, sizes.stack_active, groups.stack_to_rep, rep_results);
