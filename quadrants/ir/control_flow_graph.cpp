@@ -682,193 +682,247 @@ static void update_container_with_alias(
   update_aliased_stmts(tensor_to_matrix_ptrs_map, matrix_ptr_to_tensor_map, container, key, to_erase);
 }
 
-bool CFGNode::dead_store_elimination(bool after_lower_access) {
-  bool modified = false;
-  // Map a variable to its nearest load
-  std::unordered_map<Stmt *, Stmt *> live_load_in_this_node;
+namespace {
 
-  // For any stmt with TensorType'd address, the address can be either partially
-  // or fully stored/loaded, which will eventually influence the
-  // dead-store-elimination strategy
-  //
-  // Here we use CFGNode::UseDefineStatus to mark whether a TensorType'd address
-  // is fully or partially modified.
+// === Helpers for CFGNode::dead_store_elimination ===
+
+// Aliasing tables built once per CFGNode pass over the block, then threaded through every
+// container update so that touching a `MatrixPtrStmt` propagates to its tensor origin (and back).
+struct DseAliasMaps {
+  // MatrixPtrStmt->origin -> list of MatrixPtrStmts that share that origin
+  std::unordered_map<Stmt *, std::vector<Stmt *>> tensor_to_matrix_ptrs;
+  // MatrixPtrStmt -> its origin
+  std::unordered_map<Stmt *, Stmt *> matrix_ptr_to_tensor;
+};
+
+// Per-pass state mutated in lockstep during the reverse-order walk. `live_in_this_node` and
+// `killed_in_this_node` use `UseDefineStatus` to distinguish full vs partial modification of
+// tensor-typed addresses; `live_load_in_this_node` maps a variable to its nearest later load
+// for identical-load elimination.
+struct DseLiveState {
+  std::unordered_map<Stmt *, Stmt *> live_load_in_this_node;
   std::unordered_map<Stmt *, CFGNode::UseDefineStatus> live_in_this_node;
   std::unordered_map<Stmt *, CFGNode::UseDefineStatus> killed_in_this_node;
+};
 
-  // Search for aliased addresses
-  // tensor_to_matrix_ptrs_map: map MatrixPtrStmt->origin to list of
-  //   MatrixPtrStmts
-  // matrix_ptr_to_tensor_map: map MatrixPtrStmt to
-  //   MatrixPtrStmt->origin
-  std::unordered_map<Stmt *, std::vector<Stmt *>> tensor_to_matrix_ptrs_map;
-  std::unordered_map<Stmt *, Stmt *> matrix_ptr_to_tensor_map;
+DseAliasMaps build_matrix_ptr_alias_maps(Block *block, int begin_location, int end_location) {
+  DseAliasMaps alias;
   for (int i = begin_location; i < end_location; i++) {
-    auto stmt = block->statements[i].get();
-    if (stmt->is<MatrixPtrStmt>()) {
-      auto origin = stmt->as<MatrixPtrStmt>()->origin;
-      if (tensor_to_matrix_ptrs_map.count(origin) == 0) {
-        tensor_to_matrix_ptrs_map[origin] = {stmt};
-      } else {
-        tensor_to_matrix_ptrs_map[origin].push_back(stmt);
-      }
-      matrix_ptr_to_tensor_map[stmt] = origin;
-    }
-  }
-
-  // Reverse order traversal, starting from the last IR to the first IR
-  for (int i = end_location - 1; i >= begin_location; i--) {
-    auto stmt = block->statements[i].get();
-    if (stmt->is<FuncCallStmt>()) {
-      killed_in_this_node.clear();
-      live_load_in_this_node.clear();
+    auto *stmt = block->statements[i].get();
+    if (!stmt->is<MatrixPtrStmt>()) {
       continue;
     }
-    auto store_ptrs = irpass::analysis::get_store_destination(stmt);
+    auto *origin = stmt->as<MatrixPtrStmt>()->origin;
+    alias.tensor_to_matrix_ptrs[origin].push_back(stmt);
+    alias.matrix_ptr_to_tensor[stmt] = origin;
+  }
+  return alias;
+}
 
-    // TODO: Consider AD-stacks in get_store_destination instead of here
-    //  for store-to-load forwarding on AD-stacks
-    if (auto stack_pop = stmt->cast<AdStackPopStmt>()) {
-      store_ptrs = std::vector<Stmt *>(1, stack_pop->stack);
-    } else if (auto stack_push = stmt->cast<AdStackPushStmt>()) {
-      store_ptrs = std::vector<Stmt *>(1, stack_push->stack);
-    } else if (auto stack_acc_adj = stmt->cast<AdStackAccAdjointStmt>()) {
-      store_ptrs = std::vector<Stmt *>(1, stack_acc_adj->stack);
-    } else if (stmt->is<AdStackAllocaStmt>()) {
-      store_ptrs = std::vector<Stmt *>(1, stmt);
+// Pointer eligibility predicate, applied uniformly to store ptrs, load ptrs, and live-update load
+// ptrs. After `lower_access`, only local variables (allocas) and AD-stacks remain analyzable;
+// before it, everything is in scope.
+bool is_dse_eligible_pointer(Stmt *ptr, bool after_lower_access) {
+  if (!after_lower_access) {
+    return true;
+  }
+  if (ptr->is<AllocaStmt>() || ptr->is<AdStackAllocaStmt>()) {
+    return true;
+  }
+  if (ptr->is<MatrixPtrStmt>()) {
+    auto *origin = ptr->as<MatrixPtrStmt>()->origin;
+    if (origin->is<AllocaStmt>() || origin->is<MatrixPtrStmt>()) {
+      return true;
     }
+  }
+  return false;
+}
 
+// Compute the store destinations of |stmt|, including AD-stack stmts whose store semantics
+// aren't yet captured by `get_store_destination`.
+// TODO: Consider AD-stacks in get_store_destination instead of here for store-to-load forwarding
+// on AD-stacks.
+std::vector<Stmt *> dse_store_destinations(Stmt *stmt) {
+  if (auto *pop = stmt->cast<AdStackPopStmt>()) {
+    return {pop->stack};
+  }
+  if (auto *push = stmt->cast<AdStackPushStmt>()) {
+    return {push->stack};
+  }
+  if (auto *acc = stmt->cast<AdStackAccAdjointStmt>()) {
+    return {acc->stack};
+  }
+  if (stmt->is<AdStackAllocaStmt>()) {
+    return {stmt};
+  }
+  return irpass::analysis::get_store_destination(stmt);
+}
+
+// Is |store_ptr| guaranteed dead at this point in the reverse-order walk?
+//   - !may_contain_variable(live_in_this_node, store_ptr): not loaded after this store in-node
+//   - contain_variable(killed_in_this_node, store_ptr): already overwritten in-node, OR
+//   - !may_contain_variable(live_out, store_ptr): not used in any successor node
+bool is_store_dead(Stmt *store_ptr,
+                   const std::unordered_set<Stmt *> &live_out,
+                   const DseLiveState &state) {
+  bool is_used_in_next_nodes = false;
+  for (auto *ptr : irpass::analysis::include_aliased_stmts(store_ptr)) {
+    is_used_in_next_nodes |= CFGNode::may_contain_variable(live_out, ptr);
+  }
+  const bool is_killed_in_current_node = CFGNode::contain_variable(state.killed_in_this_node, store_ptr);
+  bool is_dead = is_killed_in_current_node || !is_used_in_next_nodes;
+  is_dead &= !CFGNode::may_contain_variable(state.live_in_this_node, store_ptr);
+  return is_dead;
+}
+
+// On dead-store elimination of an `AtomicOpStmt`, the store part is dropped but the load
+// (= the atomic's return value) remains; record the load and mark the dest killed/loaded.
+void record_weakened_atomic_as_load(Stmt *dest, Stmt *new_load, const DseAliasMaps &alias, DseLiveState &state) {
+  update_container_with_alias(alias.tensor_to_matrix_ptrs, alias.matrix_ptr_to_tensor, state.live_in_this_node, dest,
+                              false);
+  update_container_with_alias(alias.tensor_to_matrix_ptrs, alias.matrix_ptr_to_tensor, state.killed_in_this_node, dest,
+                              true);
+  state.live_load_in_this_node[dest] = new_load;
+}
+
+// Try to eliminate a dead store (or weaken a dead-store atomic to a pure load) at position |i|.
+// If no elimination applies, fall through to update killed/live state for this non-eliminated
+// store and return false; the caller will then move on to load handling for the same stmt.
+bool try_eliminate_dead_store_at(CFGNode *node,
+                                 int i,
+                                 Stmt *stmt,
+                                 Stmt *store_ptr,
+                                 bool after_lower_access,
+                                 const DseAliasMaps &alias,
+                                 DseLiveState &state) {
+  if (!is_dse_eligible_pointer(store_ptr, after_lower_access)) {
+    return false;
+  }
+  const bool is_dead = is_store_dead(store_ptr, node->live_out, state);
+  const bool stmt_eliminable =
+      !stmt->is<AllocaStmt>() && !stmt->is<AdStackAllocaStmt>() && !stmt->is<ExternalFuncCallStmt>();
+  if (stmt_eliminable && is_dead) {
+    // If an address is neither used in this node, nor in the next nodes, eliminate any stores to
+    // it. Two scenarios:
+    //   1. Direct store stmts (LocalStore, GlobalStore, AdStackPush, ...): erase outright.
+    //   2. AtomicOpStmt (load+store): drop the store half, leaving a pure load.
+    if (!stmt->is<AtomicOpStmt>()) {
+      node->erase(i);
+      return true;
+    }
+    auto *atomic = stmt->cast<AtomicOpStmt>();
+    if (atomic->dest->is<AllocaStmt>()) {
+      auto local_load = Stmt::make<LocalLoadStmt>(atomic->dest);
+      local_load->ret_type = atomic->ret_type;
+      record_weakened_atomic_as_load(atomic->dest, local_load.get(), alias, state);
+      node->replace_with(i, std::move(local_load), true);
+      return true;
+    }
+    // If this node is parallel executed, we can't weaken a global atomic to a global load.
+    // TODO: we can weaken it if it's element-wise (i.e. never accessed by other threads).
+    const bool atomic_global_weakable =
+        !node->is_parallel_executed ||
+        (atomic->dest->is<GlobalPtrStmt>() && atomic->dest->as<GlobalPtrStmt>()->snode->is_scalar());
+    if (atomic_global_weakable) {
+      auto global_load = Stmt::make<GlobalLoadStmt>(atomic->dest);
+      global_load->ret_type = atomic->ret_type;
+      record_weakened_atomic_as_load(atomic->dest, global_load.get(), alias, state);
+      node->replace_with(i, std::move(global_load), true);
+      return true;
+    }
+    // Atomic was dead but not safely weakable (parallel global, non-scalar). The original code
+    // intentionally leaves state alone in this case (the atomic still executes, but state is not
+    // updated for it). Preserve that behavior.
+    return false;
+  }
+  // Non-eliminated store (not dead, or stmt not eliminable): update state. Insert into killed,
+  // and drop any live-in entry that aliases the same address.
+  update_container_with_alias(alias.tensor_to_matrix_ptrs, alias.matrix_ptr_to_tensor, state.killed_in_this_node,
+                              store_ptr, false);
+  auto old_live_in = state.live_in_this_node;
+  for (auto &var : old_live_in) {
+    if (irpass::analysis::definitely_same_address(store_ptr, var.first)) {
+      update_container_with_alias(alias.tensor_to_matrix_ptrs, alias.matrix_ptr_to_tensor, state.live_in_this_node,
+                                  store_ptr, true);
+    }
+  }
+  return false;
+}
+
+// Try to eliminate an identical (redundant) load at |stmt|. We only do this within a single
+// CFGNode, and only if no store has intervened since the prior load. The prior load (later in the
+// block, since we walk in reverse) is the one erased; |stmt| takes over its usages.
+bool try_eliminate_identical_load_at(CFGNode *node,
+                                     Stmt *stmt,
+                                     Stmt *load_ptr,
+                                     bool after_lower_access,
+                                     const DseAliasMaps &alias,
+                                     DseLiveState &state) {
+  if (!is_dse_eligible_pointer(load_ptr, after_lower_access)) {
+    return false;
+  }
+  bool modified = false;
+  auto it = state.live_load_in_this_node.find(load_ptr);
+  if (it != state.live_load_in_this_node.end() &&
+      !CFGNode::may_contain_variable(state.killed_in_this_node, load_ptr)) {
+    auto *next_load_stmt = it->second;
+    if (irpass::analysis::same_statements(stmt, next_load_stmt)) {
+      next_load_stmt->replace_usages_with(stmt);
+      node->erase(node->block->locate(next_load_stmt));
+      modified = true;
+    }
+  }
+  update_container_with_alias(alias.tensor_to_matrix_ptrs, alias.matrix_ptr_to_tensor, state.killed_in_this_node,
+                              load_ptr, true);
+  state.live_load_in_this_node[load_ptr] = stmt;
+  return modified;
+}
+
+// Mark all (eligible) loads of |stmt| as live-in-this-node so that earlier-in-reverse-order stores
+// to the same address see them and abort their dead-store check.
+void mark_loads_live_in_this_node(const std::vector<Stmt *> &load_ptrs,
+                                  bool after_lower_access,
+                                  const DseAliasMaps &alias,
+                                  DseLiveState &state) {
+  for (auto *load_ptr : load_ptrs) {
+    if (is_dse_eligible_pointer(load_ptr, after_lower_access)) {
+      update_container_with_alias(alias.tensor_to_matrix_ptrs, alias.matrix_ptr_to_tensor, state.live_in_this_node,
+                                  load_ptr, false);
+    }
+  }
+}
+
+}  // namespace
+
+bool CFGNode::dead_store_elimination(bool after_lower_access) {
+  // Reverse-order walk over this node's statements. At each statement we may (a) eliminate a dead
+  // store, (b) eliminate an identical load, or (c) update live/killed state for later iterations.
+  // `FuncCallStmt` is treated as a full barrier: it can read/write anything, so we drop the kill
+  // and live-load tables and start fresh.
+  const DseAliasMaps alias = build_matrix_ptr_alias_maps(block, begin_location, end_location);
+  DseLiveState state;
+  bool modified = false;
+  for (int i = end_location - 1; i >= begin_location; i--) {
+    auto *stmt = block->statements[i].get();
+    if (stmt->is<FuncCallStmt>()) {
+      state.killed_in_this_node.clear();
+      state.live_load_in_this_node.clear();
+      continue;
+    }
+    const auto store_ptrs = dse_store_destinations(stmt);
     if (store_ptrs.size() == 1) {
-      // Dead store elimination
-      auto store_ptr = *store_ptrs.begin();
-
-      if (!after_lower_access ||
-          (store_ptr->is<MatrixPtrStmt>() && store_ptr->as<MatrixPtrStmt>()->origin->is<AllocaStmt>()) ||
-          (store_ptr->is<MatrixPtrStmt>() && store_ptr->as<MatrixPtrStmt>()->origin->is<MatrixPtrStmt>()) ||
-          (store_ptr->is<AllocaStmt>() || store_ptr->is<AdStackAllocaStmt>())) {
-        // !may_contain_variable(live_in_this_node, store_ptr): address is not
-        //      loaded after this store
-        // contain_variable(killed_in_this_node, store_ptr): address is already
-        //      stored by another store stmt in this node (thus killed)
-        // !may_contain_variable(live_out, store_ptr): address is not used
-        //      in the next nodes
-        bool is_used_in_next_nodes = false;
-        for (auto ptr : irpass::analysis::include_aliased_stmts(store_ptr)) {
-          is_used_in_next_nodes |= may_contain_variable(live_out, ptr);
-        }
-
-        bool is_killed_in_current_node = contain_variable(killed_in_this_node, store_ptr);
-        bool is_dead = is_killed_in_current_node || !is_used_in_next_nodes;
-        is_dead &= !may_contain_variable(live_in_this_node, store_ptr);
-        if (!stmt->is<AllocaStmt>() && !stmt->is<AdStackAllocaStmt>() && !stmt->is<ExternalFuncCallStmt>() && is_dead) {
-          // If an address is neither used in this node, nor used in the next
-          // nodes, then we can consider eliminating any stores to this address
-          // (it's not used anyway). There's two different scenerios though:
-          // 1. Any direct store stmt can be eliminated immediately (LocalStore,
-          //    GlobalStore, AdStackPush, ...)
-          // 2. AtomicStmt (load + store): remove the store part, thus
-          //    converting the AtomicStmt into a LoadStmt
-          if (!stmt->is<AtomicOpStmt>()) {
-            // Eliminate the dead store.
-            erase(i);
-            modified = true;
-            continue;
-          }
-          auto atomic = stmt->cast<AtomicOpStmt>();
-          // Weaken the atomic operation to a load.
-          if (atomic->dest->is<AllocaStmt>()) {
-            auto local_load = Stmt::make<LocalLoadStmt>(atomic->dest);
-            local_load->ret_type = atomic->ret_type;
-            // Notice that we have a load here
-            // (the return value of AtomicOpStmt).
-            update_container_with_alias(tensor_to_matrix_ptrs_map, matrix_ptr_to_tensor_map, live_in_this_node,
-                                        atomic->dest, false);
-            update_container_with_alias(tensor_to_matrix_ptrs_map, matrix_ptr_to_tensor_map, killed_in_this_node,
-                                        atomic->dest, true);
-            live_load_in_this_node[atomic->dest] = local_load.get();
-
-            replace_with(i, std::move(local_load), true);
-            modified = true;
-            continue;
-          } else if (!is_parallel_executed ||
-                     (atomic->dest->is<GlobalPtrStmt>() && atomic->dest->as<GlobalPtrStmt>()->snode->is_scalar())) {
-            // If this node is parallel executed, we can't weaken a global
-            // atomic operation to a global load.
-            // TODO: we can weaken it if it's element-wise (i.e. never
-            //  accessed by other threads).
-            auto global_load = Stmt::make<GlobalLoadStmt>(atomic->dest);
-            global_load->ret_type = atomic->ret_type;
-            // Notice that we have a load here
-            // (the return value of AtomicOpStmt).
-            update_container_with_alias(tensor_to_matrix_ptrs_map, matrix_ptr_to_tensor_map, live_in_this_node,
-                                        atomic->dest, false);
-            update_container_with_alias(tensor_to_matrix_ptrs_map, matrix_ptr_to_tensor_map, killed_in_this_node,
-                                        atomic->dest, true);
-            live_load_in_this_node[atomic->dest] = global_load.get();
-
-            replace_with(i, std::move(global_load), true);
-            modified = true;
-            continue;
-          }
-        } else {
-          // A non-eliminated store.
-          // Insert to killed_in_this_node if it's stored in this node.
-          update_container_with_alias(tensor_to_matrix_ptrs_map, matrix_ptr_to_tensor_map, killed_in_this_node,
-                                      store_ptr, false);
-
-          // Remove the address from live_in_this_node if it's stored in this
-          // node.
-          auto old_live_in_this_node = live_in_this_node;
-          for (auto &var : old_live_in_this_node) {
-            if (irpass::analysis::definitely_same_address(store_ptr, var.first)) {
-              update_container_with_alias(tensor_to_matrix_ptrs_map, matrix_ptr_to_tensor_map, live_in_this_node,
-                                          store_ptr, true);
-            }
-          }
-        }
+      if (try_eliminate_dead_store_at(this, i, stmt, store_ptrs.front(), after_lower_access, alias, state)) {
+        modified = true;
+        continue;
       }
     }
-    auto load_ptrs = irpass::analysis::get_load_pointers(stmt);
+    const auto load_ptrs = irpass::analysis::get_load_pointers(stmt);
     if (load_ptrs.size() == 1 && store_ptrs.empty()) {
-      // Identical load elimination
-      auto load_ptr = load_ptrs.begin()[0];
-
-      if (!after_lower_access ||
-          (load_ptr->is<MatrixPtrStmt>() && load_ptr->as<MatrixPtrStmt>()->origin->is<AllocaStmt>()) ||
-          (load_ptr->is<MatrixPtrStmt>() && load_ptr->as<MatrixPtrStmt>()->origin->is<MatrixPtrStmt>()) ||
-          (load_ptr->is<AllocaStmt>() || load_ptr->is<AdStackAllocaStmt>())) {
-        // live_load_in_this_node[addr]: tracks the
-        //        next load to the same address
-        // "!may_contain_variable(killed_in_this_node, load_ptr)": means it's
-        //        not been stored in between the two loads
-        if (live_load_in_this_node.find(load_ptr) != live_load_in_this_node.end() &&
-            !may_contain_variable(killed_in_this_node, load_ptr)) {
-          // Only perform identical load elimination within a CFGNode.
-          auto next_load_stmt = live_load_in_this_node[load_ptr];
-          if (irpass::analysis::same_statements(stmt, next_load_stmt)) {
-            next_load_stmt->replace_usages_with(stmt);
-            erase(block->locate(next_load_stmt));
-            modified = true;
-          }
-        }
-
-        update_container_with_alias(tensor_to_matrix_ptrs_map, matrix_ptr_to_tensor_map, killed_in_this_node, load_ptr,
-                                    true);
-        live_load_in_this_node[load_ptr] = stmt;
+      if (try_eliminate_identical_load_at(this, stmt, load_ptrs.front(), after_lower_access, alias, state)) {
+        modified = true;
       }
     }
-
-    // Update live_in_this_node
-    for (auto &load_ptr : load_ptrs) {
-      if (!after_lower_access ||
-          (load_ptr->is<MatrixPtrStmt>() && load_ptr->as<MatrixPtrStmt>()->origin->is<AllocaStmt>()) ||
-          (load_ptr->is<MatrixPtrStmt>() && load_ptr->as<MatrixPtrStmt>()->origin->is<MatrixPtrStmt>()) ||
-          (load_ptr->is<AllocaStmt>() || load_ptr->is<AdStackAllocaStmt>())) {
-        // Addr is used in this node, so it's live in this node
-        update_container_with_alias(tensor_to_matrix_ptrs_map, matrix_ptr_to_tensor_map, live_in_this_node, load_ptr,
-                                    false);
-      }
-    }
+    mark_loads_live_in_this_node(load_ptrs, after_lower_access, alias, state);
   }
   return modified;
 }
