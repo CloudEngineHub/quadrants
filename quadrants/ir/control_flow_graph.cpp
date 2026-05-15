@@ -159,7 +159,7 @@ CFGNode::CFGNode(Block *block,
     prev_node_in_same_block->next_node_in_same_block = this;
   if (!empty()) {
     // For non-empty nodes, precompute |parent_blocks| to accelerate
-    // get_store_forwarding_data().
+    // find_forwardable_store_value().
     QD_ASSERT(begin_location >= 0);
     QD_ASSERT(block);
     auto parent_block = block;
@@ -280,7 +280,7 @@ bool CFGNode::may_contain_variable(const std::unordered_set<Stmt *> &var_set, St
   }
 }
 
-bool CFGNode::reach_kill_variable(Stmt *var) const {
+bool CFGNode::is_reach_killed(Stmt *var) const {
   // Does this node (definitely) kill a definition of var?
   return contain_variable(reach_kill, var);
 }
@@ -296,10 +296,10 @@ bool CFGNode::is_visible_at(Stmt *stmt, int position) const {
   return parent_blocks_.find(stmt->parent) != parent_blocks_.end();
 }
 
-bool CFGNode::update_forwarding_result(Stmt *stmt,
-                                       int position,
-                                       Stmt *&result,
-                                       bool &result_visible) const {
+bool CFGNode::fold_definition_into_result(Stmt *stmt,
+                                          int position,
+                                          Stmt *&result,
+                                          bool &result_visible) const {
   // |stmt| is a definition in the UD-chain of the variable being forwarded.
   // Fold its stored data into |result| / |result_visible|. Return false if
   // forwarding must abort (the caller should propagate nullptr); true to
@@ -380,7 +380,7 @@ std::optional<int> CFGNode::find_cross_block_def(Stmt *var,
   // nodes[start_node]->reach_gen.
   for (auto *stmt : reach_in) {
     if (var == stmt || may_contain_address(stmt, var)) {
-      if (!update_forwarding_result(stmt, position, result, result_visible)) {
+      if (!fold_definition_into_result(stmt, position, result, result_visible)) {
         return std::nullopt;
       }
       last_def_position = 0;
@@ -389,7 +389,7 @@ std::optional<int> CFGNode::find_cross_block_def(Stmt *var,
   // Stores generated within this node (in reach_gen) that precede |position|.
   for (auto *stmt : reach_gen) {
     if (may_contain_address(stmt, var) && stmt->parent->locate(stmt) < position) {
-      if (!update_forwarding_result(stmt, position, result, result_visible)) {
+      if (!fold_definition_into_result(stmt, position, result, result_visible)) {
         return std::nullopt;
       }
       last_def_position = stmt->parent->locate(stmt);
@@ -420,7 +420,7 @@ bool CFGNode::any_aliased_store_breaks_forwarding(Stmt *result, Stmt *var, int f
 // cross-block forwarding when present), then falls back to the cross-block search over reach_in
 // and reach_gen. In both cases an intervening aliased store that may write a different value
 // breaks the forward.
-Stmt *CFGNode::get_store_forwarding_data(Stmt *var, int position) const {
+Stmt *CFGNode::find_forwardable_store_value(Stmt *var, int position) const {
   // [Intra-block search] Walks backwards in this node's block.
   if (int last_def = find_intra_block_last_def(var, position); last_def != -1) {
     Stmt *result = irpass::analysis::get_store_data(block->statements[last_def].get());
@@ -475,7 +475,7 @@ void CFGNode::reaching_definition_analysis(bool after_lower_access) {
         // After lower_access, we only analyze local variables.
         continue;
       }
-      if (!reach_kill_variable(data_source_ptr)) {
+      if (!is_reach_killed(data_source_ptr)) {
         reach_gen.insert(stmt);
         reach_kill.insert(data_source_ptr);
       }
@@ -490,11 +490,11 @@ bool CFGNode::try_forward_load_at(int &i, Stmt *stmt, bool after_lower_access, b
   Stmt *result = nullptr;
   if (auto *local_load = stmt->cast<LocalLoadStmt>()) {
     load_src = local_load->src;
-    result = get_store_forwarding_data(load_src, i);
+    result = find_forwardable_store_value(load_src, i);
   } else if (auto *global_load = stmt->cast<GlobalLoadStmt>()) {
     if (!after_lower_access && !autodiff_enabled) {
       load_src = global_load->src;
-      result = get_store_forwarding_data(load_src, i);
+      result = find_forwardable_store_value(load_src, i);
     }
   }
   if (!result) {
@@ -535,7 +535,7 @@ void CFGNode::try_eliminate_identical_store_at(int &i,
   // same address. For local stores under non-autodiff there's also an alloca-zero special case:
   // writing a zero to a freshly-allocated alloca is redundant.
   if (auto *local_store = stmt->cast<LocalStoreStmt>()) {
-    Stmt *result = get_store_forwarding_data(local_store->dest, i);
+    Stmt *result = find_forwardable_store_value(local_store->dest, i);
     if (result && result->is<AllocaStmt>() && !autodiff_enabled) {
       // TensorType does not apply to this special case.
       if (result->ret_type.ptr_removed()->is<TensorType>()) {
@@ -561,7 +561,7 @@ void CFGNode::try_eliminate_identical_store_at(int &i,
     if (after_lower_access) {
       return;
     }
-    Stmt *result = get_store_forwarding_data(global_store->dest, i);
+    Stmt *result = find_forwardable_store_value(global_store->dest, i);
     if (irpass::analysis::same_value(result, global_store->val)) {
       erase(i);
       i--;
@@ -1195,10 +1195,10 @@ bool is_reach_in_stmt_killed_at(CFGNode *node, Stmt *stmt) {
   // Not const: `one_or_more::begin()` is non-const, so the range-for below would not compile.
   auto store_ptrs = irpass::analysis::get_store_destination(stmt);
   if (store_ptrs.empty()) {
-    return node->reach_kill_variable(stmt);
+    return node->is_reach_killed(stmt);
   }
   for (auto *store_ptr : store_ptrs) {
-    if (!node->reach_kill_variable(store_ptr)) {
+    if (!node->is_reach_killed(store_ptr)) {
       return false;
     }
   }

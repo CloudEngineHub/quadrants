@@ -37,7 +37,7 @@ class CFGNode {
   };
 
  private:
-  // For accelerating get_store_forwarding_data()
+  // For accelerating find_forwardable_store_value()
   std::unordered_set<Block *> parent_blocks_;
 
  public:
@@ -88,8 +88,8 @@ class CFGNode {
   static bool contain_variable(const std::unordered_map<Stmt *, UseDefineStatus> &var_set, Stmt *var);
   static bool may_contain_variable(const std::unordered_set<Stmt *> &var_set, Stmt *var);
   static bool may_contain_variable(const std::unordered_map<Stmt *, UseDefineStatus> &var_set, Stmt *var);
-  bool reach_kill_variable(Stmt *var) const;
-  Stmt *get_store_forwarding_data(Stmt *var, int position) const;
+  bool is_reach_killed(Stmt *var) const;
+  Stmt *find_forwardable_store_value(Stmt *var, int position) const;
 
   // Per-node (intra-block) analyses and transforms. Each is driven across the
   // whole graph by the same-named method on ControlFlowGraph; see below.
@@ -111,30 +111,30 @@ class CFGNode {
   bool dead_store_elimination(bool after_lower_access);
 
  private:
-  // Helper for get_store_forwarding_data: is |stmt| visible at |position|
+  // Helper for find_forwardable_store_value: is |stmt| visible at |position|
   // inside this node's block? A stmt is visible if it lives in the same block
   // and precedes |position|, or if its parent block is an ancestor of
   // |this->block|.
   bool is_visible_at(Stmt *stmt, int position) const;
 
-  // Helper for get_store_forwarding_data: incorporate |stmt|, a definition in
+  // Helper for find_forwardable_store_value: incorporate |stmt|, a definition in
   // the UD-chain of the variable being forwarded, into the running |result| /
   // |result_visible| state. Returns false to signal that forwarding must
   // abort (the caller should return nullptr), true to continue scanning.
-  bool update_forwarding_result(Stmt *stmt,
-                                int position,
-                                Stmt *&result,
-                                bool &result_visible) const;
+  bool fold_definition_into_result(Stmt *stmt,
+                                   int position,
+                                   Stmt *&result,
+                                   bool &result_visible) const;
 
-  // Helper for get_store_forwarding_data: walk this node's block backwards
+  // Helper for find_forwardable_store_value: walk this node's block backwards
   // from |position| and return the index of the most recent store to |var|,
   // or -1 if none is in this block. Handles the quant-store exclusion plus the
   // MatrixInitStmt-via-MatrixPtrStmt forwarding special case.
   int find_intra_block_last_def(Stmt *var, int position) const;
 
-  // Helper for get_store_forwarding_data: scan |reach_in| and |reach_gen| for
+  // Helper for find_forwardable_store_value: scan |reach_in| and |reach_gen| for
   // definitions of |var| reaching |position|, folding each into |result| /
-  // |result_visible| via update_forwarding_result. Returns nullopt if any
+  // |result_visible| via fold_definition_into_result. Returns nullopt if any
   // visited def is unforwardable (caller must return nullptr); otherwise the
   // last_def_position (0 if only reach_in matched, an in-block index if
   // reach_gen matched, -1 if no eligible def was found).
@@ -143,7 +143,7 @@ class CFGNode {
                                           Stmt *&result,
                                           bool &result_visible) const;
 
-  // Helper for get_store_forwarding_data: scan block statements in
+  // Helper for find_forwardable_store_value: scan block statements in
   // [from, to_exclusive) for a store that may write a different value to an
   // address aliasing |var|. Returns true iff such a store exists (so
   // forwarding |result| must abort). The check is skipped (returns false) for
