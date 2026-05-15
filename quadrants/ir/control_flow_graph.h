@@ -129,6 +129,25 @@ class CFGNode {
   // non-tensor alloca destinations, where aliasing through MatrixPtrStmt
   // cannot apply.
   bool any_aliased_store_breaks_forwarding(Stmt *result, Stmt *var, int from, int to_exclusive) const;
+
+  // Helper for store_to_load_forwarding: if |stmt| is a load whose source has
+  // a forwardable preceding store, replace it. Returns true iff the load was
+  // handled (the caller must skip identical-store elimination for this stmt
+  // even if no IR change happened, matching the legacy fall-through). |i| is
+  // decremented on erase so the for-loop's natural `i++` lands on the next
+  // unread stmt; |modified| is flipped on erase only (preserved from legacy:
+  // replace-with-zero does not flip it).
+  bool try_forward_load_at(int &i, Stmt *stmt, bool after_lower_access, bool autodiff_enabled, bool &modified);
+
+  // Helper for store_to_load_forwarding: if |stmt| is a store identical to a
+  // preceding store to the same address, erase it. Handles the alloca-init-0
+  // special case under non-autodiff. Same |i|/|modified| accounting as
+  // try_forward_load_at.
+  void try_eliminate_identical_store_at(int &i,
+                                        Stmt *stmt,
+                                        bool after_lower_access,
+                                        bool autodiff_enabled,
+                                        bool &modified);
 };
 
 class ControlFlowGraph {

@@ -404,109 +404,109 @@ void CFGNode::reaching_definition_analysis(bool after_lower_access) {
   }
 }
 
+bool CFGNode::try_forward_load_at(int &i, Stmt *stmt, bool after_lower_access, bool autodiff_enabled, bool &modified) {
+  // Find the closest preceding store-to-same-address. For GlobalLoadStmt the forwarder is gated:
+  // after lower_access or under autodiff we don't trust cross-block forwarding to be sound.
+  Stmt *load_src = nullptr;
+  Stmt *result = nullptr;
+  if (auto *local_load = stmt->cast<LocalLoadStmt>()) {
+    load_src = local_load->src;
+    result = get_store_forwarding_data(load_src, i);
+  } else if (auto *global_load = stmt->cast<GlobalLoadStmt>()) {
+    if (!after_lower_access && !autodiff_enabled) {
+      load_src = global_load->src;
+      result = get_store_forwarding_data(load_src, i);
+    }
+  }
+  if (!result) {
+    return false;
+  }
+  if (result->is<AllocaStmt>()) {
+    // TensorType does not apply to this special case; skip further handling for this stmt.
+    if (result->ret_type.ptr_removed()->is<TensorType>()) {
+      return true;
+    }
+    // Alloca initialized to 0: replace the load with a zero const.
+    // Note: |modified| is intentionally NOT flipped here (preserved from legacy behavior).
+    auto zero = Stmt::make<ConstStmt>(TypedConstant(result->ret_type.ptr_removed(), 0));
+    replace_with(i, std::move(zero), true);
+    return true;
+  }
+  // Non-alloca result: forward it. Extract a MatrixInitStmt element when the forwarded data is
+  // a TensorType-typed init but the load is for a scalar slot.
+  if (result->ret_type.ptr_removed()->is<TensorType>() && !stmt->ret_type->is<TensorType>()) {
+    QD_ASSERT(load_src->is<MatrixPtrStmt>() && load_src->as<MatrixPtrStmt>()->offset->is<ConstStmt>());
+    QD_ASSERT(result->is<MatrixInitStmt>());
+    const int offset = load_src->as<MatrixPtrStmt>()->offset->as<ConstStmt>()->val.val_int32();
+    result = result->as<MatrixInitStmt>()->values[offset];
+  }
+  stmt->replace_usages_with(result);
+  erase(i);  // end_location--
+  i--;       // cancel the for-loop's i++
+  modified = true;
+  return true;
+}
+
+void CFGNode::try_eliminate_identical_store_at(int &i,
+                                               Stmt *stmt,
+                                               bool after_lower_access,
+                                               bool autodiff_enabled,
+                                               bool &modified) {
+  // Eliminate a store whose value is provably identical to the closest preceding store to the
+  // same address. For local stores under non-autodiff there's also an alloca-zero special case:
+  // writing a zero to a freshly-allocated alloca is redundant.
+  if (auto *local_store = stmt->cast<LocalStoreStmt>()) {
+    Stmt *result = get_store_forwarding_data(local_store->dest, i);
+    if (result && result->is<AllocaStmt>() && !autodiff_enabled) {
+      // TensorType does not apply to this special case.
+      if (result->ret_type.ptr_removed()->is<TensorType>()) {
+        return;
+      }
+      if (auto *stored = local_store->val->cast<ConstStmt>()) {
+        if (stored->val.equal_value(0)) {
+          erase(i);
+          i--;
+          modified = true;
+        }
+      }
+      return;
+    }
+    if (irpass::analysis::same_value(result, local_store->val)) {
+      erase(i);
+      i--;
+      modified = true;
+    }
+    return;
+  }
+  if (auto *global_store = stmt->cast<GlobalStoreStmt>()) {
+    if (after_lower_access) {
+      return;
+    }
+    Stmt *result = get_store_forwarding_data(global_store->dest, i);
+    if (irpass::analysis::same_value(result, global_store->val)) {
+      erase(i);
+      i--;
+      modified = true;
+    }
+  }
+}
+
 bool CFGNode::store_to_load_forwarding(bool after_lower_access, bool autodiff_enabled) {
-  // Contains two separate parts:
-  // 1. Store-to-load Forwarding: for each load stmt, find the closest previous
-  // store stmt
-  //        that stores to the same address as the load stmt, then replace
-  //        load with the "val".
-  // 2. Identical Store Elimination: for each store stmt, find the closest
-  // previous store stmt
-  //        that stores to the same address as the store stmt. If the "val"s
-  //        are the same, then remove the store stmt.
+  // Two passes fused into one forward walk:
+  //   1. Store-to-load forwarding: replace a load with the value from the closest preceding store
+  //      to the same address.
+  //   2. Identical-store elimination: erase a store whose value is identical to the closest
+  //      preceding store to the same address.
+  // The forwarding pass takes precedence: if we forwarded a load, we don't also try to treat the
+  // same stmt as a store. erase() shrinks end_location, so per-elimination we both `erase(i)` and
+  // decrement `i` to keep the for-loop pointing at the right next stmt.
   bool modified = false;
   for (int i = begin_location; i < end_location; i++) {
-    // Store-to-load forwarding
-    auto stmt = block->statements[i].get();
-
-    // result: the value to be store/load
-    Stmt *result = nullptr;
-
-    // [get_store_forwarding_data] find the store stmt that:
-    // 1. stores to the same address and as the load stmt
-    // 2. (one value at a time) closest to the load stmt but before the load
-    // stmt
-    Stmt *load_src = nullptr;
-    if (auto local_load = stmt->cast<LocalLoadStmt>()) {
-      result = get_store_forwarding_data(local_load->src, i);
-      load_src = local_load->src;
-    } else if (auto global_load = stmt->cast<GlobalLoadStmt>()) {
-      if (!after_lower_access && !autodiff_enabled) {
-        result = get_store_forwarding_data(global_load->src, i);
-        load_src = global_load->src;
-      }
-    }
-
-    // [Apply Load-Store-Forwarding]
-    // replace load stmt with the value-"result"
-    if (result) {
-      // Forward the stored data |result|.
-      if (result->is<AllocaStmt>()) {
-        // TensorType does not apply to this special case
-        if (result->ret_type.ptr_removed()->is<TensorType>())
-          continue;
-
-        // special case of alloca (initialized to 0)
-        auto zero = Stmt::make<ConstStmt>(TypedConstant(result->ret_type.ptr_removed(), 0));
-        replace_with(i, std::move(zero), true);
-      } else {
-        if (result->ret_type.ptr_removed()->is<TensorType>() && !stmt->ret_type->is<TensorType>()) {
-          QD_ASSERT(load_src->is<MatrixPtrStmt>() && load_src->as<MatrixPtrStmt>()->offset->is<ConstStmt>());
-          QD_ASSERT(result->is<MatrixInitStmt>());
-
-          int offset = load_src->as<MatrixPtrStmt>()->offset->as<ConstStmt>()->val.val_int32();
-
-          result = result->as<MatrixInitStmt>()->values[offset];
-        }
-
-        stmt->replace_usages_with(result);
-        erase(i);  // This causes end_location--
-        i--;       // to cancel i++ in the for loop
-        modified = true;
-      }
+    auto *stmt = block->statements[i].get();
+    if (try_forward_load_at(i, stmt, after_lower_access, autodiff_enabled, modified)) {
       continue;
     }
-
-    // [Identical store elimination]
-    // find the store stmt that:
-    // 1. stores to the same address as the current store stmt
-    // 2. has the same store value as the current store stmt
-    // 3. (one value at a time) closest to the current store stmt but before the
-    // current store stmt then erase the current store stmt
-    if (auto local_store = stmt->cast<LocalStoreStmt>()) {
-      result = get_store_forwarding_data(local_store->dest, i);
-      if (result && result->is<AllocaStmt>() && !autodiff_enabled) {
-        // TensorType does not apply to this special case
-        if (result->ret_type.ptr_removed()->is<TensorType>()) {
-          continue;
-        }
-
-        // special case of alloca (initialized to 0)
-        if (auto stored_data = local_store->val->cast<ConstStmt>()) {
-          if (stored_data->val.equal_value(0)) {
-            erase(i);  // This causes end_location--
-            i--;       // to cancel i++ in the for loop
-            modified = true;
-          }
-        }
-      } else {
-        // not alloca
-        if (irpass::analysis::same_value(result, local_store->val)) {
-          erase(i);  // This causes end_location--
-          i--;       // to cancel i++ in the for loop
-          modified = true;
-        }
-      }
-    } else if (auto global_store = stmt->cast<GlobalStoreStmt>()) {
-      if (!after_lower_access) {
-        result = get_store_forwarding_data(global_store->dest, i);
-        if (irpass::analysis::same_value(result, global_store->val)) {
-          erase(i);  // This causes end_location--
-          i--;       // to cancel i++ in the for loop
-          modified = true;
-        }
-      }
-    }
+    try_eliminate_identical_store_at(i, stmt, after_lower_access, autodiff_enabled, modified);
   }
   return modified;
 }
