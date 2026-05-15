@@ -332,6 +332,7 @@ int CFGNode::find_intra_block_last_def(Stmt *var, int position) const {
     // Find previous store stmt to the same dest_addr, stop at the closest one.
     // store_ptr: prev-store dest_addr
     for (auto *store_ptr : irpass::analysis::get_store_destination(block->statements[i].get())) {
+      // [SEMANTIC TRAP -- DO NOT REMOVE the is_quant() guard below]
       // Exclude `store_ptr` as a potential store destination due to mixed
       // semantics of store statements for quant types. The store operation
       // involves implicit casting before storing, which may result in a loss of
@@ -399,7 +400,11 @@ std::optional<int> CFGNode::find_cross_block_def(Stmt *var,
 }
 
 bool CFGNode::any_aliased_store_breaks_forwarding(Stmt *result, Stmt *var, int from, int to_exclusive) const {
-  // Allocas without tensor type cannot be aliased through MatrixPtrStmt, so the check is moot.
+  // [SEMANTIC TRAP -- DO NOT REMOVE the non-tensor-alloca early-out]
+  // Allocas without tensor type cannot be aliased through MatrixPtrStmt (the only derived-pointer
+  // form that creates aliasing in this IR). Without this early-out, the loop below would still
+  // run and `may_contain_address(non_tensor_alloca, store_ptr)` would mis-report aliasing for
+  // unrelated stores in the same block, falsely aborting forwardings that the legacy code allowed.
   const bool is_tensor_involved = var->ret_type.ptr_removed()->is<TensorType>();
   if (var->is<AllocaStmt>() && !is_tensor_involved) {
     return false;
@@ -505,8 +510,13 @@ bool CFGNode::try_forward_load_at(int &i, Stmt *stmt, bool after_lower_access, b
     if (result->ret_type.ptr_removed()->is<TensorType>()) {
       return true;
     }
-    // Alloca initialized to 0: replace the load with a zero const.
-    // Note: |modified| is intentionally NOT flipped here (preserved from legacy behavior).
+    // [SEMANTIC TRAP -- DO NOT "fix" by setting modified = true here]
+    // Alloca initialized to 0 (default): replace the load with a zero const. `modified` is
+    // intentionally NOT flipped -- preserved verbatim from the pre-refactor implementation. The
+    // exact reason was not captured in the original code; the safe assumption is that some
+    // upstream caller relies on `modified` strictly tracking "could a further S2L iteration find
+    // more work" rather than "IR changed", and flipping it here may regress that. If a future
+    // change needs to flip it, do it behind a regression-tested benchmark.
     auto zero = Stmt::make<ConstStmt>(TypedConstant(result->ret_type.ptr_removed(), 0));
     replace_with(i, std::move(zero), true);
     return true;
@@ -537,9 +547,15 @@ void CFGNode::try_eliminate_identical_store_at(int &i,
   if (auto *local_store = stmt->cast<LocalStoreStmt>()) {
     Stmt *result = find_forwardable_store_value(local_store->dest, i);
     if (result && result->is<AllocaStmt>() && !autodiff_enabled) {
-      // TensorType does not apply to this special case.
+      // [SEMANTIC TRAP -- DO NOT REMOVE the !autodiff_enabled gate, or generalize past const 0]
+      // The "default-initialized alloca implicitly holds 0" rewrite only fires under non-autodiff.
+      // Under autodiff, AdStack/AdStackPush semantics depend on every primal write being observed
+      // by the recorder; treating a store-zero-to-fresh-alloca as redundant breaks the push
+      // ordering in the backward pass. The const-zero check is also load-bearing: it's the only
+      // value we know matches the default-init contract; other constants would need a separate
+      // proof that the alloca has not been written yet on every path reaching here.
       if (result->ret_type.ptr_removed()->is<TensorType>()) {
-        return;
+        return;  // TensorType does not apply to this special case.
       }
       if (auto *stored = local_store->val->cast<ConstStmt>()) {
         if (stored->val.equal_value(0)) {
@@ -900,9 +916,15 @@ bool try_eliminate_dead_store_at(CFGNode *node,
       node->replace_with(i, std::move(global_load), true);
       return true;
     }
-    // Atomic was dead but not safely weakable (parallel global, non-scalar). The original code
-    // intentionally leaves state alone in this case (the atomic still executes, but state is not
-    // updated for it). Preserve that behavior.
+    // [SEMANTIC TRAP -- DO NOT REMOVE]
+    // Atomic was dead but not safely weakable (parallel global, non-scalar).
+    // The legacy code intentionally returns *without* updating
+    // `killed_in_this_node` / `live_in_this_node` here -- the atomic still executes at runtime, so
+    // its dest is neither newly-killed nor a fresh live entry. Falling through into the
+    // state-update block below would mark this address as killed-by-an-erased-store, which it
+    // isn't, and silently corrupt downstream DSE decisions on aliasing addresses.
+    // A previous refactor of this function broke exactly this branch; the existing AD/atomic test
+    // suites do not cover it directly. Touch with care.
     return false;
   }
   // Non-eliminated store (not dead, or stmt not eliminable): update state. Insert into killed,
