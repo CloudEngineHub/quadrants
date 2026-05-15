@@ -16,6 +16,55 @@
 
 namespace quadrants::lang {
 
+namespace {
+
+// Does |store_stmt| store to an address that may alias |var|?
+// Matrix-pointer aliasing is handled both ways: a MatrixPtrStmt aliases its
+// underlying origin, and vice-versa.
+bool may_contain_address(Stmt *store_stmt, Stmt *var) {
+  for (auto store_ptr : irpass::analysis::get_store_destination(store_stmt)) {
+    if (var->is<MatrixPtrStmt>() && !store_ptr->is<MatrixPtrStmt>()) {
+      // check for aliased address with var
+      if (irpass::analysis::maybe_same_address(var->as<MatrixPtrStmt>()->origin, store_ptr)) {
+        return true;
+      }
+    }
+
+    if (!var->is<MatrixPtrStmt>() && store_ptr->is<MatrixPtrStmt>()) {
+      // check for aliased address with store_ptr
+      if (irpass::analysis::maybe_same_address(store_ptr->as<MatrixPtrStmt>()->origin, var)) {
+        return true;
+      }
+    }
+
+    if (irpass::analysis::maybe_same_address(var, store_ptr)) {
+      return true;
+    }
+  }
+  return false;
+}
+
+// Should |stmt| appear in the synthetic `live_gen` of the final CFG node?
+// Locals (allocas, matrix-pointers into allocas) are never live past the
+// kernel boundary. Global pointers are live unless SFG has marked their
+// SNode as eliminable in |config_opt|.
+bool in_final_node_live_gen(const Stmt *stmt,
+                            const std::optional<ControlFlowGraph::LiveVarAnalysisConfig> &config_opt) {
+  if (stmt->is<AllocaStmt>() || stmt->is<AdStackAllocaStmt>()) {
+    return false;
+  }
+  if (stmt->is<MatrixPtrStmt>() && stmt->cast<MatrixPtrStmt>()->origin->is<AllocaStmt>()) {
+    return false;
+  }
+  if (auto *gptr = stmt->cast<GlobalPtrStmt>(); gptr && config_opt.has_value()) {
+    return config_opt->eliminable_snodes.count(gptr->snode) == 0;
+  }
+  // A global pointer that may be loaded after this kernel.
+  return true;
+}
+
+}  // namespace
+
 CFGNode::CFGNode(Block *block,
                  int begin_location,
                  int end_location,
@@ -91,8 +140,12 @@ bool CFGNode::contain_variable(const std::unordered_set<Stmt *> &var_set, Stmt *
     // TODO: How to optimize this?
     if (var_set.find(var) != var_set.end())
       return true;
-    return std::any_of(var_set.begin(), var_set.end(),
-                       [&](Stmt *set_var) { return irpass::analysis::definitely_same_address(var, set_var); });
+    for (Stmt *set_var : var_set) {
+      if (irpass::analysis::definitely_same_address(var, set_var)) {
+        return true;
+      }
+    }
+    return false;
   }
 }
 
@@ -107,12 +160,12 @@ bool CFGNode::contain_variable(const std::unordered_map<Stmt *, CFGNode::UseDefi
     if (var_set.find(var) != var_set.end()) {
       return var_set.at(var) != CFGNode::UseDefineStatus::PARTIAL;
     }
-    return std::any_of(var_set.begin(), var_set.end(), [&](const auto &set_var) {
-      if (irpass::analysis::definitely_same_address(var, set_var.first)) {
-        return set_var.second != CFGNode::UseDefineStatus::PARTIAL;
+    for (const auto &[key, status] : var_set) {
+      if (irpass::analysis::definitely_same_address(var, key)) {
+        return status != CFGNode::UseDefineStatus::PARTIAL;
       }
-      return false;
-    });
+    }
+    return false;
   }
 }
 
@@ -123,8 +176,12 @@ bool CFGNode::may_contain_variable(const std::unordered_map<Stmt *, CFGNode::Use
     // TODO: How to optimize this?
     if (var_set.find(var) != var_set.end())
       return true;
-    return std::any_of(var_set.begin(), var_set.end(),
-                       [&](const auto &set_var) { return irpass::analysis::maybe_same_address(var, set_var.first); });
+    for (const auto &entry : var_set) {
+      if (irpass::analysis::maybe_same_address(var, entry.first)) {
+        return true;
+      }
+    }
+    return false;
   }
 }
 
@@ -135,14 +192,60 @@ bool CFGNode::may_contain_variable(const std::unordered_set<Stmt *> &var_set, St
     // TODO: How to optimize this?
     if (var_set.find(var) != var_set.end())
       return true;
-    return std::any_of(var_set.begin(), var_set.end(),
-                       [&](Stmt *set_var) { return irpass::analysis::maybe_same_address(var, set_var); });
+    for (Stmt *set_var : var_set) {
+      if (irpass::analysis::maybe_same_address(var, set_var)) {
+        return true;
+      }
+    }
+    return false;
   }
 }
 
 bool CFGNode::reach_kill_variable(Stmt *var) const {
   // Does this node (definitely) kill a definition of var?
   return contain_variable(reach_kill, var);
+}
+
+bool CFGNode::is_visible_at(Stmt *stmt, int position) const {
+  // Check if |stmt| is before |position| here.
+  if (stmt->parent == block) {
+    return stmt->parent->locate(stmt) < position;
+  }
+  // |parent_blocks_| is precomputed in the constructor of CFGNode.
+  // TODO: What if |stmt| appears in an ancestor of |block| but after
+  //  |position|?
+  return parent_blocks_.find(stmt->parent) != parent_blocks_.end();
+}
+
+bool CFGNode::update_forwarding_result(Stmt *stmt,
+                                       int position,
+                                       Stmt *&result,
+                                       bool &result_visible) const {
+  // |stmt| is a definition in the UD-chain of the variable being forwarded.
+  // Fold its stored data into |result| / |result_visible|. Return false if
+  // forwarding must abort (the caller should propagate nullptr); true to
+  // continue scanning.
+  auto data = irpass::analysis::get_store_data(stmt);
+  if (!data) {  // not forwardable
+    return false;
+  }
+  if (!result) {
+    result = data;
+    result_visible = is_visible_at(data, position);
+    return true;
+  }
+  if (!irpass::analysis::same_value(result, data)) {
+    // check the special case of alloca (initialized to 0)
+    if (!(result->is<AllocaStmt>() && data->is<ConstStmt>() && data->as<ConstStmt>()->val.equal_value(0))) {
+      return false;
+    }
+  }
+  if (!result_visible && is_visible_at(data, position)) {
+    // pick the visible one for store-to-load forwarding
+    result = data;
+    result_visible = true;
+  }
+  return true;
 }
 
 // var: dest_addr
@@ -198,30 +301,6 @@ Stmt *CFGNode::get_store_forwarding_data(Stmt *var, int position) const {
     }
   }
 
-  // Check if store_stmt will ever influence the value of var
-  auto may_contain_address = [&](Stmt *store_stmt, Stmt *var) {
-    for (auto store_ptr : irpass::analysis::get_store_destination(store_stmt)) {
-      if (var->is<MatrixPtrStmt>() && !store_ptr->is<MatrixPtrStmt>()) {
-        // check for aliased address with var
-        if (irpass::analysis::maybe_same_address(var->as<MatrixPtrStmt>()->origin, store_ptr)) {
-          return true;
-        }
-      }
-
-      if (!var->is<MatrixPtrStmt>() && store_ptr->is<MatrixPtrStmt>()) {
-        // check for aliased address with store_ptr
-        if (irpass::analysis::maybe_same_address(store_ptr->as<MatrixPtrStmt>()->origin, var)) {
-          return true;
-        }
-      }
-
-      if (irpass::analysis::maybe_same_address(var, store_ptr)) {
-        return true;
-      }
-    }
-    return false;
-  };
-
   // Check for aliased address
   // There's a store to the same dest_addr before this stmt
   if (last_def_position != -1) {
@@ -247,46 +326,6 @@ Stmt *CFGNode::get_store_forwarding_data(Stmt *var, int position) const {
   // Search for store to the same dest_addr in reach_in and reach_gen
   Stmt *result = nullptr;
   bool result_visible = false;
-  auto visible = [&](Stmt *stmt) {
-    // Check if |stmt| is before |position| here.
-    if (stmt->parent == block) {
-      return stmt->parent->locate(stmt) < position;
-    }
-    // |parent_blocks| is precomputed in the constructor of CFGNode.
-    // TODO: What if |stmt| appears in an ancestor of |block| but after
-    //  |position|?
-    return parent_blocks_.find(stmt->parent) != parent_blocks_.end();
-  };
-  /**
-   * |stmt| is a definition in the UD-chain of |var|. Update |result| with
-   * |stmt|. If either the stored data of |stmt| is not forwardable or the
-   * stored data of |stmt| is not definitely the same as other definitions of
-   * |var|, return false to show that there is no store-to-load forwardable
-   * data.
-   */
-  auto update_result = [&](Stmt *stmt) {
-    auto data = irpass::analysis::get_store_data(stmt);
-    if (!data) {     // not forwardable
-      return false;  // return nullptr
-    }
-    if (!result) {
-      result = data;
-      result_visible = visible(data);
-      return true;  // continue the following loops
-    }
-    if (!irpass::analysis::same_value(result, data)) {
-      // check the special case of alloca (initialized to 0)
-      if (!(result->is<AllocaStmt>() && data->is<ConstStmt>() && data->as<ConstStmt>()->val.equal_value(0))) {
-        return false;  // return nullptr
-      }
-    }
-    if (!result_visible && visible(data)) {
-      // pick the visible one for store-to-load forwarding
-      result = data;
-      result_visible = true;
-    }
-    return true;  // continue the following loops
-  };
 
   // [Global Addr only]
   // test whether there's a store to the same dest_addr in a previous block.
@@ -296,7 +335,7 @@ Stmt *CFGNode::get_store_forwarding_data(Stmt *var, int position) const {
     // var == stmt is for the case that a global ptr is never stored.
     // In this case, stmt is from nodes[start_node]->reach_gen.
     if (var == stmt || may_contain_address(stmt, var)) {
-      if (!update_result(stmt))
+      if (!update_forwarding_result(stmt, position, result, result_visible))
         return nullptr;
       else
         last_def_position = 0;
@@ -308,7 +347,7 @@ Stmt *CFGNode::get_store_forwarding_data(Stmt *var, int position) const {
   //  if the store values are the same, then return the value
   for (auto stmt : reach_gen) {
     if (may_contain_address(stmt, var) && stmt->parent->locate(stmt) < position) {
-      if (!update_result(stmt))
+      if (!update_forwarding_result(stmt, position, result, result_visible))
         return nullptr;
       else
         last_def_position = stmt->parent->locate(stmt);
@@ -1060,26 +1099,12 @@ void ControlFlowGraph::live_variable_analysis(bool after_lower_access,
   nodes[final_node]->live_gen.clear();
   nodes[final_node]->live_kill.clear();
 
-  auto in_final_node_live_gen = [&config_opt](const Stmt *stmt) -> bool {
-    if (stmt->is<AllocaStmt>() || stmt->is<AdStackAllocaStmt>()) {
-      return false;
-    }
-    if (stmt->is<MatrixPtrStmt>() && stmt->cast<MatrixPtrStmt>()->origin->is<AllocaStmt>()) {
-      return false;
-    }
-    if (auto *gptr = stmt->cast<GlobalPtrStmt>(); gptr && config_opt.has_value()) {
-      const bool res = (config_opt->eliminable_snodes.count(gptr->snode) == 0);
-      return res;
-    }
-    // A global pointer that may be loaded after this kernel.
-    return true;
-  };
   if (!after_lower_access) {
     for (int i = 0; i < num_nodes; i++) {
       for (int j = nodes[i]->begin_location; j < nodes[i]->end_location; j++) {
         auto stmt = nodes[i]->block->statements[j].get();
         for (auto store_ptr : irpass::analysis::get_store_destination(stmt, true /*get_alias*/)) {
-          if (in_final_node_live_gen(store_ptr)) {
+          if (in_final_node_live_gen(store_ptr, config_opt)) {
             nodes[final_node]->live_gen.insert(store_ptr);
           }
         }
@@ -1495,8 +1520,14 @@ void ControlFlowGraph::determine_ad_stack_size() {
       }
     }
     if (scc_is_cyclic[s]) {
+      struct DfsFinishGreater {
+        const std::vector<int> &dfs_finish;
+        bool operator()(int a, int b) const {
+          return dfs_finish[a] > dfs_finish[b];
+        }
+      };
       auto topo = nodes_in_s;
-      std::sort(topo.begin(), topo.end(), [&](int a, int b) { return dfs_finish[a] > dfs_finish[b]; });
+      std::sort(topo.begin(), topo.end(), DfsFinishGreater{dfs_finish});
       scc_topo[s] = std::move(topo);
     }
   }
@@ -1510,14 +1541,15 @@ void ControlFlowGraph::determine_ad_stack_size() {
   struct FingerprintHash {
     std::size_t operator()(const Fingerprint &f) const noexcept {
       std::size_t h = 1469598103934665603ULL;
+      // FNV-1a mix of three components per fingerprint entry.
+      constexpr std::size_t fnv_prime = 1099511628211ULL;
       for (auto &[n, i, m] : f) {
-        auto mix = [&](std::size_t x) {
-          h ^= x;
-          h *= 1099511628211ULL;
-        };
-        mix(static_cast<std::size_t>(n));
-        mix(static_cast<std::size_t>(static_cast<unsigned>(i)));
-        mix(static_cast<std::size_t>(static_cast<unsigned>(m)));
+        h ^= static_cast<std::size_t>(n);
+        h *= fnv_prime;
+        h ^= static_cast<std::size_t>(static_cast<unsigned>(i));
+        h *= fnv_prime;
+        h ^= static_cast<std::size_t>(static_cast<unsigned>(m));
+        h *= fnv_prime;
       }
       return h;
     }

@@ -88,6 +88,22 @@ class CFGNode {
   void gather_loaded_snodes(std::unordered_set<SNode *> &snodes) const;
   void live_variable_analysis(bool after_lower_access);
   bool dead_store_elimination(bool after_lower_access);
+
+ private:
+  // Helper for get_store_forwarding_data: is |stmt| visible at |position|
+  // inside this node's block? A stmt is visible if it lives in the same block
+  // and precedes |position|, or if its parent block is an ancestor of
+  // |this->block|.
+  bool is_visible_at(Stmt *stmt, int position) const;
+
+  // Helper for get_store_forwarding_data: incorporate |stmt|, a definition in
+  // the UD-chain of the variable being forwarded, into the running |result| /
+  // |result_visible| state. Returns false to signal that forwarding must
+  // abort (the caller should return nullptr), true to continue scanning.
+  bool update_forwarding_result(Stmt *stmt,
+                                int position,
+                                Stmt *&result,
+                                bool &result_visible) const;
 };
 
 class ControlFlowGraph {
