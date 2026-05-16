@@ -216,7 +216,16 @@ def test_data_oriented_ndarray_reassign_same_shape():
 # ---------------------------------------------------------------------------
 
 
-@pytest.mark.xfail(strict=False, reason="Gap A: data_oriented specialisation key does not include ndarray dtype/ndim")
+@pytest.mark.xfail(
+    strict=False,
+    reason=(
+        "Gap A: ``_template_mapper_hotpath._extract_arg`` returns ``weakref.ref(arg)`` for "
+        "``is_data_oriented(arg)`` instead of descending into ``vars(arg)`` to emit per-field shape "
+        "descriptors. Same instance + reassign to different dtype reuses the compiled kernel for the "
+        "original dtype, so the second launch corrupts the new-dtype buffer. Separate from Bug 2; not "
+        "addressed in this PR."
+    ),
+)
 @test_utils.test(arch=qd.cpu)
 def test_data_oriented_ndarray_reassign_different_dtype():
     N = 4
@@ -362,3 +371,212 @@ def test_dataclass_ndarray_sanity():
 
     run(state)
     np.testing.assert_array_equal(x.to_numpy(), np.arange(N) * 11)
+
+
+# ---------------------------------------------------------------------------
+# 12. data_oriented holding a (frozen) dataclass that holds an ndarray.
+#     Exercises the ``else`` branch of ``_walk_obj`` recursing through a dataclass child — added by
+#     the Bug 1 fix.
+# ---------------------------------------------------------------------------
+
+
+@test_utils.test(arch=qd.cpu)
+def test_data_oriented_holding_dataclass_with_ndarray():
+    N = 4
+
+    @dataclasses.dataclass(frozen=True)
+    class Inner:
+        x: qd.types.NDArray[qd.i32, 1]
+
+    @qd.data_oriented
+    class Outer:
+        def __init__(self, inner):
+            self.inner = inner
+
+    x = qd.ndarray(qd.i32, shape=(N,))
+    outer = Outer(inner=Inner(x=x))
+
+    @qd.kernel
+    def run(s: qd.template()):
+        for i in range(N):
+            s.inner.x[i] = i + 1
+
+    run(outer)
+    np.testing.assert_array_equal(x.to_numpy(), np.arange(1, N + 1))
+
+
+# ---------------------------------------------------------------------------
+# 13. Frozen dataclass holding a data_oriented holding an ndarray, kernel-arg via ``qd.template()``.
+#     Exercises the dataclass branch of ``_walk_obj`` recursing through a data_oriented child — added
+#     by the Bug 1 fix. The outer dataclass must be frozen because (i) non-frozen dataclasses are
+#     unhashable in Python (``__hash__ is None``) and the template-mapper key tuple needs the value
+#     to be hashable, and (ii) the typed-dataclass-arg form (``def run(s: Outer):``) goes through
+#     ``_transform_kernel_arg`` which does not currently recurse on data_oriented field *types* (as
+#     opposed to values) — that's a separate follow-up.
+# ---------------------------------------------------------------------------
+
+
+@test_utils.test(arch=qd.cpu)
+def test_dataclass_holding_data_oriented_with_ndarray():
+    N = 4
+
+    @qd.data_oriented
+    class Inner:
+        def __init__(self, x):
+            self.x = x
+
+    @dataclasses.dataclass(frozen=True)
+    class Outer:
+        inner: Inner
+
+    x = qd.ndarray(qd.i32, shape=(N,))
+    outer = Outer(inner=Inner(x=x))
+
+    @qd.kernel
+    def run(s: qd.template()):
+        for i in range(N):
+            s.inner.x[i] = i + 5
+
+    run(outer)
+    np.testing.assert_array_equal(x.to_numpy(), np.arange(5, 5 + N))
+
+
+# ---------------------------------------------------------------------------
+# 14. Three-level nesting: data_oriented(data_oriented(data_oriented(ndarray))).
+# ---------------------------------------------------------------------------
+
+
+@test_utils.test(arch=qd.cpu)
+def test_data_oriented_three_level_nesting():
+    N = 4
+
+    @qd.data_oriented
+    class L3:
+        def __init__(self, x):
+            self.x = x
+
+    @qd.data_oriented
+    class L2:
+        def __init__(self, l3):
+            self.l3 = l3
+
+    @qd.data_oriented
+    class L1:
+        def __init__(self, l2):
+            self.l2 = l2
+
+    x = qd.ndarray(qd.i32, shape=(N,))
+    root = L1(l2=L2(l3=L3(x=x)))
+
+    @qd.kernel
+    def run(s: qd.template()):
+        for i in range(N):
+            s.l2.l3.x[i] = i * 13
+
+    run(root)
+    np.testing.assert_array_equal(x.to_numpy(), np.arange(N) * 13)
+
+
+# ---------------------------------------------------------------------------
+# 15. Mutation on a nested ndarray: outer.inner.x reassigned between kernel calls. Verifies the
+#     Bug 2 stale-cache guard fires even when the ndarray lives several attribute hops deep.
+# ---------------------------------------------------------------------------
+
+
+@test_utils.test(arch=qd.cpu)
+def test_data_oriented_nested_ndarray_reassign():
+    N = 4
+
+    @qd.data_oriented
+    class Inner:
+        def __init__(self, x):
+            self.x = x
+
+    @qd.data_oriented
+    class Outer:
+        def __init__(self, inner):
+            self.inner = inner
+
+    x1 = qd.ndarray(qd.i32, shape=(N,))
+    x2 = qd.ndarray(qd.i32, shape=(N,))
+    outer = Outer(inner=Inner(x=x1))
+
+    @qd.kernel
+    def run(s: qd.template()):
+        for i in range(N):
+            s.inner.x[i] = i + 200
+
+    run(outer)
+    np.testing.assert_array_equal(x1.to_numpy(), np.arange(200, 200 + N))
+
+    outer.inner.x = x2
+    run(outer)
+    np.testing.assert_array_equal(x2.to_numpy(), np.arange(200, 200 + N))
+
+
+# ---------------------------------------------------------------------------
+# 16. Same data_oriented instance, two kernels sharing it. Verifies the launch-info per-kernel
+#     bookkeeping is independent (each kernel's compile sets up its own pre-declared ndarray args).
+# ---------------------------------------------------------------------------
+
+
+@test_utils.test(arch=qd.cpu)
+def test_data_oriented_two_kernels_same_instance():
+    N = 4
+
+    @qd.data_oriented
+    class State:
+        def __init__(self, x, y):
+            self.x = x
+            self.y = y
+
+    x = qd.ndarray(qd.i32, shape=(N,))
+    y = qd.ndarray(qd.i32, shape=(N,))
+    state = State(x=x, y=y)
+
+    @qd.kernel
+    def fill_x(s: qd.template()):
+        for i in range(N):
+            s.x[i] = i + 1
+
+    @qd.kernel
+    def fill_y_from_x(s: qd.template()):
+        for i in range(N):
+            s.y[i] = s.x[i] * 100
+
+    fill_x(state)
+    fill_y_from_x(state)
+    np.testing.assert_array_equal(x.to_numpy(), np.arange(1, N + 1))
+    np.testing.assert_array_equal(y.to_numpy(), np.arange(1, N + 1) * 100)
+
+
+# ---------------------------------------------------------------------------
+# 17. data_oriented + ndarray + @qd.func sub-call. Pins that the AST-time attribute resolution in
+#     ``build_Attribute`` (which uses the predeclared AnyArray cache) works when the access happens
+#     inside a func, not just the top-level kernel.
+# ---------------------------------------------------------------------------
+
+
+@test_utils.test(arch=qd.cpu)
+def test_data_oriented_ndarray_via_func():
+    N = 4
+
+    @qd.data_oriented
+    class State:
+        def __init__(self, x):
+            self.x = x
+
+    x = qd.ndarray(qd.i32, shape=(N,))
+    state = State(x=x)
+
+    @qd.func
+    def write(s: qd.template(), i: qd.i32, v: qd.i32):
+        s.x[i] = v
+
+    @qd.kernel
+    def run(s: qd.template()):
+        for i in range(N):
+            write(s, i, i * 9)
+
+    run(state)
+    np.testing.assert_array_equal(x.to_numpy(), np.arange(N) * 9)
