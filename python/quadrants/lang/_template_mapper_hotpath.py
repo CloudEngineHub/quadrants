@@ -25,6 +25,7 @@ immutably bound to 'type(arg)'. Moreover, some privates fields of standard modul
 a consequence of inlining 'is_dataclass' and 'fields'.
 """
 
+import dataclasses
 import weakref
 from dataclasses import _FIELD, _FIELDS
 from typing import Any, Union
@@ -69,6 +70,35 @@ AnnotationType = Union[
 _ExprCxx = _qd_core.ExprCxx
 _composite_mutable_types = {list, dict, set}
 _primitive_types = {int, float, bool}
+
+
+def _collect_struct_nd_descriptors(obj: Any, path: str, out: list) -> None:
+    """Walk a ``@qd.data_oriented`` (or dataclass) container's reachable ``Ndarray`` members and append a per-ndarray
+    shape descriptor ``(path, element_type, ndim, needs_grad, layout)`` to ``out``. Used by the template-mapper to
+    refine the specialisation key when the container holds ndarrays — see the data_oriented branch in
+    ``_extract_arg``.
+
+    Walks both ``dataclasses.is_dataclass(child)`` and ``is_data_oriented(child)`` children recursively. Mirrors the
+    walker used at compile time in ``_predeclare_struct_ndarrays``, so the compile-time pre-declaration and the
+    specialisation key see the same set of ndarrays.
+    """
+    if dataclasses.is_dataclass(obj) and not isinstance(obj, type):
+        children = ((f.name, getattr(obj, f.name)) for f in dataclasses.fields(obj))
+    else:
+        children = obj.__dict__.items()
+    for k, v in children:
+        full = f"{path}.{k}" if path else k
+        if type(v) in _TENSOR_WRAPPER_TYPES:
+            v = v._unwrap()
+        v_type = type(v)
+        if issubclass(v_type, Ndarray):
+            type_id = id(v.element_type)
+            element_type = type_id if type_id in primitive_types.type_ids else v.element_type
+            out.append((full, element_type, len(v.shape), v.grad is not None, v._qd_layout))
+        elif is_data_oriented(v):
+            _collect_struct_nd_descriptors(v, full, out)
+        elif dataclasses.is_dataclass(v) and not isinstance(v, type):
+            _collect_struct_nd_descriptors(v, full, out)
 
 
 def _extract_arg(raise_on_templated_floats: bool, arg: Any, annotation: AnnotationType, arg_name: str) -> Any:
@@ -124,7 +154,7 @@ def _extract_arg(raise_on_templated_floats: bool, arg: Any, annotation: Annotati
             raise QuadrantsRuntimeTypeError(
                 "Ndarray shouldn't be passed in via `qd.template()`, please annotate your kernel using `qd.types.ndarray(...)` instead"
             )
-        if arg_type in _composite_mutable_types or is_data_oriented(arg):
+        if arg_type in _composite_mutable_types:
             # [Composite arguments] Return weak reference to the object
             # Quadrants kernel will cache the extracted arguments, thus we can't simply return the original argument.
             # Instead, a weak reference to the original value is returned to avoid memory leak.
@@ -133,6 +163,21 @@ def _extract_arg(raise_on_templated_floats: bool, arg: Any, annotation: Annotati
             # This can resolve the following issues:
             # 1. Invalid weak-ref will leave a dead(dangling) entry in both caches: "self.mapping" and "self.compiled_functions"
             # 2. Different argument instances with same type and same value, will get templatized into separate kernels.
+            return weakref.ref(arg)
+        if is_data_oriented(arg):
+            # Same memory-leak avoidance as above — keep ``weakref.ref(arg)`` so the spec key never holds a strong
+            # reference to user state. But for data_oriented containers that hold ``Ndarray`` members, the live
+            # ``weakref`` alone is too coarse: same instance with ``state.x = other_ndarray`` of a different dtype/ndim
+            # would re-use the previously-compiled kernel, which was specialised for the old shape. Walk the reachable
+            # ndarrays and prepend their shape descriptors so dtype/ndim changes trigger re-specialisation. Mirrors what
+            # the dataclass branch below does via ``annotation_fields``.
+            #
+            # Containers with no ndarrays keep the original short-path (one spec per instance via weakref) so this is
+            # a no-op for the existing data_oriented + qd.field workloads (genesis field-backend).
+            nd_descriptors: list = []
+            _collect_struct_nd_descriptors(arg, "", nd_descriptors)
+            if nd_descriptors:
+                return (id(type(arg)), tuple(nd_descriptors), weakref.ref(arg))
             return weakref.ref(arg)
 
         # Return value directly for other types, i.e. primitive types and all qd.Field-derived classes
