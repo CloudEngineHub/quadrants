@@ -216,16 +216,6 @@ def test_data_oriented_ndarray_reassign_same_shape():
 # ---------------------------------------------------------------------------
 
 
-@pytest.mark.xfail(
-    strict=False,
-    reason=(
-        "Gap A: ``_template_mapper_hotpath._extract_arg`` returns ``weakref.ref(arg)`` for "
-        "``is_data_oriented(arg)`` instead of descending into ``vars(arg)`` to emit per-field shape "
-        "descriptors. Same instance + reassign to different dtype reuses the compiled kernel for the "
-        "original dtype, so the second launch corrupts the new-dtype buffer. Separate from Bug 2; not "
-        "addressed in this PR."
-    ),
-)
 @test_utils.test(arch=qd.cpu)
 def test_data_oriented_ndarray_reassign_different_dtype():
     N = 4
@@ -580,3 +570,110 @@ def test_data_oriented_ndarray_via_func():
 
     run(state)
     np.testing.assert_array_equal(x.to_numpy(), np.arange(N) * 9)
+
+
+# ---------------------------------------------------------------------------
+# 18. Reassign ndarray to a *different ndim* on the same data_oriented instance.
+#     Complementary to test 7 (different-dtype). Spec key must change so a 2D-specialised kernel is
+#     not reused for a 1D ndarray. Pins the Gap A fix from the dtype side.
+# ---------------------------------------------------------------------------
+
+
+@test_utils.test(arch=qd.cpu)
+def test_data_oriented_ndarray_reassign_different_ndim():
+    @qd.data_oriented
+    class State:
+        def __init__(self, x):
+            self.x = x
+
+    x_1d = qd.ndarray(qd.i32, shape=(4,))
+    x_2d = qd.ndarray(qd.i32, shape=(2, 3))
+    state = State(x=x_1d)
+
+    @qd.kernel
+    def fill_1d(s: qd.template()):
+        for i in range(4):
+            s.x[i] = i * 2
+
+    @qd.kernel
+    def fill_2d(s: qd.template()):
+        for i, j in qd.ndrange(2, 3):
+            s.x[i, j] = i * 10 + j
+
+    fill_1d(state)
+    np.testing.assert_array_equal(x_1d.to_numpy(), np.arange(4) * 2)
+
+    state.x = x_2d
+    fill_2d(state)
+    np.testing.assert_array_equal(x_2d.to_numpy(), np.array([[0, 1, 2], [10, 11, 12]], dtype=np.int32))
+
+
+# ---------------------------------------------------------------------------
+# 19. Spec-key descent for nested data_oriented + ndarray reassign at the leaf. Confirms the
+#     recursive walker in ``_collect_struct_nd_descriptors`` reaches through nested data_oriented.
+# ---------------------------------------------------------------------------
+
+
+@test_utils.test(arch=qd.cpu)
+def test_data_oriented_nested_ndarray_reassign_different_dtype():
+    @qd.data_oriented
+    class Inner:
+        def __init__(self, x):
+            self.x = x
+
+    @qd.data_oriented
+    class Outer:
+        def __init__(self, inner):
+            self.inner = inner
+
+    x_i32 = qd.ndarray(qd.i32, shape=(4,))
+    x_f32 = qd.ndarray(qd.f32, shape=(4,))
+    outer = Outer(inner=Inner(x=x_i32))
+
+    @qd.kernel
+    def run_i32(s: qd.template()):
+        for i in range(4):
+            s.inner.x[i] = i + 1
+
+    @qd.kernel
+    def run_f32(s: qd.template()):
+        for i in range(4):
+            s.inner.x[i] = float(i) + 0.5
+
+    run_i32(outer)
+    np.testing.assert_array_equal(x_i32.to_numpy(), np.arange(1, 5))
+
+    outer.inner.x = x_f32
+    run_f32(outer)
+    np.testing.assert_array_equal(x_f32.to_numpy(), np.arange(4, dtype=np.float32) + 0.5)
+
+
+# ---------------------------------------------------------------------------
+# 20. No spec-key regression for data_oriented containers WITHOUT ndarrays. The Gap A fix prepends
+#     ndarray descriptors only when ndarrays are present; otherwise the original ``weakref.ref(arg)``
+#     spec key is preserved (one spec per instance). This test pins the no-ndarray case.
+# ---------------------------------------------------------------------------
+
+
+@test_utils.test(arch=qd.cpu)
+def test_data_oriented_field_only_no_speckey_change():
+    N = 4
+
+    @qd.data_oriented
+    class State:
+        def __init__(self, f):
+            self.f = f
+
+    f = qd.field(qd.i32, shape=(N,))
+    state = State(f=f)
+
+    @qd.kernel
+    def run(s: qd.template()):
+        for i in range(N):
+            s.f[i] = i + 1
+
+    run(state)
+    np.testing.assert_array_equal(f.to_numpy(), np.arange(1, N + 1))
+
+    # Run a second time on the same instance — should reuse the same compiled kernel.
+    run(state)
