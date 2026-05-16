@@ -174,7 +174,7 @@ Mixing `qd.field` and `qd.ndarray` members in the same class is also supported. 
 
 Note: as with `dataclasses.dataclass`, reassigning an ndarray member between kernel calls (`state.x = other_ndarray`) is allowed; the kernel re-binds against the live value on the next launch. Reassigning to an ndarray of a different `dtype` or `ndim` also works — a fresh kernel is compiled and cached for the new shape.
 
-For how `@qd.kernel(fastcache=True)` interacts with `@qd.data_oriented` containers (including which member types are supported, when primitive values trigger recompilation, and the `dataclasses.dataclass` footgun), see [Using fastcache with `@qd.data_oriented`](fastcache.md#using-fastcache-with-qddata_oriented) in the fastcache user guide.
+For how `@qd.kernel(fastcache=True)` interacts with compound types (which member types are supported, when primitive values fold into the cache key, the `dataclasses.dataclass` opt-in footgun, and the `qd.field`-disables behaviour), see [Advanced — compound-type cache keying](fastcache.md#compound-type-cache-keying) in the fastcache user guide.
 
 ## Nesting compatibility
 
