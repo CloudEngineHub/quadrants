@@ -93,7 +93,7 @@ def k2(s: Outer) -> None:
 
 ### Passing nested sub-structs to a `qd.func`
 
-You can pass either a whole nested-dataclass argument or one of its sub-struct fields to a `qd.func`. The callee declares the sub-struct's type as the parameter annotation; the caller writes the attribute access at the call site:
+You can pass either a whole nested-dataclass argument or one of its sub-struct members to a `qd.func`. The callee declares the sub-struct's type as the parameter annotation; the caller writes the attribute access at the call site:
 
 ```python
 @dataclass
@@ -125,7 +125,7 @@ Sub-struct passing supports:
 - arbitrary nesting depth (`f(s.a.b.c)` where each level is a dataclass)
 - positional and keyword call sites (`f(s.inner)` and `f(inner=s.inner)`)
 - call sites both directly inside `@qd.kernel` bodies and inside other `@qd.func` bodies
-- pruning of the sub-struct's leaf fields that the callee never reads
+- pruning of the sub-struct's leaf members that the callee never reads
 
 Note: assigning a sub-struct to a local variable and then passing it (`t = s.inner; touch_inner(t)`) is **not** supported. Pass the attribute access directly at the call site.
 
@@ -186,7 +186,7 @@ This table summarises which member types are allowed inside which container type
 | `@qd.data_oriented`             | yes | yes | yes | yes | yes      | yes |
 | `@qd.dataclass`                 | no  | yes | yes | no  | no       | yes |
 
-[\*1] A `dataclasses.dataclass` may *hold* a `@qd.data_oriented` member, but the **outer kernel-arg annotation** must be `qd.template()`, not the dataclass type itself. Passing a typed-dataclass kernel arg (`def k(s: Outer)`) whose field type is a `@qd.data_oriented` class raises a clear `QuadrantsSyntaxError` at compile time pointing you to `qd.template()`. The reason: typed-dataclass kernel args are flattened from annotations, but `@qd.data_oriented` carries no per-attribute annotations — its members are walked from the live instance, which only happens on the template path.
+[\*1] A `dataclasses.dataclass` may *hold* a `@qd.data_oriented` member, but the **outer kernel-arg annotation** must be `qd.template()`, not the dataclass type itself. Passing a typed-dataclass kernel arg (`def k(s: Outer)`) whose member type is a `@qd.data_oriented` class raises a clear `QuadrantsSyntaxError` at compile time pointing you to `qd.template()`. The reason: typed-dataclass kernel args are flattened from annotations, but `@qd.data_oriented` carries no per-member annotations — its members are walked from the live instance, which only happens on the template path.
 
 ### Outer kernel-arg annotation
 
@@ -195,8 +195,8 @@ The outermost annotation you put on the kernel parameter determines how the cont
 | Annotation | Kernel-arg walker | Notes |
 |---|---|---|
 | `qd.types.NDArray[...]`           | ndarray slot                                       | leaf-level only |
-| `MyDataclass` (dataclass type)    | per-field flatten using annotations                | needs every field to have a quadrants-typed annotation |
-| `qd.template()`                   | value-driven walk of `vars(self)` / dataclass fields | supports the full nesting matrix above |
+| `MyDataclass` (dataclass type)    | per-member flatten using annotations               | needs every member to have a quadrants-typed annotation |
+| `qd.template()`                   | value-driven walk of `vars(self)` / dataclass members | supports the full nesting matrix above |
 
 Two practical consequences:
 
@@ -212,9 +212,9 @@ For both `dataclasses.dataclass` and `@qd.data_oriented` containers passed via `
 A few combinations are still unsupported:
 
 - **`@qd.dataclass` (the Quadrants `StructType` decorator) cannot contain ndarrays.** This is a legacy field-only type. Use `dataclasses.dataclass` or `@qd.data_oriented` instead. (The function-form factory `qd.types.struct(...)` produces the same `StructType` and has the same restrictions.)
-- **A typed-dataclass kernel-arg annotation cannot have a `@qd.data_oriented` field type** (see [\*1] above) — errors clearly at compile time.
+- **A typed-dataclass kernel-arg annotation cannot have a `@qd.data_oriented` member type** (see [\*1] above) — errors clearly at compile time.
 - **An outer `qd.template()` arg of dataclass type must be `frozen=True`** — non-frozen dataclasses are unhashable and the template-mapper cannot use them as cache keys.
-- **The set of ndarray-bearing attributes on a `@qd.data_oriented` class is assumed stable across instances.** Declare ndarray attributes in `__init__`, don't add new attributes after the first kernel launch on an instance of that class; the path cache is per-class and won't pick up attributes added later.
+- **The set of ndarray-bearing members on a `@qd.data_oriented` class is assumed stable across instances.** Declare ndarray members in `__init__`, don't add new members after the first kernel launch on an instance of that class; the path cache is per-class and won't pick up members added later.
 
 ## qd.dataclass / qd.types.struct
 

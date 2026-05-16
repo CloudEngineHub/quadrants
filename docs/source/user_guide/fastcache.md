@@ -56,7 +56,7 @@ A kernel is eligible for fastcache only if all of the following hold:
 
 ### 1. All data flows through parameters
 
-The kernel must receive every piece of data it operates on as an explicit parameter. It must **not** capture variables from the enclosing Python scope (closures over fields, ndarrays, or mutable globals). This is the core "purity" constraint — the compiled kernel's behavior must be fully determined by its arguments.
+The kernel must receive every piece of data it operates on as an explicit parameter. It must **not** capture variables from the enclosing Python scope (closures over ndarrays, mutable globals, or any other external state). This is the core "purity" constraint — the compiled kernel's behavior must be fully determined by its arguments.
 
 ```python
 a = qd.ndarray(qd.f32, (10,))
@@ -95,7 +95,7 @@ Fastcache supports the following parameter types:
 | `qd.types.NDArray` (scalar, vector, matrix) | Yes | dtype, ndim, layout |
 | `torch.Tensor` | Yes | dtype, ndim |
 | `numpy.ndarray` | Yes | dtype, ndim |
-| `dataclasses.dataclass` | Yes | field types recursively; field values if annotated with `FIELD_METADATA_CACHE_VALUE` (see [Advanced — compound-type cache keying](#compound-type-cache-keying)) |
+| `dataclasses.dataclass` | Yes | member types recursively; member values if annotated with `FIELD_METADATA_CACHE_VALUE` (see [Advanced — compound-type cache keying](#compound-type-cache-keying)) |
 | `@qd.data_oriented` objects | Yes | member types recursively; primitive member values folded automatically (see [Advanced — compound-type cache keying](#compound-type-cache-keying)) |
 | `qd.Template` primitives (int, float, bool) | Yes | type and value (baked into kernel) |
 | Non-template primitives (int, float, bool) | Yes | type only |
@@ -155,7 +155,7 @@ The args hasher walks compound-type kernel parameters recursively. For each leaf
 - Nested `dataclasses.dataclass` member — recurses (with the dataclass rules below).
 - `qd.field` member — fastcache is disabled for the entire kernel call. The kernel still runs via normal compilation; a warn-level log line is emitted.
 
-**`dataclasses.dataclass`:** the walker descends into the declared fields. For each field, only the *type* is folded into the cache key by default — **not** the value. To include a field's value, annotate it:
+**`dataclasses.dataclass`:** the walker descends into the declared members. For each member, only the *type* is folded into the cache key by default — **not** the value. To include a member's value, annotate it:
 
 ```python
 import dataclasses
@@ -167,6 +167,6 @@ class SimConfig:
     dt: float = dataclasses.field(metadata={FIELD_METADATA_CACHE_VALUE: True})
 ```
 
-This is necessary whenever the compiled kernel depends on the field's *value* rather than just its type (for example, when the value is used as a loop bound that the compiler bakes into the generated code). Without the annotation, two `SimConfig` instances with different `num_layers` values would share a fastcache key, and the second instance would silently load a kernel compiled for the wrong value.
+This is necessary whenever the compiled kernel depends on the member's *value* rather than just its type (for example, when the value is used as a loop bound that the compiler bakes into the generated code). Without the annotation, two `SimConfig` instances with different `num_layers` values would share a fastcache key, and the second instance would silently load a kernel compiled for the wrong value.
 
-Note the asymmetry: `@qd.data_oriented` primitive members fold their *values* into the key automatically; `dataclasses.dataclass` fields fold only their *types* unless you opt in per-field.
+Note the asymmetry: `@qd.data_oriented` primitive members fold their *values* into the key automatically; `dataclasses.dataclass` members fold only their *types* unless you opt in per-member.
