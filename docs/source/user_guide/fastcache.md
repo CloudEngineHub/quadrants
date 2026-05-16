@@ -80,6 +80,120 @@ With this annotation, changing `num_envs` from 100 to 200 produces a different c
 
 Note: `@qd.data_oriented` objects and `qd.Template` parameters already include primitive values in the cache key automatically — this annotation is only needed for `dataclasses.dataclass` fields.
 
+## Using fastcache with `@qd.data_oriented`
+
+A `@qd.data_oriented` class is the natural place to write simulation-style code: an `__init__` that allocates state once, and `@qd.kernel` methods that operate on that state. Fastcache works with this pattern when the container holds only fastcache-supported member types (ndarrays, primitives, nested data_oriented or dataclasses, enums).
+
+### Worked example
+
+```python
+import quadrants as qd
+
+qd.init(arch=qd.cpu)
+
+
+@qd.data_oriented
+class Simulation:
+    def __init__(self, n: int, dt: float):
+        # Primitives — folded into the fastcache key as values (see below)
+        self.n = n
+        self.dt = dt
+        self.gravity = -9.81
+
+        # Tensors — only their dtype/ndim/layout enter the cache key
+        self.x = qd.ndarray(qd.f32, shape=(n,))
+        self.v = qd.ndarray(qd.f32, shape=(n,))
+
+    @qd.kernel(fastcache=True)
+    def step(self):
+        for i in range(qd.static(self.n)):
+            self.v[i] = self.v[i] + qd.static(self.gravity * self.dt)
+            self.x[i] = self.x[i] + self.v[i] * qd.static(self.dt)
+
+
+sim = Simulation(n=8, dt=0.01)
+sim.step()
+```
+
+On the first call, the kernel compiles and the artifact is written to the fastcache. On a subsequent Python process the artifact is loaded directly — no AST parse, no compile.
+
+### Primitive members are implicitly templated
+
+For members of a `@qd.data_oriented`, the args hasher folds *values* of primitive types (`int`, `float`, `bool`, `enum.Enum`) into the cache key automatically — you do **not** need `add_value_to_cache_key`, and you do **not** need to wrap them in `qd.static(...)` for the cache to be correct (`qd.static(...)` is still useful inside the kernel body to make the intent explicit and to force loop unrolling).
+
+That means changing a primitive member triggers a new compilation:
+
+```python
+sim_a = Simulation(n=8, dt=0.01)   # cache key #1
+sim_b = Simulation(n=64, dt=0.01)  # cache key #2 — different n value
+sim_c = Simulation(n=8, dt=0.005)  # cache key #3 — different dt value
+```
+
+This is the same semantics as if you'd written `n` and `dt` as explicit `qd.template()` parameters. Two instances with the same `(n, dt, gravity)` and the same ndarray dtypes/ndims share a cache entry.
+
+### Tensor contents are not part of the cache key
+
+For ndarray members, only `(dtype, ndim, layout)` enter the key. The actual element values are not hashed. You can mutate `self.x[i] = ...` freely between calls — same compiled kernel, different data.
+
+Reassigning an ndarray member to a different shape or dtype produces a different cache key, which is the correct behaviour:
+
+| Operation                                              | Same cache key? |
+|--------------------------------------------------------|:---:|
+| Mutate elements: `sim.x[i] = 1.0`                      | yes |
+| Reassign same dtype/ndim: `sim.x = qd.ndarray(qd.f32, (n,))` | yes |
+| Reassign different dtype: `sim.x = qd.ndarray(qd.f64, (n,))` | no — different cache entry |
+| Reassign different ndim: `(n,)` → `(n, m)`             | no — different cache entry |
+
+### `dataclasses.dataclass` members work — with one footgun
+
+You can nest a `dataclasses.dataclass` inside a `@qd.data_oriented` (or vice versa) and the walker recurses correctly. **But there is an important asymmetry on primitives:**
+
+| Container         | Primitive child values folded into the cache key by default? |
+|-------------------|:---:|
+| `@qd.data_oriented` | **yes** — implicitly templated |
+| `dataclasses.dataclass` | **no** — type only; opt in per-field with `FIELD_METADATA_CACHE_VALUE` |
+
+If you put a `qd.static(...)`-baked value inside a dataclass without `FIELD_METADATA_CACHE_VALUE`, fastcache can load a kernel compiled for the *wrong* value:
+
+```python
+@dataclasses.dataclass
+class SimConfig:
+    num_layers: int  # WRONG for qd.static — type-only key
+    dt: float        # WRONG for qd.static — type-only key
+
+@qd.data_oriented
+class Simulation:
+    def __init__(self, cfg):
+        self.cfg = cfg
+        ...
+    @qd.kernel(fastcache=True)
+    def step(self):
+        for i in qd.static(range(self.cfg.num_layers)):  # baked-in value!
+            ...
+```
+
+`SimConfig(num_layers=8)` and `SimConfig(num_layers=16)` would hash to the **same** fastcache key, and the second instance could silently load a kernel compiled for 8 iterations. Fix by opting the fields into the key:
+
+```python
+from quadrants.lang._fast_caching import FIELD_METADATA_CACHE_VALUE
+
+@dataclasses.dataclass
+class SimConfig:
+    num_layers: int = dataclasses.field(metadata={FIELD_METADATA_CACHE_VALUE: True})
+    dt: float = dataclasses.field(metadata={FIELD_METADATA_CACHE_VALUE: True})
+```
+
+The asymmetry exists because `@qd.data_oriented` is intended as a "self" container — its primitives are treated as part of the type signature. `dataclasses.dataclass` is a general value container; defaulting primitive values into the key would over-specialise.
+
+### What disables fastcache on a `@qd.data_oriented` arg
+
+The args hasher walks every member and bails out if any single member is fastcache-unsupported. Most relevant:
+
+- A `qd.field` member anywhere in the tree (including nested) disables fastcache for the entire kernel call. A warn-level log line is emitted. The kernel still runs correctly via normal compilation, just without the fastcache speed-up.
+- Any captured external state in the kernel body (closures over `self`-bound names is fine; closures over enclosing-Python-scope names are not, with the same exemptions as for any other fastcache kernel — see [Constraints](#constraints) below).
+
+If you need fastcache for a class that currently uses `qd.field`, the migration path is to replace the fields with `qd.ndarray`s in `__init__`. Field members are tracked as a follow-up in `perso_hugh/doc/data_oriented_fastcache.md`.
+
 ## Constraints
 
 A kernel is eligible for fastcache only if all of the following hold:
