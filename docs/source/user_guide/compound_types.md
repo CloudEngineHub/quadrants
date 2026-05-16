@@ -12,7 +12,7 @@ The following compound types are available:
 | type                               | can be passed to qd.kernel? | can be passed to qd.func? | can contain ndarray? | can contain field? | can be nested? | supports differentiation? |
 |------------------------------------|:---------------------------:|:-------------------------:|:--------------------:|:------------------:|:--------------:|:-------------------------:|
 | `dataclasses.dataclass`            | yes                         | yes                       | yes                  | yes                | yes            | no [*1]                   |
-| `@qd.data_oriented`               | yes                         | yes                       | no                   | yes                | yes            | yes                       |
+| `@qd.data_oriented`               | yes                         | yes                       | yes                  | yes                | yes            | yes                       |
 | `@qd.struct`, `@qd.dataclass`     | yes                         | yes                       | no                   | yes                | yes            | yes                       |
 
 ## Recommendation
@@ -147,6 +147,30 @@ sim.step()
 ```
 
 `@qd.data_oriented` objects can also be passed as `qd.Template` parameters to kernels defined outside the class, and they support nesting (one `@qd.data_oriented` struct containing another).
+
+### ndarray members
+
+`@qd.data_oriented` classes may also hold `qd.ndarray` (and `qd.Vector.ndarray` / `qd.Matrix.ndarray`) members. Subscript access inside kernels works the same as for `dataclasses.dataclass`:
+
+```python
+@qd.data_oriented
+class State:
+    def __init__(self, n):
+        self.x = qd.ndarray(qd.f32, shape=(n,))
+        self.v = qd.ndarray(qd.f32, shape=(n,))
+
+@qd.kernel
+def step(s: qd.template()):
+    for i in range(s.x.shape[0]):
+        s.x[i] += s.v[i]
+
+state = State(100)
+step(state)
+```
+
+Mixing `qd.field` and `qd.ndarray` members in the same class is also supported. Nested `@qd.data_oriented` (or nested `dataclasses.dataclass`) containers with ndarrays inside are walked recursively.
+
+Note: as with `dataclasses.dataclass`, reassigning an ndarray member between kernel calls (`state.x = other_ndarray`) is allowed; the kernel re-binds against the live value on the next launch.
 
 ## qd.struct / qd.dataclass
 
