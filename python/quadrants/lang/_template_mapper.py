@@ -1,37 +1,28 @@
-import dataclasses
 from functools import partial
 from typing import Any, TypeAlias
 from weakref import ReferenceType
 
 from quadrants.lang import impl
-from quadrants.lang._ndarray import Ndarray
 from quadrants.lang.impl import Program
 from quadrants.lang.kernel_arguments import ArgMetadata
 from quadrants.lang.util import is_data_oriented
 
 from .._test_tools import warnings_helper
 from ._kernel_types import ArgsHash
-from ._template_mapper_hotpath import _extract_arg, _primitive_types
+from ._template_mapper_hotpath import _extract_arg, _primitive_types, _struct_nd_paths_for
 
 
-def _collect_data_oriented_nd_ids(obj: Any, out: list) -> None:
-    """Walk a ``@qd.data_oriented`` (or dataclass) container's reachable ``Ndarray`` members and append
-    ``id(ndarray)`` to ``out``. Mirrors ``_template_mapper_hotpath._collect_struct_nd_descriptors`` but emits identities
-    instead of shape descriptors. Used to refine ``args_hash`` so that reassigning a member ndarray on the same
-    data_oriented instance invalidates the ``_mapping_cache_tracker`` and re-runs ``extract()``.
+def _collect_data_oriented_nd_ids(arg: Any, out: list) -> None:
+    """Append ``id(ndarray)`` for every ndarray reachable from ``arg``, using the per-class path cache in
+    ``_template_mapper_hotpath._struct_nd_paths_for`` so the first call walks ``vars(arg)`` once and subsequent calls
+    are just ``getattr`` chains. Empty path list short-circuits with zero work — critical for genesis's
+    ``@qd.data_oriented`` Solver passed as ``self`` to every kernel.
     """
-    if dataclasses.is_dataclass(obj) and not isinstance(obj, type):
-        children = ((f.name, getattr(obj, f.name)) for f in dataclasses.fields(obj))
-    else:
-        children = obj.__dict__.items()
-    for _, v in children:
-        v_type = type(v)
-        if issubclass(v_type, Ndarray):
-            out.append(id(v))
-        elif is_data_oriented(v):
-            _collect_data_oriented_nd_ids(v, out)
-        elif dataclasses.is_dataclass(v) and not isinstance(v, type):
-            _collect_data_oriented_nd_ids(v, out)
+    for chain in _struct_nd_paths_for(arg):
+        v = arg
+        for a in chain:
+            v = getattr(v, a)
+        out.append(id(v))
 
 Key: TypeAlias = tuple[Any, ...]
 

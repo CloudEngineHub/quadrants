@@ -72,33 +72,66 @@ _composite_mutable_types = {list, dict, set}
 _primitive_types = {int, float, bool}
 
 
-def _collect_struct_nd_descriptors(obj: Any, path: str, out: list) -> None:
-    """Walk a ``@qd.data_oriented`` (or dataclass) container's reachable ``Ndarray`` members and append a per-ndarray
-    shape descriptor ``(path, element_type, ndim, needs_grad, layout)`` to ``out``. Used by the template-mapper to
-    refine the specialisation key when the container holds ndarrays — see the data_oriented branch in
-    ``_extract_arg``.
+# Per-class cache: ``type(arg) -> list[tuple[str, ...]]`` of attribute paths whose values are ``Ndarray`` instances at
+# first observation. Populated lazily by ``_struct_nd_paths_for`` on the first call with each new data_oriented (or
+# nested dataclass) class. Empty list means "this class holds no ndarrays anywhere", in which case subsequent calls
+# pay only a dict-lookup per arg. Non-empty list short-circuits the full ``vars()`` recursion and just resolves each
+# cached path via ``getattr`` chains. Critical for the genesis field-backend hot path: the ``@qd.data_oriented``
+# Solver is passed as ``self`` to most kernels and holds dozens of attributes, so a full per-call ``vars()`` walk
+# costs >100ns per kernel and trashed FPS until this cache was added.
+_struct_nd_paths_cache: dict[type, list[tuple]] = {}
 
-    Walks both ``dataclasses.is_dataclass(child)`` and ``is_data_oriented(child)`` children recursively. Mirrors the
-    walker used at compile time in ``_predeclare_struct_ndarrays``, so the compile-time pre-declaration and the
-    specialisation key see the same set of ndarrays.
-    """
+
+def _build_struct_nd_paths(obj: Any, prefix: tuple, out: list) -> None:
     if dataclasses.is_dataclass(obj) and not isinstance(obj, type):
         children = ((f.name, getattr(obj, f.name)) for f in dataclasses.fields(obj))
     else:
         children = obj.__dict__.items()
     for k, v in children:
-        full = f"{path}.{k}" if path else k
+        chain = prefix + (k,)
         if type(v) in _TENSOR_WRAPPER_TYPES:
             v = v._unwrap()
         v_type = type(v)
         if issubclass(v_type, Ndarray):
-            type_id = id(v.element_type)
-            element_type = type_id if type_id in primitive_types.type_ids else v.element_type
-            out.append((full, element_type, len(v.shape), v.grad is not None, v._qd_layout))
-        elif is_data_oriented(v):
-            _collect_struct_nd_descriptors(v, full, out)
-        elif dataclasses.is_dataclass(v) and not isinstance(v, type):
-            _collect_struct_nd_descriptors(v, full, out)
+            out.append(chain)
+        elif is_data_oriented(v) or (dataclasses.is_dataclass(v) and not isinstance(v, type)):
+            _build_struct_nd_paths(v, chain, out)
+
+
+def _struct_nd_paths_for(arg: Any) -> list[tuple]:
+    """Return the cached attribute paths (each a tuple of attr-name strings) at which ``Ndarray`` instances are
+    reachable from ``arg`` of type ``type(arg)``. First call for a class walks ``arg`` once via
+    ``_build_struct_nd_paths``; subsequent calls are dict-lookups.
+
+    Trades freshness for speed: assumes the *set* of ndarray-holding attribute paths is stable across instances of
+    the same class. The genesis Solver and similar ``@qd.data_oriented`` containers satisfy this — their ndarray
+    members are declared in ``__init__`` and not added later. If you need to add an ndarray attribute after the first
+    kernel launch on an instance of a given class, the new attribute won't be tracked. Call ``invalidate_struct_nd_
+    paths_for`` (below) or restart the program.
+    """
+    cls = type(arg)
+    paths = _struct_nd_paths_cache.get(cls)
+    if paths is None:
+        paths = []
+        _build_struct_nd_paths(arg, (), paths)
+        _struct_nd_paths_cache[cls] = paths
+    return paths
+
+
+def _collect_struct_nd_descriptors(arg: Any, out: list) -> None:
+    """Emit per-ndarray shape descriptors ``(joined-path, element_type, ndim, needs_grad, layout)`` for every ndarray
+    reachable from ``arg``. Used by the template-mapper to refine the spec key for ``@qd.data_oriented`` args holding
+    ndarrays — see the data_oriented branch in ``_extract_arg``.
+    """
+    for chain in _struct_nd_paths_for(arg):
+        v = arg
+        for a in chain:
+            v = getattr(v, a)
+        if type(v) in _TENSOR_WRAPPER_TYPES:
+            v = v._unwrap()
+        type_id = id(v.element_type)
+        element_type = type_id if type_id in primitive_types.type_ids else v.element_type
+        out.append((".".join(chain), element_type, len(v.shape), v.grad is not None, v._qd_layout))
 
 
 def _extract_arg(raise_on_templated_floats: bool, arg: Any, annotation: AnnotationType, arg_name: str) -> Any:
@@ -175,7 +208,7 @@ def _extract_arg(raise_on_templated_floats: bool, arg: Any, annotation: Annotati
             # Containers with no ndarrays keep the original short-path (one spec per instance via weakref) so this is
             # a no-op for the existing data_oriented + qd.field workloads (genesis field-backend).
             nd_descriptors: list = []
-            _collect_struct_nd_descriptors(arg, "", nd_descriptors)
+            _collect_struct_nd_descriptors(arg, nd_descriptors)
             if nd_descriptors:
                 return (id(type(arg)), tuple(nd_descriptors), weakref.ref(arg))
             return weakref.ref(arg)
