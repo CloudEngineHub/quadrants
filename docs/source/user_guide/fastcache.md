@@ -96,7 +96,7 @@ Fastcache supports the following parameter types:
 | `torch.Tensor` | Yes | dtype, ndim |
 | `numpy.ndarray` | Yes | dtype, ndim |
 | `dataclasses.dataclass` | Yes | member types recursively; member values if annotated with `FIELD_METADATA_CACHE_VALUE` (see [Advanced — compound-type cache keying](#compound-type-cache-keying)) |
-| `@qd.data_oriented` objects | Yes | member types recursively; primitive member values folded automatically (see [Advanced — compound-type cache keying](#compound-type-cache-keying)) |
+| `@qd.data_oriented` objects | Yes | member types recursively; primitive member values baked into kernel (see [Advanced — compound-type cache keying](#compound-type-cache-keying)) |
 | `qd.Template` primitives (int, float, bool) | Yes | type and value (baked into kernel) |
 | Non-template primitives (int, float, bool) | Yes | type only |
 | `enum.Enum` | Yes | name and value |
@@ -145,17 +145,17 @@ On the first run you'll see `cache_stored=True` but `cache_loaded=False`. On the
 
 ### Compound-type cache keying
 
-The args hasher walks compound-type kernel parameters recursively. For each leaf member it decides what (if anything) to fold into the cache key. The headline rules:
+The args hasher walks compound-type kernel parameters recursively. For each leaf member it decides what (if anything) contributes to the cache key. The headline rules:
 
 **`@qd.data_oriented`:** the walker descends into `vars(obj)`. For each child:
 
-- `qd.ndarray` member — `(dtype, ndim, layout)` folded into the key. Element values are not.
-- Primitive (`int` / `float` / `bool` / `enum.Enum`) member — *value* folded into the key. Two instances of the same class with different primitive member values get different cache entries.
+- `qd.ndarray` member — `(dtype, ndim, layout)` is included in the cache key. Element values are not.
+- Primitive (`int` / `float` / `bool` / `enum.Enum`) member — value is baked into the kernel (same semantics as a `qd.Template` primitive). Two instances of the same class with different primitive member values get different cache entries.
 - Nested `@qd.data_oriented` member — recurses.
 - Nested `dataclasses.dataclass` member — recurses (with the dataclass rules below).
 - `qd.field` member — fastcache is disabled for the entire kernel call. The kernel still runs via normal compilation; a warn-level log line is emitted.
 
-**`dataclasses.dataclass`:** the walker descends into the declared members. For each member, only the *type* is folded into the cache key by default — **not** the value. To include a member's value, annotate it:
+**`dataclasses.dataclass`:** the walker descends into the declared members. For each member, only the *type* is included in the cache key by default — **not** the value. To include a member's value, annotate it:
 
 ```python
 import dataclasses
@@ -169,4 +169,4 @@ class SimConfig:
 
 This is necessary whenever the compiled kernel depends on the member's *value* rather than just its type (for example, when the value is used as a loop bound that the compiler bakes into the generated code). Without the annotation, two `SimConfig` instances with different `num_layers` values would share a fastcache key, and the second instance would silently load a kernel compiled for the wrong value.
 
-Note the asymmetry: `@qd.data_oriented` primitive members fold their *values* into the key automatically; `dataclasses.dataclass` members fold only their *types* unless you opt in per-member.
+Note the asymmetry: `@qd.data_oriented` primitive members are baked into the kernel automatically (same semantics as `qd.Template`); `dataclasses.dataclass` members contribute only their *type* to the cache key unless you opt in per-member.
