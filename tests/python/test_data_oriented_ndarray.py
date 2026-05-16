@@ -655,6 +655,37 @@ def test_data_oriented_nested_ndarray_reassign_different_dtype():
 # ---------------------------------------------------------------------------
 
 
+# ---------------------------------------------------------------------------
+# 21. Typed-dataclass kernel arg with a ``@qd.data_oriented`` field type — should error clearly
+#     pointing the user to ``qd.template()``. The two patterns are incompatible at the kernel-arg
+#     layer: dataclass kernel args are flattened using annotations, data_oriented containers need a
+#     value-driven walk. Pins the helpful error message.
+# ---------------------------------------------------------------------------
+
+
+@test_utils.test(arch=qd.cpu)
+def test_typed_dataclass_with_data_oriented_field_raises_clear_error():
+    @qd.data_oriented
+    class Inner:
+        def __init__(self, x):
+            self.x = x
+
+    @dataclasses.dataclass
+    class Outer:
+        inner: Inner
+
+    x = qd.ndarray(qd.i32, shape=(4,))
+    outer = Outer(inner=Inner(x=x))
+
+    @qd.kernel
+    def run(s: Outer):
+        for i in range(4):
+            s.inner.x[i] = i + 1
+
+    with pytest.raises(Exception, match="data_oriented.*qd.template"):
+        run(outer)
+
+
 @test_utils.test(arch=qd.cpu)
 def test_data_oriented_field_only_no_speckey_change():
     N = 4
