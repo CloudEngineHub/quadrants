@@ -7,13 +7,13 @@ It can be useful to combine multiple ndarrays or fields together into a single s
 The following compound types are available:
 - `dataclasses.dataclass` — **recommended**
 - `@qd.data_oriented` — for classes that define `@qd.kernel` methods
-- `@qd.struct` / `@qd.dataclass` — legacy, field-only
+- `@qd.dataclass` (and its function-form equivalent `qd.types.struct(...)`) — legacy Quadrants `StructType`, field-only
 
 | type                               | can be passed to qd.kernel? | can be passed to qd.func? | can contain ndarray? | can contain field? | can be nested? | supports differentiation? |
 |------------------------------------|:---------------------------:|:-------------------------:|:--------------------:|:------------------:|:--------------:|:-------------------------:|
 | `dataclasses.dataclass`            | yes                         | yes                       | yes                  | yes                | yes            | no [*1]                   |
 | `@qd.data_oriented`               | yes                         | yes                       | yes                  | yes                | yes            | yes                       |
-| `@qd.struct`, `@qd.dataclass`     | yes                         | yes                       | no                   | yes                | yes            | yes                       |
+| `@qd.dataclass` / `qd.types.struct` | yes                       | yes                       | no                   | yes                | yes            | yes                       |
 
 See [Nesting compatibility](#nesting-compatibility) below for a per-container × per-member-type breakdown, including the constraints on the outer kernel-arg annotation and ndarray reassignment.
 
@@ -178,11 +178,11 @@ Note: as with `dataclasses.dataclass`, reassigning an ndarray member between ker
 
 This table summarises which member types are allowed inside which container type. "yes" means the member is walked correctly when the container is passed to a kernel; "no" means the member is ignored or the combination raises an error.
 
-| Container ↓ &nbsp;&nbsp;&nbsp; / &nbsp;&nbsp;&nbsp; Member → | `qd.ndarray` | `qd.field` | primitive | `dataclasses.dataclass` | `@qd.data_oriented` | `@qd.struct` / `@qd.dataclass` |
+| Container ↓ &nbsp;&nbsp;&nbsp; / &nbsp;&nbsp;&nbsp; Member → | `qd.ndarray` | `qd.field` | primitive | `dataclasses.dataclass` | `@qd.data_oriented` | `@qd.dataclass` |
 |---|:---:|:---:|:---:|:---:|:---:|:---:|
 | `dataclasses.dataclass`         | yes | yes | yes | yes | yes [\*1] | yes |
 | `@qd.data_oriented`             | yes | yes | yes | yes | yes      | yes |
-| `@qd.struct` / `@qd.dataclass`  | no  | yes | yes | no  | no       | yes |
+| `@qd.dataclass`                 | no  | yes | yes | no  | no       | yes |
 
 [\*1] A `dataclasses.dataclass` may *hold* a `@qd.data_oriented` member, but the **outer kernel-arg annotation** must be `qd.template()`, not the dataclass type itself. Passing a typed-dataclass kernel arg (`def k(s: Outer)`) whose field type is a `@qd.data_oriented` class raises a clear `QuadrantsSyntaxError` at compile time pointing you to `qd.template()`. The reason: typed-dataclass kernel args are flattened from annotations, but `@qd.data_oriented` carries no per-attribute annotations — its members are walked from the live instance, which only happens on the template path.
 
@@ -209,14 +209,14 @@ For both `dataclasses.dataclass` and `@qd.data_oriented` containers passed via `
 
 A few combinations are still unsupported:
 
-- **`@qd.struct` / `@qd.dataclass` cannot contain ndarrays.** This is a legacy field-only type. Use `dataclasses.dataclass` or `@qd.data_oriented` instead.
+- **`@qd.dataclass` (the Quadrants `StructType` decorator) cannot contain ndarrays.** This is a legacy field-only type. Use `dataclasses.dataclass` or `@qd.data_oriented` instead. (The function-form factory `qd.types.struct(...)` produces the same `StructType` and has the same restrictions.)
 - **A typed-dataclass kernel-arg annotation cannot have a `@qd.data_oriented` field type** (see [\*1] above) — errors clearly at compile time.
 - **An outer `qd.template()` arg of dataclass type must be `frozen=True`** — non-frozen dataclasses are unhashable and the template-mapper cannot use them as cache keys.
 - **The set of ndarray-bearing attributes on a `@qd.data_oriented` class is assumed stable across instances.** Declare ndarray attributes in `__init__`, don't add new attributes after the first kernel launch on an instance of that class; the path cache is per-class and won't pick up attributes added later.
 
-## qd.struct / qd.dataclass
+## qd.dataclass / qd.types.struct
 
-`@qd.struct` (and its alias `@qd.dataclass`) is a Quadrants-native struct type. It can only contain fields and primitive types, not ndarrays.
+`@qd.dataclass` is a Quadrants-native `StructType` decorator. The function-form factory `qd.types.struct(name1=type1, ...)` produces the same `StructType`. Both can only contain fields and primitive types (and other `StructType` members), not ndarrays.
 
 ```python
 @qd.dataclass
