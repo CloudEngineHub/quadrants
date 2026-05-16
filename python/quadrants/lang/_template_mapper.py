@@ -1,14 +1,37 @@
+import dataclasses
 from functools import partial
 from typing import Any, TypeAlias
 from weakref import ReferenceType
 
 from quadrants.lang import impl
+from quadrants.lang._ndarray import Ndarray
 from quadrants.lang.impl import Program
 from quadrants.lang.kernel_arguments import ArgMetadata
+from quadrants.lang.util import is_data_oriented
 
 from .._test_tools import warnings_helper
 from ._kernel_types import ArgsHash
 from ._template_mapper_hotpath import _extract_arg, _primitive_types
+
+
+def _collect_data_oriented_nd_ids(obj: Any, out: list) -> None:
+    """Walk a ``@qd.data_oriented`` (or dataclass) container's reachable ``Ndarray`` members and append
+    ``id(ndarray)`` to ``out``. Mirrors ``_template_mapper_hotpath._collect_struct_nd_descriptors`` but emits identities
+    instead of shape descriptors. Used to refine ``args_hash`` so that reassigning a member ndarray on the same
+    data_oriented instance invalidates the ``_mapping_cache_tracker`` and re-runs ``extract()``.
+    """
+    if dataclasses.is_dataclass(obj) and not isinstance(obj, type):
+        children = ((f.name, getattr(obj, f.name)) for f in dataclasses.fields(obj))
+    else:
+        children = obj.__dict__.items()
+    for _, v in children:
+        v_type = type(v)
+        if issubclass(v_type, Ndarray):
+            out.append(id(v))
+        elif is_data_oriented(v):
+            _collect_data_oriented_nd_ids(v, out)
+        elif dataclasses.is_dataclass(v) and not isinstance(v, type):
+            _collect_data_oriented_nd_ids(v, out)
 
 Key: TypeAlias = tuple[Any, ...]
 
@@ -71,6 +94,17 @@ class TemplateMapper:
         # branching for primitive types dramatically improve performance of hash computation.
         mapping_cache_tracker: list[ReferenceType | None] | None = None
         args_hash: ArgsHash = tuple([id(arg) for arg in args])
+        # ``@qd.data_oriented`` containers can have their member ndarrays reassigned between calls on the same instance
+        # (``state.x = other_ndarray``). The id(arg) alone does not capture that, so the spec-key cache below would
+        # serve a stale entry and the new ndarray's dtype/ndim would be wrong. Fold the reachable ndarray ids into the
+        # hash. No-op for data_oriented containers that hold no ndarrays — the walker returns an empty list. See
+        # ``_collect_data_oriented_nd_ids``.
+        nd_ids: list = []
+        for arg in args:
+            if is_data_oriented(arg):
+                _collect_data_oriented_nd_ids(arg, nd_ids)
+        if nd_ids:
+            args_hash = args_hash + tuple(nd_ids)
         try:
             mapping_cache_tracker = self._mapping_cache_tracker[args_hash]
         except KeyError:
