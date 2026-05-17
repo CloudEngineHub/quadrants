@@ -251,15 +251,3 @@ class Particle:
 
 particles = Particle.field(shape=(N,))  # SOA-style allocation of N Particles
 ```
-
-Use `@qd.dataclass` when:
-
-- You want to allocate a Quadrants field of struct values (`Type.field(shape=...)`) — typically the SOA layout for field-backed code.
-- You want `@qd.func` methods callable from kernels via `instance.method(...)` syntax.
-
-Constraints:
-
-- Members must be primitives, vectors / matrices, or other `StructType`s — **no ndarrays**.
-- No default values on members.
-
-For plain Python aggregation, mixing in ndarrays, or passing kernel-side state without the field-allocation requirement, prefer `dataclasses.dataclass` (top of this page) or `@qd.data_oriented`.
