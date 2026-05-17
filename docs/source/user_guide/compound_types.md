@@ -254,7 +254,7 @@ class Particle:
 particles = Particle.field(shape=(N,))  # SOA-style allocation of N Particles
 ```
 
-`qd.types.struct(name1=type1, ...)` is the function-form equivalent of `@qd.dataclass`: it builds the same `StructType` without a class body — useful when the members are computed dynamically.
+`qd.types.struct(name1=type1, ...)` is the function-form equivalent of `@qd.dataclass`: it builds the same `StructType` without a class body.
 
 ```python
 vec3 = qd.types.vector(3, qd.f32)
