@@ -245,7 +245,10 @@ class Particle:
     vel: qd.types.vector(3, qd.f32)
     mass: qd.f32
 
-particles = Particle.field(shape=(N,))  # SOA-style allocation of N Particles
+# AOS layout: each element of `particles` is a (pos, vel, mass) cell contiguous in memory.
+# Only possible because Particle is a StructType — `@qd.data_oriented` and
+# `dataclasses.dataclass` containers can't be the element type of a tensor.
+particles = Particle.field(shape=(N,), layout=qd.Layout.AOS)
 ```
 
 Methods can be added to a `@qd.dataclass` and may be decorated with `@qd.func` so they can be called from kernels via `instance.method(...)` syntax (the call is inlined at compile time, like any other `@qd.func`).
