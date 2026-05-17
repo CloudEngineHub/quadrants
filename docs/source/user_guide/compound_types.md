@@ -194,8 +194,6 @@ state = State(100)
 state.step()
 ```
 
-Mixing tensor backends in the same class is supported. Nested `@qd.data_oriented` containers are supported.
-
 ### Fastcache
 
 `@qd.kernel(fastcache=True)` is supported on methods of `@qd.data_oriented` classes, but is disabled for fields; see [Advanced — compound-type cache keying](fastcache.md#compound-type-cache-keying) for more information.
