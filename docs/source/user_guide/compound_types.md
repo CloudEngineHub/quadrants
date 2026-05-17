@@ -198,7 +198,7 @@ Mixing tensor backends in the same class is supported. Nested `@qd.data_oriented
 
 ### Fastcache
 
-`@qd.kernel(fastcache=True)` is supported on `@qd.data_oriented` classes; see [Advanced — compound-type cache keying](fastcache.md#compound-type-cache-keying) for the cache-keying rules and what disables it.
+`@qd.kernel(fastcache=True)` is supported on `@qd.data_oriented` classes, but is disabled for fields; see [Advanced — compound-type cache keying](fastcache.md#compound-type-cache-keying) for more information.
 
 ## Nesting compatibility
 
