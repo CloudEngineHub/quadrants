@@ -315,12 +315,20 @@ def data_oriented(cls=None, *, stable_members: bool = False):
         return lambda c: data_oriented(c, stable_members=stable_members)
 
     def make_kernel_indirect(fun, is_property, attr_name):
+        # Capture the primal at decoration time so the per-call path skips the
+        # ``_BoundedDifferentiableMethod`` allocation. The class itself is validated when
+        # ``_BoundedDifferentiableMethod`` is invoked via the `.grad()` path; for the common
+        # primal call here we replicate the check inline.
+        primal = fun._primal
+
         @wraps(fun)
         def _kernel_indirect(self, *args, **kwargs):
-            nonlocal fun
-            ret = _BoundedDifferentiableMethod(self, fun)
-            ret.__name__ = fun.__name__  # type: ignore
-            return ret(*args, **kwargs)
+            try:
+                return primal(self, *args, **kwargs)
+            except (QuadrantsCompilationError, QuadrantsRuntimeError) as e:
+                if impl.get_runtime().print_full_traceback:
+                    raise e
+                raise type(e)("\n" + str(e)) from None
 
         ret = QuadrantsCallable(fun, _kernel_indirect)
         # setattr-after-class doesn't trigger __set_name__; set the name explicitly so
