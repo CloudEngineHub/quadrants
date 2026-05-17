@@ -238,6 +238,10 @@ For both `dataclasses.dataclass` and `@qd.data_oriented` containers passed via `
 
 Unlike `@qd.data_oriented` and `@dataclasses.dataclass`, `@qd.dataclass` creates a struct that is available within the kernels themselves. The former types are only used for structure on the python side, before compilation. `@qd.dataclass` can be used as the element type of fields. One key downside of `@qd.dataclass` is that they can only be used with fields and primitives, not with ndarray. This is because tensors are embedded in the struct by value, not as a reference pointer.
 
+Methods on a `@qd.dataclass` may be decorated with `@qd.func` so they can be called from kernels via `instance.method(...)` syntax (the call is inlined at compile time, like any other `@qd.func`).
+
+`qd.types.struct(name1=type1, ...)` is the function-form equivalent of `@qd.dataclass`: it builds the same `StructType`, but without a class body — useful when the members are computed dynamically.
+
 ```python
 @qd.dataclass
 class Particle:
