@@ -236,7 +236,7 @@ For both `dataclasses.dataclass` and `@qd.data_oriented` containers passed via `
 
 ## qd.dataclass / qd.types.struct
 
-`@qd.dataclass` can only contain fields and primitive types (and other `StructType` members), not ndarrays.
+`@qd.dataclass` is a class decorator that produces a Quadrants-native `StructType` from a class with type-annotated members and optional `@qd.func` methods. The function-form factory `qd.types.struct(name1=type1, ...)` produces the same `StructType`.
 
 ```python
 @qd.dataclass
@@ -244,4 +244,22 @@ class Particle:
     pos: qd.types.vector(3, qd.f32)
     vel: qd.types.vector(3, qd.f32)
     mass: qd.f32
+
+    @qd.func
+    def kinetic_energy(self):
+        return 0.5 * self.mass * self.vel.dot(self.vel)
+
+particles = Particle.field(shape=(N,))  # SOA-style allocation of N Particles
 ```
+
+Use `@qd.dataclass` when:
+
+- You want to allocate a Quadrants field of struct values (`Type.field(shape=...)`) — typically the SOA layout for field-backed code.
+- You want `@qd.func` methods callable from kernels via `instance.method(...)` syntax.
+
+Constraints:
+
+- Members must be primitives, vectors / matrices, or other `StructType`s — **no ndarrays**.
+- No default values on members.
+
+For plain Python aggregation, mixing in ndarrays, or passing kernel-side state without the field-allocation requirement, prefer `dataclasses.dataclass` (top of this page) or `@qd.data_oriented`.
