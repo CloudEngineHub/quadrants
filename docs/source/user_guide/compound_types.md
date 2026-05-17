@@ -172,7 +172,7 @@ Simulation(200).step()   # compiles kernel #2 with n=200 baked in
 
 ### Tensor members
 
-`@qd.data_oriented` classes may hold tensor members of any backend: `qd.field`, `qd.ndarray` (including `qd.Vector.ndarray` / `qd.Matrix.ndarray`), or `qd.Tensor`.
+`@qd.data_oriented` classes may hold tensor members of any backend: `qd.field`, `qd.ndarray`, or `qd.Tensor`.
 
 ```python
 @qd.data_oriented
