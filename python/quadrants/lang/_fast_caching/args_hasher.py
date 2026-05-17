@@ -12,6 +12,7 @@ from quadrants._tensor_wrapper import Tensor as _TensorWrapper
 from quadrants.types.annotations import Template
 
 from .._ndarray import ScalarNdarray
+from .._quadrants_callable import BoundQuadrantsCallable, QuadrantsCallable
 from ..field import ScalarField
 from ..kernel_arguments import ArgMetadata
 from ..matrix import MatrixField, MatrixNdarray, VectorNdarray
@@ -182,6 +183,13 @@ def stringify_obj_type(
         except AttributeError:
             _dict = obj.__dict__
         for k, v in _dict.items():
+            # Skip Quadrants method-descriptor cache entries. ``QuadrantsCallable.__get__``
+            # stashes the per-instance ``BoundQuadrantsCallable`` on ``instance.__dict__`` so
+            # that subsequent ``instance.method`` lookups skip the descriptor allocation;
+            # those entries are not data and must not invalidate the fastcache key.
+            v_type = type(v)
+            if v_type is QuadrantsCallable or v_type is BoundQuadrantsCallable:
+                continue
             _child_repr = stringify_obj_type(raise_on_templated_floats, (*path, k), v, ArgMetadata(Template, ""))
             if _child_repr is None:
                 if _should_warn:
