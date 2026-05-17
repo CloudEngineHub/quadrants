@@ -5,15 +5,15 @@
 It can be useful to combine multiple ndarrays or fields together into a single struct-like object that can be passed into kernels, and into @qd.func's.
 
 The following compound types are available:
-- `dataclasses.dataclass` — lightweight container of tensors and primitives; can contain ndarrays
+- `@dataclasses.dataclass` — lightweight container of tensors and primitives; can contain ndarrays
 - `@qd.data_oriented` — for creating objects with `self` that define `@qd.kernel` methods
 - `@qd.dataclass` — for structures that are embedded into the kernel, and don't contain ndarrays
 
 | type                               | can be passed to qd.kernel? | can be passed to qd.func? | can contain ndarray? | can contain field? | can be nested? | supports differentiation? |
 |------------------------------------|:---------------------------:|:-------------------------:|:--------------------:|:------------------:|:--------------:|:-------------------------:|
-| `dataclasses.dataclass`            | yes                         | yes                       | yes                  | yes                | yes            | yes                       |
-| `@qd.data_oriented`               | yes                         | yes                       | yes                  | yes                | yes            | yes                       |
-| `@qd.dataclass` / `qd.types.struct` | yes                       | yes                       | no                   | yes                | yes            | yes                       |
+| `@dataclasses.dataclass`           | yes                         | yes                       | yes                  | yes                | yes            | yes                       |
+| `@qd.data_oriented`                | yes                         | yes                       | yes                  | yes                | yes            | yes                       |
+| `@qd.dataclass` / `qd.types.struct`| yes                         | yes                       | no                   | yes                | yes            | yes                       |
 
 See [Nesting compatibility](#nesting-compatibility) below for a per-container × per-member-type breakdown, including the constraints on the outer kernel-arg annotation and ndarray reassignment.
 
