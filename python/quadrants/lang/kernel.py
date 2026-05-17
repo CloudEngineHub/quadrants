@@ -403,6 +403,8 @@ class Kernel(FuncBase):
             range_begin = 0 if used_py_dataclass_parameters is None else 1
             runtime = impl.get_runtime()
             for _pass in range(range_begin, 2):
+                if _pass == 0:
+                    pruning.pass_0_ran = True
                 if _pass >= 1:
                     pruning.enforce()
                 tree, ctx = self.get_tree_and_ctx(

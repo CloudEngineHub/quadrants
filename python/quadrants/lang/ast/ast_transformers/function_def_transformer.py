@@ -227,11 +227,26 @@ class FunctionDefTransformer:
         Also stores ``(arg_id, template_arg_idx, attr_chain)`` tuples in
         ``ctx.global_context.struct_ndarray_launch_info`` so the launch path can populate the corresponding slots in the
         launch context.
+
+        Pruning: in the enforcing (second) compile pass, ``pruning.used_struct_ndarray_ids``
+        contains the set of ``id(ndarray)`` values that ``_promote_ndarray_if_declared``
+        observed being accessed during the first pass (directly in the kernel body, or
+        transitively through ``@qd.func`` inlining). We register only those, dropping every
+        unused ndarray from the kernel's parameter list. On the first pass the set is empty
+        / not yet populated, so we register everything as today (correctness: the first
+        pass needs every reachable ndarray in the cache for ``build_Attribute`` to resolve
+        the accesses that *will* populate the set).
         """
         from quadrants.lang.util import cook_dtype  # pylint: disable=C0415
 
         cache = ctx.global_context.ndarray_to_any_array
         launch_info = ctx.global_context.struct_ndarray_launch_info
+        pruning = ctx.global_context.pruning
+        used_ids = getattr(pruning, "used_struct_ndarray_ids", None)
+        # Only prune on the enforcing pass when we actually ran pass 0 to populate the
+        # used-ndarray set. On a fastcache hit pass 0 is skipped and the set is empty —
+        # fall back to registering every reachable ndarray.
+        prune = pruning.enforcing and used_ids is not None and getattr(pruning, "pass_0_ran", False)
 
         def _walk_obj(obj, arg_idx, path):
             if dataclasses.is_dataclass(obj) and not isinstance(obj, type):
@@ -257,6 +272,8 @@ class FunctionDefTransformer:
         def _register_ndarray(nd, arg_idx, attr_chain):
             key = id(nd)
             if key in cache:
+                return
+            if prune and key not in used_ids:
                 return
             from quadrants._lib import core as _qd_core  # pylint: disable=C0415
 

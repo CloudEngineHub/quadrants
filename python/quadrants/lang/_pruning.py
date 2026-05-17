@@ -39,6 +39,17 @@ class Pruning:
             self.used_vars_by_func_id[Pruning.KERNEL_FUNC_ID].update(kernel_used_parameters)
         # only needed for args, not kwargs
         self.callee_param_by_caller_arg_name_by_func_id: dict[int, dict[str, str]] = defaultdict(dict)
+        # id(ndarray) -> seen during the first compile pass via ``_promote_ndarray_if_declared``.
+        # Populated by the AST builder when a chain like ``self.x.y`` resolves to an ndarray
+        # that was pre-declared by ``_predeclare_struct_ndarrays``. On the second (enforcing)
+        # pass, ``_predeclare_struct_ndarrays`` only registers ndarrays whose id is in this set
+        # — dropping every reachable-but-unused ndarray from the kernel's parameter list.
+        self.used_struct_ndarray_ids: set[int] = set()
+        # Whether the non-enforcing first pass actually ran for this kernel materialize.
+        # When fastcache hits, we skip pass 0 entirely and ``used_struct_ndarray_ids`` is
+        # therefore unreliable — in that case ``_predeclare_struct_ndarrays`` falls back to
+        # registering every reachable ndarray (same as the historical behavior).
+        self.pass_0_ran: bool = False
 
     def mark_used(self, func_id: int, parameter_flat_name: str) -> None:
         assert not self.enforcing

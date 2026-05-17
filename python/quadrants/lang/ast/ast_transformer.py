@@ -656,14 +656,25 @@ class ASTTransformer(Builder):
     @staticmethod
     def _promote_ndarray_if_declared(ctx: ASTTransformerFuncContext, value: Any) -> Any:
         """If *value* is a bare ``Ndarray`` that was pre-declared as a kernel arg (in ``_predeclare_struct_ndarrays``),
-        return the ``AnyArray`` proxy from the cache. Otherwise return *value* unchanged."""
+        return the ``AnyArray`` proxy from the cache. Otherwise return *value* unchanged.
+
+        Also records the ndarray id in ``pruning.used_struct_ndarray_ids`` on the non-enforcing
+        first pass, so that the enforcing second-pass ``_predeclare_struct_ndarrays`` can skip
+        ndarrays that the kernel never actually accesses.
+        """
         from quadrants.lang._ndarray import Ndarray  # pylint: disable=C0415
 
         if not isinstance(value, Ndarray):
             return value
         cache = ctx.global_context.ndarray_to_any_array
-        arr = cache.get(id(value))
-        return arr if arr is not None else value
+        key = id(value)
+        arr = cache.get(key)
+        if arr is not None:
+            pruning = ctx.global_context.pruning
+            if not pruning.enforcing:
+                pruning.used_struct_ndarray_ids.add(key)
+            return arr
+        return value
 
     @staticmethod
     def build_Attribute(ctx: ASTTransformerFuncContext, node: ast.Attribute):
