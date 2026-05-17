@@ -476,10 +476,15 @@ class Kernel(FuncBase):
             if self._struct_ndarray_launch_info_by_key:
                 struct_nd_info = self._struct_ndarray_launch_info_by_key.get(key)
                 if struct_nd_info:
+                    # Data_oriented containers marked ``_qd_stable_members = True`` (or decorated
+                    # with ``@qd.data_oriented(stable_members=True)``) promise their ndarray
+                    # members are never reassigned, so we exclude them from the per-call
+                    # ``_resolve_struct_ndarray`` walk that builds ``args_hash``.
                     self._mutable_nd_cached_val = [
                         (idx, chain)
                         for _, idx, chain in struct_nd_info
-                        if type(args[idx]).__hash__ is None or is_data_oriented(args[idx])
+                        if type(args[idx]).__hash__ is None
+                        or (is_data_oriented(args[idx]) and not type(args[idx]).__dict__.get("_qd_stable_members"))
                     ]
                 else:
                     self._mutable_nd_cached_val = []
