@@ -240,8 +240,6 @@ Unlike `@qd.data_oriented` and `@dataclasses.dataclass`, `@qd.dataclass` creates
 
 Methods can be added to a `@qd.dataclass` and may be decorated with `@qd.func` so they can be called from kernels via `instance.method(...)` syntax (the call is inlined at compile time, like any other `@qd.func`).
 
-`qd.types.struct(name1=type1, ...)` is the function-form equivalent of `@qd.dataclass`: it builds the same `StructType`, but without a class body — useful when the members are computed dynamically.
-
 ```python
 @qd.dataclass
 class Particle:
@@ -254,4 +252,12 @@ class Particle:
         return 0.5 * self.mass * self.vel.dot(self.vel)
 
 particles = Particle.field(shape=(N,))  # SOA-style allocation of N Particles
+```
+
+`qd.types.struct(name1=type1, ...)` is the function-form equivalent of `@qd.dataclass`: it builds the same `StructType` without a class body — useful when the members are computed dynamically.
+
+```python
+vec3 = qd.types.vector(3, qd.f32)
+Particle = qd.types.struct(pos=vec3, vel=vec3, mass=qd.f32)
+particles = Particle.field(shape=(N,))
 ```
