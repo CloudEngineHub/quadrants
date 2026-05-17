@@ -19,8 +19,6 @@ The following compound types are available:
 
 See [Nesting compatibility](#nesting-compatibility) below for a per-container × per-member-type breakdown, including the constraints on the outer kernel-arg annotation and ndarray reassignment.
 
-The other compound types exist for historical reasons.
-
 ## dataclasses.dataclass
 
 `dataclasses.dataclass` allows you to create structs containing:
