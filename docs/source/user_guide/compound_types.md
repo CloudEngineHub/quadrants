@@ -170,27 +170,31 @@ Simulation(100).step()   # compiles kernel #1 with n=100 baked in
 Simulation(200).step()   # compiles kernel #2 with n=200 baked in
 ```
 
-### ndarray members
+### Tensor members
 
-`@qd.data_oriented` classes may also hold `qd.ndarray` (and `qd.Vector.ndarray` / `qd.Matrix.ndarray`) members.
+`@qd.data_oriented` classes may hold tensor members of any backend: `qd.field`, `qd.ndarray` (including `qd.Vector.ndarray` / `qd.Matrix.ndarray`), and the unified `qd.tensor` dispatcher (which selects a backend via the `backend=` keyword — see [tensor](tensor.md)).
 
 ```python
 @qd.data_oriented
 class State:
     def __init__(self, n):
-        self.x = qd.ndarray(qd.f32, shape=(n,))
-        self.v = qd.ndarray(qd.f32, shape=(n,))
+        self.n = n
+        self.a = qd.field(qd.f32, shape=n)
+        self.b = qd.ndarray(qd.f32, shape=(n,))
+        self.c = qd.tensor(qd.f32, shape=(n,))
 
     @qd.kernel
     def step(self):
-        for i in range(self.x.shape[0]):
-            self.x[i] += self.v[i]
+        for i in range(self.n):
+            self.a[i] += 1.0
+            self.b[i] += 1.0
+            self.c[i] += 1.0
 
 state = State(100)
 state.step()
 ```
 
-Mixing `qd.field` and `qd.ndarray` members in the same class is also supported. Nested `@qd.data_oriented` (or nested `dataclasses.dataclass`) containers with ndarrays inside are walked recursively.
+Mixing tensor backends in the same class is supported. Nested `@qd.data_oriented` (or nested `dataclasses.dataclass`) containers with tensor members inside are walked recursively.
 
 ### Fastcache
 
