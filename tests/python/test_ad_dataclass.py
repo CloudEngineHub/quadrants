@@ -7,8 +7,9 @@ dataclasses, across the tensor types Quadrants exposes:
 * ``qd.field`` — ``qd.template()`` path; gradient via ``qd.ad.Tape``.
 * ``qd.tensor(backend=NDARRAY)`` — same path as ``qd.ndarray``; the dispatcher returns a wrapper
   whose ndarray ``_impl`` is unwrapped by the dataclass-annotation infrastructure.
-* ``qd.tensor(backend=FIELD)`` — xfail (pre-existing, not AD-specific): ``TensorWrapper`` is not
-  unwrapped through dataclass member access for kernel-side subscript. Use ``qd.field`` directly.
+* ``qd.tensor(backend=FIELD)`` — works when the dataclass member is annotated ``qd.Tensor``
+  (or ``qd.template()``). With ``object`` / no annotation the wrapper survives into kernel scope
+  and host-side ``__getitem__`` asserts.
 * mixed — single dataclass holding both a ``qd.ndarray`` and a ``qd.field`` member.
 
 Pattern mirrors ``test_ad_ndarray.py`` (ndarray) and ``test_ad_basics.py`` (field). See
@@ -19,7 +20,6 @@ for ``dataclasses.dataclass``.
 import dataclasses
 
 import numpy as np
-import pytest
 
 import quadrants as qd
 
@@ -179,25 +179,23 @@ def test_ad_dataclass_tensor_ndarray_backend():
     np.testing.assert_allclose(a.grad.to_numpy(), b.to_numpy())
 
 
-@pytest.mark.xfail(
-    reason=(
-        "Pre-existing TensorWrapper limitation (not AD-specific): qd.tensor(backend=FIELD) returned "
-        "by the qd.tensor dispatcher is wrapped in a TensorWrapper whose __getitem__ is not unwrapped "
-        "when accessed via dataclass member (`s.x[i]`). Forward-only kernels fail identically. "
-        "Workaround: use qd.field directly. See test_ad_dataclass_field_template_tape."
-    ),
-    strict=True,
-)
 @test_utils.test(default_fp=qd.f64, require=qd.extension.adstack)
 def test_ad_dataclass_tensor_field_backend_tape():
-    """dataclass holding qd.tensor(..., backend=FIELD) members; field-AD via qd.ad.Tape."""
+    """dataclass holding qd.tensor(..., backend=FIELD) members; field-AD via qd.ad.Tape.
+
+    Note: members must be annotated as ``qd.Tensor`` (not ``object``) when the value is a
+    ``qd.tensor(...)`` wrapper. The typed-dataclass / template machinery uses the member
+    annotation to decide whether to unwrap the wrapper into its underlying impl before the
+    kernel sees ``s.x[i]``. With ``object`` annotation the wrapper survives into kernel scope
+    and its host-side ``__getitem__`` asserts.
+    """
     N = 5
 
     @dataclasses.dataclass(frozen=True)
     class State:
-        a: object
-        b: object
-        loss: object
+        a: qd.Tensor
+        b: qd.Tensor
+        loss: qd.Tensor
 
     a = qd.tensor(qd.f64, shape=(N,), backend=qd.Backend.FIELD, needs_grad=True)
     b = qd.tensor(qd.f64, shape=(N,), backend=qd.Backend.FIELD)
@@ -213,7 +211,7 @@ def test_ad_dataclass_tensor_field_backend_tape():
         for i in range(N):
             s.loss[None] += s.a[i] * s.b[i]
 
-    with qd.ad.Tape(loss):
+    with qd.ad.Tape(loss._unwrap()):
         compute(state)
 
     np.testing.assert_allclose(a.grad.to_numpy(), b.to_numpy())
