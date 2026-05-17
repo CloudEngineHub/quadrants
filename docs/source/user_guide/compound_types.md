@@ -5,9 +5,9 @@
 It can be useful to combine multiple ndarrays or fields together into a single struct-like object that can be passed into kernels, and into @qd.func's.
 
 The following compound types are available:
-- `dataclasses.dataclass` — **recommended**
-- `@qd.data_oriented` — for classes that define `@qd.kernel` methods
-- `@qd.dataclass` (and its function-form equivalent `qd.types.struct(...)`) — legacy Quadrants `StructType`, field-only
+- `dataclasses.dataclass` — lightweight container of tensors and primitives; can contain ndarrays
+- `@qd.data_oriented` — for creating objects with `self` that define `@qd.kernel` methods
+- `@qd.dataclass` — for structures that are embedded into the kernel, and don't contain ndarrays
 
 | type                               | can be passed to qd.kernel? | can be passed to qd.func? | can contain ndarray? | can contain field? | can be nested? | supports differentiation? |
 |------------------------------------|:---------------------------:|:-------------------------:|:--------------------:|:------------------:|:--------------:|:-------------------------:|
