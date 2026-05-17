@@ -177,3 +177,146 @@ def test_data_oriented_method_calls_qd_func_with_two_dataclass_members():
     solver.run()
     np.testing.assert_array_equal(solver.sa.a.to_numpy(), np.arange(N) * 2)
     np.testing.assert_array_equal(solver.sb.b.to_numpy(), np.arange(N) * 13)
+
+
+# ----- nested dataclass --------------------------------------------------------
+
+
+@test_utils.test(arch=qd.cpu)
+def test_data_oriented_method_calls_qd_func_with_nested_dataclass_member():
+    """data_oriented holds an Outer{ Inner{ ndarray } } and passes ``self.outer`` to a
+    @qd.func that expands the nested dataclass into flat leaves on both sides."""
+    N = 4
+
+    @dataclasses.dataclass
+    class Inner:
+        x: qd.types.NDArray[qd.i32, 1]
+
+    @dataclasses.dataclass
+    class Outer:
+        inner: Inner
+
+    @qd.func
+    def write_inner_x(outer: Outer, i: qd.i32, v: qd.i32):
+        outer.inner.x[i] = v
+
+    @qd.data_oriented
+    class Solver:
+        def __init__(self):
+            self.outer = Outer(inner=Inner(x=qd.ndarray(qd.i32, shape=(N,))))
+
+        @qd.kernel
+        def run(self):
+            for i in range(N):
+                write_inner_x(self.outer, i, i * 17)
+
+    solver = Solver()
+    solver.run()
+    np.testing.assert_array_equal(solver.outer.inner.x.to_numpy(), np.arange(N) * 17)
+
+
+@test_utils.test(arch=qd.cpu)
+def test_data_oriented_method_calls_qd_func_with_nested_dataclass_kwarg():
+    """Same as above but the dataclass arg is passed by keyword."""
+    N = 4
+
+    @dataclasses.dataclass
+    class Inner:
+        x: qd.types.NDArray[qd.i32, 1]
+
+    @dataclasses.dataclass
+    class Outer:
+        inner: Inner
+
+    @qd.func
+    def write_inner_x(outer: Outer, i: qd.i32, v: qd.i32):
+        outer.inner.x[i] = v
+
+    @qd.data_oriented(stable_members=True)
+    class Solver:
+        def __init__(self):
+            self.outer = Outer(inner=Inner(x=qd.ndarray(qd.i32, shape=(N,))))
+
+        @qd.kernel
+        def run(self):
+            for i in range(N):
+                write_inner_x(outer=self.outer, i=i, v=i * 19)
+
+    solver = Solver()
+    solver.run()
+    np.testing.assert_array_equal(solver.outer.inner.x.to_numpy(), np.arange(N) * 19)
+
+
+# ----- chained @qd.func calls (qd.func -> qd.func, dataclass threaded through) ---
+
+
+@test_utils.test(arch=qd.cpu)
+def test_data_oriented_method_qd_func_chain_with_dataclass_member():
+    """data_oriented kernel calls outer @qd.func, which in turn calls inner @qd.func,
+    threading the same dataclass arg through. Both qd.funcs have the typed-dataclass
+    parameter; only the outermost call site (data_oriented method body) uses self.X.
+    The two inner call sites use the typed-arg path that already worked."""
+    N = 4
+
+    @dataclasses.dataclass
+    class State:
+        x: qd.types.NDArray[qd.i32, 1]
+
+    @qd.func
+    def inner_write(state: State, i: qd.i32, v: qd.i32):
+        state.x[i] = v
+
+    @qd.func
+    def outer_write(state: State, i: qd.i32, v: qd.i32):
+        inner_write(state, i, v)
+
+    @qd.data_oriented
+    class Solver:
+        def __init__(self):
+            self.state = State(x=qd.ndarray(qd.i32, shape=(N,)))
+
+        @qd.kernel
+        def run(self):
+            for i in range(N):
+                outer_write(self.state, i, i * 23)
+
+    solver = Solver()
+    solver.run()
+    np.testing.assert_array_equal(solver.state.x.to_numpy(), np.arange(N) * 23)
+
+
+@test_utils.test(arch=qd.cpu)
+def test_data_oriented_method_qd_func_chain_with_nested_dataclass_member():
+    """Combination: nested dataclass passed through a chain of two @qd.func calls
+    from a @qd.data_oriented self-method via self.outer."""
+    N = 4
+
+    @dataclasses.dataclass
+    class Inner:
+        x: qd.types.NDArray[qd.i32, 1]
+
+    @dataclasses.dataclass
+    class Outer:
+        inner: Inner
+
+    @qd.func
+    def inner_write(outer: Outer, i: qd.i32, v: qd.i32):
+        outer.inner.x[i] = v
+
+    @qd.func
+    def outer_write(outer: Outer, i: qd.i32, v: qd.i32):
+        inner_write(outer, i, v)
+
+    @qd.data_oriented(stable_members=True)
+    class Solver:
+        def __init__(self):
+            self.outer = Outer(inner=Inner(x=qd.ndarray(qd.i32, shape=(N,))))
+
+        @qd.kernel
+        def run(self):
+            for i in range(N):
+                outer_write(self.outer, i, i * 29)
+
+    solver = Solver()
+    solver.run()
+    np.testing.assert_array_equal(solver.outer.inner.x.to_numpy(), np.arange(N) * 29)
