@@ -11,7 +11,7 @@ The following compound types are available:
 
 | type                               | can be passed to qd.kernel? | can be passed to qd.func? | can contain ndarray? | can contain field? | can be nested? | supports differentiation? |
 |------------------------------------|:---------------------------:|:-------------------------:|:--------------------:|:------------------:|:--------------:|:-------------------------:|
-| `dataclasses.dataclass`            | yes                         | yes                       | yes                  | yes                | yes            | no [*1]                   |
+| `dataclasses.dataclass`            | yes                         | yes                       | yes                  | yes                | yes            | yes                       |
 | `@qd.data_oriented`               | yes                         | yes                       | yes                  | yes                | yes            | yes                       |
 | `@qd.dataclass` / `qd.types.struct` | yes                       | yes                       | no                   | yes                | yes            | yes                       |
 
