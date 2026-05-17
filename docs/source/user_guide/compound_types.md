@@ -240,7 +240,7 @@ For both `dataclasses.dataclass` and `@qd.data_oriented` containers passed via `
 
 ## qd.dataclass / qd.types.struct
 
-`@qd.dataclass` is a Quadrants-native `StructType` decorator. The function-form factory `qd.types.struct(name1=type1, ...)` produces the same `StructType`. Both can only contain fields and primitive types (and other `StructType` members), not ndarrays.
+`@qd.dataclass` can only contain fields and primitive types (and other `StructType` members), not ndarrays.
 
 ```python
 @qd.dataclass
