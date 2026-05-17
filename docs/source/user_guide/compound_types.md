@@ -127,7 +127,7 @@ Note: assigning a sub-struct to a local variable and then passing it (`t = s.inn
 
 ### Under the hood
 
-A `dataclasses.dataclass` is a Python-only container. The compiler reads it at compile time and flattens its members into individual kernel parameters — the container itself has no memory layout and doesn't exist on the kernel side. That's why members are read-only: the values are captured once at compile time and re-assigning them afterwards has no effect on running kernels.
+A `dataclasses.dataclass` is a Python-only container. The compiler reads it at compile time and flattens its members into individual kernel parameters — the container itself has no memory layout and doesn't exist on the kernel side. That's why members are read-only: the values are captured at compile time and re-assigning them afterwards has no effect on running kernels.
 
 ## qd.data_oriented
 
