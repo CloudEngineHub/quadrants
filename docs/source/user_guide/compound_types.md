@@ -231,8 +231,6 @@ For both `dataclasses.dataclass` and `@qd.data_oriented` containers passed via `
 
 ### Restrictions
 
-A few combinations are still unsupported:
-
 - **`@qd.dataclass` (the Quadrants `StructType` decorator) cannot contain ndarrays.** This is a legacy field-only type. Use `dataclasses.dataclass` or `@qd.data_oriented` instead. (The function-form factory `qd.types.struct(...)` produces the same `StructType` and has the same restrictions.)
 - **A typed-dataclass kernel-arg annotation cannot have a `@qd.data_oriented` member type** (see [\*1] above) — errors clearly at compile time.
 - **An outer `qd.template()` arg of dataclass type must be `frozen=True`** — non-frozen dataclasses are unhashable and the template-mapper cannot use them as cache keys.
