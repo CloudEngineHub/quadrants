@@ -643,10 +643,10 @@
 <span class="sd">            as a class-level attribute ``_qd_stable_members = True`` (equivalent).</span>
 
 <span class="sd">            Note: this flag is *purely* a launch-time perf hint. It no longer affects fastcache</span>
-<span class="sd">            argument hashing — the cache key is derived from pruning info (the set of flat names</span>
-<span class="sd">            the kernel actually reads), and unrecognised types at kernel-accessed paths fall back</span>
-<span class="sd">            to a deterministic ``type(v).__qualname__`` hash with a one-shot ``[UNKNOWN_TYPE]``</span>
-<span class="sd">            warning. See ``docs/source/user_guide/fastcache.md``.</span>
+<span class="sd">            argument hashing — the fastcache key is derived from pruning info (the set of flat</span>
+<span class="sd">            names the kernel actually reads), and unrecognised types at kernel-read paths fail</span>
+<span class="sd">            fastcache loudly with a one-shot ``[UNKNOWN_TYPE]`` + ``[INVALID_FUNC]`` diagnostic</span>
+<span class="sd">            (no qualname fallback). See ``docs/source/user_guide/fastcache.md``.</span>
 
 <span class="sd">    Returns:</span>
 <span class="sd">        The decorated class (or, when called with arguments, a decorator).</span>

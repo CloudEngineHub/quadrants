@@ -497,10 +497,10 @@ Genesis-style containers with dozens of ndarray attrs). Reassigning a member on 
 be reused even if the new ndarray has different dtype/ndim/layout. May also be set
 as a class-level attribute <code class="docutils literal notranslate"><span class="pre">_qd_stable_members</span> <span class="pre">=</span> <span class="pre">True</span></code> (equivalent).</p>
 <p>Note: this flag is <em>purely</em> a launch-time perf hint. It no longer affects fastcache
-argument hashing — the cache key is derived from pruning info (the set of flat names
-the kernel actually reads), and unrecognised types at kernel-accessed paths fall back
-to a deterministic <code class="docutils literal notranslate"><span class="pre">type(v).__qualname__</span></code> hash with a one-shot <code class="docutils literal notranslate"><span class="pre">[UNKNOWN_TYPE]</span></code>
-warning. See <code class="docutils literal notranslate"><span class="pre">docs/source/user_guide/fastcache.md</span></code>.</p>
+argument hashing — the fastcache key is derived from pruning info (the set of flat
+names the kernel actually reads), and unrecognised types at kernel-read paths fail
+fastcache loudly with a one-shot <code class="docutils literal notranslate"><span class="pre">[UNKNOWN_TYPE]</span></code> + <code class="docutils literal notranslate"><span class="pre">[INVALID_FUNC]</span></code> diagnostic
+(no qualname fallback). See <code class="docutils literal notranslate"><span class="pre">docs/source/user_guide/fastcache.md</span></code>.</p>
 </p></li>
 </ul>
 </dd>
