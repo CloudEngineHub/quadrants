@@ -243,14 +243,28 @@ class FunctionDefTransformer:
         """
         from quadrants.lang.util import cook_dtype  # pylint: disable=C0415
 
+        from quadrants.lang._pruning import Pruning  # pylint: disable=C0415
+
         cache = ctx.global_context.ndarray_to_any_array
         launch_info = ctx.global_context.struct_ndarray_launch_info
         pruning = ctx.global_context.pruning
         used_ids = getattr(pruning, "used_struct_ndarray_ids", None)
         # Only prune on the enforcing pass when we actually ran pass 0 to populate the
-        # used-ndarray set. On a fastcache hit pass 0 is skipped and the set is empty —
-        # fall back to registering every reachable ndarray.
+        # used-ndarray set. On a fastcache hit pass 0 is skipped and the set is empty.
         prune = pruning.enforcing and used_ids is not None and getattr(pruning, "pass_0_ran", False)
+        # On a fastcache hit (enforcing without a pass-0 run), the `id(nd)` set is empty, but the
+        # *flat-name* set on ``used_vars_by_func_id[KERNEL_FUNC_ID]`` was loaded from cache and
+        # already contains every kernel-accessed leaf path (folded in by
+        # ``_fold_struct_nd_paths_into_pruning`` during the compile that produced the cache entry).
+        # Use that to prune the walk so we register the exact same ndarray set as the originating
+        # compile produced — without this, every reachable ndarray gets registered, the kernel's
+        # arg slots get rebound to the wrong ndarrays at launch, and physics silently breaks.
+        prune_from_flat_names = pruning.enforcing and not getattr(pruning, "pass_0_ran", False)
+        kernel_used_flat_names = (
+            pruning.used_vars_by_func_id.get(Pruning.KERNEL_FUNC_ID, set())
+            if prune_from_flat_names
+            else None
+        )
 
         # Cycle-safe walker: Genesis object graphs have cross-references (e.g. solver <-> scene <-> sim) so we must
         # avoid re-entering the same node. ``seen`` is shared across the whole arg's traversal — ``id(obj)`` is
@@ -289,6 +303,19 @@ class FunctionDefTransformer:
                 return
             if prune and key not in used_ids:
                 return
+            if prune_from_flat_names:
+                # Build the leaf flat name (e.g. ``__qd_self__qd__collider_state__qd_active_buffer``)
+                # and skip registration when the kernel's cached pruning set doesn't contain it.
+                if arg_idx < 0 or arg_idx >= len(ctx.func.arg_metas):
+                    return
+                arg_name = ctx.func.arg_metas[arg_idx].name
+                if not arg_name:
+                    return
+                flat = arg_name
+                for attr in attr_chain:
+                    flat = create_flat_name(flat, attr)
+                if flat not in kernel_used_flat_names:
+                    return
             from quadrants._lib import core as _qd_core  # pylint: disable=C0415
 
             element_type = cook_dtype(nd.element_type)
