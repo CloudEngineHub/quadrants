@@ -106,7 +106,7 @@ def test_ad_dataclass_ndarray_template():
 # ----------------------------------------------------------------------------
 
 
-@test_utils.test(default_fp=qd.f64, require=qd.extension.adstack)
+@test_utils.test(default_fp=qd.f64, require=[qd.extension.adstack, qd.extension.data64])
 def test_ad_dataclass_field_template_tape():
     """dataclass holding qd.fields, passed via qd.template(), gradient via qd.ad.Tape."""
     N = 5
@@ -179,7 +179,7 @@ def test_ad_dataclass_tensor_ndarray_backend():
     np.testing.assert_allclose(a.grad.to_numpy(), b.to_numpy())
 
 
-@test_utils.test(default_fp=qd.f64, require=qd.extension.adstack)
+@test_utils.test(default_fp=qd.f64, require=[qd.extension.adstack, qd.extension.data64])
 def test_ad_dataclass_tensor_field_backend_tape():
     """dataclass holding qd.tensor(..., backend=FIELD) members; field-AD via qd.ad.Tape.
 
