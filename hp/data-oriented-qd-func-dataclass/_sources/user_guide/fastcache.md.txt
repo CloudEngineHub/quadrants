@@ -154,6 +154,11 @@ The args hasher walks compound-type kernel parameters recursively. For each leaf
 - Nested `@qd.data_oriented` member — recurses.
 - Nested `dataclasses.dataclass` member — recurses (with the dataclass rules below).
 - `qd.field` member — fastcache is disabled for the entire kernel call. The kernel still runs via normal compilation; a warn-level log line is emitted.
+- **Opaque-typed member** (any type not in the recognised list above — UUID identifiers, Pydantic `BaseModel`, plain Python classes, references up the object graph, `list`, `dict`, ...) — **skipped silently** from the cache key.
+
+Skipping opaque members is safe by construction: the kernel can only read recognised types, so opaque members cannot affect kernel codegen. This is the default for all `@qd.data_oriented` classes; no opt-in flag is required. (`@qd.data_oriented(stable_members=True)` is a separate per-call launch performance hint — see [compound_types.md](compound_types.md#stable_memberstrue) — and does not affect fastcache behaviour.)
+
+Note the distinction between **opaque** (any unrecognised type, skipped silently) and **recognised-but-unsupported** (`qd.field` / `qd.Matrix.field`, which disable fastcache). Field-like types are *recognised* — their shape/dtype affect kernel codegen — but the hasher does not yet know how to include them in the cache key, so the safe default is to disable fastcache when one is present, rather than silently emit a stale cache key.
 
 **`dataclasses.dataclass`:** the walker descends into the declared members. For each member, only the *type* is included in the cache key by default — **not** the value. To include a member's value, annotate it:
 
