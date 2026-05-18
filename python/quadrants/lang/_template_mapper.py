@@ -28,7 +28,10 @@ _UNCLASSIFIED = object()
 def _classify_for_args_hash(arg: Any) -> "list[tuple] | None":
     """First-sighting classification for ``type(arg)`` in the args_hash walk. Returns the path list to walk (when the
     arg is a data_oriented container without ``_qd_stable_members`` that actually contains ndarrays), or ``None`` to
-    skip subsequent per-call work for this type."""
+    skip subsequent per-call work for this type.
+
+    ``_qd_stable_members`` here is a *launch-time perf hint only* (see ``@qd.data_oriented(stable_members=...)``).
+    It does not affect fastcache key derivation."""
     if not is_data_oriented(arg):
         return None
     if type(arg).__dict__.get("_qd_stable_members"):

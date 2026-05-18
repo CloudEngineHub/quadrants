@@ -412,7 +412,7 @@ class Kernel(FuncBase):
             self.graph_do_while_arg = cached_graph_do_while_arg or self.graph_do_while_arg
             return None
 
-        elif self.quadrants_callable and not self.quadrants_callable.is_pure and self.runtime.print_non_pure:
+        if self.quadrants_callable and not self.quadrants_callable.is_pure and self.runtime.print_non_pure:
             # The bit in caps should not be modified without updating corresponding test
             # freetext can be freely modified.
             # As for why we are using `print` rather than eg logger.info, it is because this is only printed when
@@ -509,9 +509,7 @@ class Kernel(FuncBase):
             # Post-compile fastcache bookkeeping. See ``_maybe_persist_l1_and_set_l2_key`` docstring.
             self._maybe_persist_l1_and_set_l2_key(key, py_args)
 
-    def _fold_struct_nd_paths_into_pruning(
-        self, key: "CompiledKernelKeyType", pruning: Pruning
-    ) -> None:
+    def _fold_struct_nd_paths_into_pruning(self, key: "CompiledKernelKeyType", pruning: Pruning) -> None:
         """Add data_oriented (and dataclass-nested) ndarray attribute chains to the kernel's pruning flat
         name set so ``args_hasher.hash_args`` narrow-walks them correctly.
 
@@ -550,9 +548,7 @@ class Kernel(FuncBase):
                 flat = create_flat_name(flat, attr)
                 kernel_used.add(flat)
 
-    def _maybe_persist_l1_and_set_l2_key(
-        self, key: "CompiledKernelKeyType", py_args: tuple[Any, ...]
-    ) -> None:
+    def _maybe_persist_l1_and_set_l2_key(self, key: "CompiledKernelKeyType", py_args: tuple[Any, ...]) -> None:
         """After a successful materialize, persist L1 (if missing) and set ``fast_checksum`` to the L2 key.
 
         Called at the end of ``materialize`` once both passes have completed (or once pass 1 has completed
@@ -626,7 +622,9 @@ class Kernel(FuncBase):
                     # Data_oriented containers marked ``_qd_stable_members = True`` (or decorated
                     # with ``@qd.data_oriented(stable_members=True)``) promise their ndarray
                     # members are never reassigned, so we exclude them from the per-call
-                    # ``_resolve_struct_ndarray`` walk that builds ``args_hash``.
+                    # ``_resolve_struct_ndarray`` walk that builds ``args_hash``. This is a
+                    # *launch-time perf hint only* and has no fastcache role — fastcache derives
+                    # its key from kernel-pruning info regardless of this flag.
                     self._mutable_nd_cached_val = [
                         (idx, chain)
                         for _, idx, chain in struct_nd_info

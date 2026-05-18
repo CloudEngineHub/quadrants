@@ -300,13 +300,20 @@ def data_oriented(cls=None, *, stable_members: bool = False):
 
     Args:
         cls (Class): the class to be decorated.
-        stable_members (bool): if ``True``, declares that the class's ndarray-typed members are
-            allocated once and never reassigned between kernel calls. Quadrants will skip a
-            per-call walk of the instance's attributes (~1-2 us/call savings on Genesis-style
-            containers with several ndarray attrs). Reassigning a member on a ``stable_members``
-            class is undefined behaviour — the previously-compiled kernel will be reused even if
-            the new ndarray has different dtype/ndim/layout. May also be set as a class-level
-            attribute ``_qd_stable_members = True`` (equivalent).
+        stable_members (bool): launch-context perf hint — if ``True``, declares that the class's
+            ndarray-typed members are allocated once and never reassigned between kernel calls.
+            Quadrants will skip the per-call ndarray-reference walk that ``Kernel.launch_kernel``
+            uses to detect ndarray reassignment on mutable containers (~1-2 us/call savings on
+            Genesis-style containers with dozens of ndarray attrs). Reassigning a member on a
+            ``stable_members`` class is undefined behaviour — the previously-compiled kernel will
+            be reused even if the new ndarray has different dtype/ndim/layout. May also be set
+            as a class-level attribute ``_qd_stable_members = True`` (equivalent).
+
+            Note: this flag is *purely* a launch-time perf hint. It no longer affects fastcache
+            argument hashing — the cache key is derived from pruning info (the set of flat names
+            the kernel actually reads), and unrecognised types at kernel-accessed paths fall back
+            to a deterministic ``type(v).__qualname__`` hash with a one-shot ``[UNKNOWN_TYPE]``
+            warning. See ``docs/source/user_guide/fastcache.md``.
 
     Returns:
         The decorated class (or, when called with arguments, a decorator).
