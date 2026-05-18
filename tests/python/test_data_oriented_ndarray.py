@@ -1263,3 +1263,73 @@ def test_data_oriented_qd_func_chain_propagation_distinguishes_cache_key(tmp_pat
     run(a)
     run(b)
     assert captured[-2] is not None and captured[-1] is not None, "both dtypes load distinct artifacts"
+
+
+@test_utils.test(arch=qd.cpu)
+def test_data_oriented_nested_primitive_via_qd_func_distinguishes_cache_key(tmp_path, monkeypatch) -> None:
+    """Pruning chain propagation through ``f(self.child)`` for *primitive* members of nested
+    data_oriented containers.
+
+    Regression test for a bug where ``record_after_call`` skipped chain-path propagation whenever the
+    caller-side arg flattened to a ``__qd_*``-prefixed name (which Attribute chains always do —
+    ``self.cfg`` → ``__qd_self__qd_cfg``). When that happened, primitive members read inside the
+    callee (``cfg.n`` → ``__qd_cfg__qd_n`` in the callee's chain set) never made it into the kernel's
+    pruning set, so the args-hasher walked ``self.cfg`` as data_oriented and found no pruned children,
+    yielding an identical hash for *any* value of ``cfg.n``. Two configs that should produce
+    different kernels (different ``range(s.cfg.n)`` trip counts baked into codegen) would then share
+    a fastcache entry — leading to stale-kernel hits and silent miscompiles (e.g. Genesis'
+    ``test_ndarray_no_compile`` was failing with iter-N kernels reused for iter-N+1 scenes that have
+    a different ``RigidSimStaticConfig.para_level`` baked into their ``qd.static`` branches).
+
+    The fix in ``_pruning.py`` gates propagation on the *root Name* of the chain (``self``, not the
+    flat result), so both ``f(self)`` and ``f(self.cfg)`` propagate, while already-flattened
+    dataclass refs (``Name('__qd_state__qd_x')``) are still skipped."""
+    from quadrants._test_tools import qd_init_same_arch
+
+    launch_kernel_orig = qd.lang.kernel_impl.Kernel.launch_kernel
+    captured = []
+
+    def launch_kernel(self, key, t_kernel, compiled_kernel_data, *args, qd_stream=None):
+        if self.func.__name__ == "run":
+            captured.append(compiled_kernel_data)
+        return launch_kernel_orig(self, key, t_kernel, compiled_kernel_data, *args, qd_stream=qd_stream)
+
+    monkeypatch.setattr("quadrants.lang.kernel_impl.Kernel.launch_kernel", launch_kernel)
+
+    @qd.data_oriented
+    class Cfg:
+        def __init__(self, n):
+            self.n = n  # primitive read by ``write_x`` — drives codegen via ``range(c.n)``
+
+    @qd.data_oriented
+    class State:
+        def __init__(self, x, cfg):
+            self.x = x
+            self.cfg = cfg
+
+    @qd.func
+    def write_x(x: qd.template(), c: qd.template()):
+        for i in range(c.n):
+            x[i] = i + c.n
+
+    @qd.kernel(fastcache=True)
+    def run(s: qd.template()):
+        write_x(s.x, s.cfg)
+
+    qd_init_same_arch(offline_cache_file_path=str(tmp_path), offline_cache=True)
+    a = State(x=qd.ndarray(qd.i32, shape=(8,)), cfg=Cfg(n=2))
+    b = State(x=qd.ndarray(qd.i32, shape=(8,)), cfg=Cfg(n=3))
+    run(a)
+    run(b)
+    assert captured[-2] is None and captured[-1] is None, "different cfg.n → both cold-compile"
+    np.testing.assert_array_equal(a.x.to_numpy()[:2], np.array([2, 3], dtype=np.int32))
+    np.testing.assert_array_equal(b.x.to_numpy()[:3], np.array([3, 4, 5], dtype=np.int32))
+
+    qd_init_same_arch(offline_cache_file_path=str(tmp_path), offline_cache=True)
+    a = State(x=qd.ndarray(qd.i32, shape=(8,)), cfg=Cfg(n=2))
+    b = State(x=qd.ndarray(qd.i32, shape=(8,)), cfg=Cfg(n=3))
+    run(a)
+    run(b)
+    assert captured[-2] is not None and captured[-1] is not None, "both cfg.n values load distinct artifacts"
+    np.testing.assert_array_equal(a.x.to_numpy()[:2], np.array([2, 3], dtype=np.int32))
+    np.testing.assert_array_equal(b.x.to_numpy()[:3], np.array([3, 4, 5], dtype=np.int32))
