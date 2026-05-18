@@ -1022,3 +1022,244 @@ def test_data_oriented_with_cyclic_attr_graph():
 
     run(p)
     np.testing.assert_array_equal(x.to_numpy(), np.arange(10, 10 + N))
+
+
+# ---------------------------------------------------------------------------
+# Pruning-driven fastcache behaviour for @qd.data_oriented containers.
+#
+# These pin the three rules enforced by the args hasher (see fastcache.md
+# "Pruning-driven argument hashing"):
+#   1. The cache key may only include contributions from kernel-pruned paths.
+#   2. Unrecognised types at kernel-read paths must not be silently dropped.
+#   3. Fastcache works for @qd.data_oriented kernel args end-to-end.
+# ---------------------------------------------------------------------------
+
+
+@test_utils.test(arch=qd.cpu)
+def test_data_oriented_kernel_unused_opaque_member_does_not_affect_cache(tmp_path, monkeypatch):
+    """Rule 1: kernel-unused opaque members do not affect the fastcache key.
+
+    Two ``State`` instances differ only in an opaque ``uuid`` member that the kernel never reads.
+    Both must hit the same compiled artifact on the second process — proof that the args hasher's
+    pruning narrow walk skips the opaque attribute (no qualname-fallback, no spurious miss)."""
+    import uuid
+
+    from quadrants._test_tools import qd_init_same_arch
+
+    launch_kernel_orig = qd.lang.kernel_impl.Kernel.launch_kernel
+    captured = []
+
+    def launch_kernel(self, key, t_kernel, compiled_kernel_data, *args, qd_stream=None):
+        if self.func.__name__ == "run":
+            captured.append(compiled_kernel_data)
+        return launch_kernel_orig(self, key, t_kernel, compiled_kernel_data, *args, qd_stream=qd_stream)
+
+    monkeypatch.setattr("quadrants.lang.kernel_impl.Kernel.launch_kernel", launch_kernel)
+
+    @qd.data_oriented
+    class State:
+        def __init__(self, x):
+            self.x = x
+            self.uuid = uuid.uuid4()  # opaque member, kernel does not read it
+
+    @qd.kernel(fastcache=True)
+    def run(s: qd.template()):
+        for i in range(4):
+            s.x[i] = s.x[i] + 1
+
+    qd_init_same_arch(offline_cache_file_path=str(tmp_path), offline_cache=True)
+    a = State(x=qd.ndarray(qd.i32, shape=(4,)))
+    b = State(x=qd.ndarray(qd.i32, shape=(4,)))
+    run(a)
+    run(b)
+
+    # Second process: cold-start, must load from disk. If the uuid had leaked into the cache key,
+    # different uuid → different L2 key → no artifact would load.
+    qd_init_same_arch(offline_cache_file_path=str(tmp_path), offline_cache=True)
+    a = State(x=qd.ndarray(qd.i32, shape=(4,)))
+    b = State(x=qd.ndarray(qd.i32, shape=(4,)))
+    run(a)
+    run(b)
+    assert captured[-2] is not None, "first instance should load from disk"
+    assert captured[-1] is not None, "second instance (different uuid) should ALSO load from disk"
+    assert run._primal.src_ll_cache_observations.cache_loaded
+
+
+@test_utils.test(arch=qd.cpu)
+def test_data_oriented_kernel_read_opaque_member_fails_fastcache(tmp_path, capfd) -> None:
+    """Rule 2: when the kernel actually reads an unrecognised-type member, fastcache fails loudly
+    with [UNKNOWN_TYPE] + [INVALID_FUNC] — no silent drop, no qualname fallback. The kernel still
+    runs via normal compilation."""
+    from quadrants._test_tools import qd_init_same_arch
+    from quadrants.lang._fast_caching.args_hasher import reset_unknown_type_warn_state
+
+    qd_init_same_arch(offline_cache_file_path=str(tmp_path), offline_cache=True)
+    reset_unknown_type_warn_state()
+
+    class CustomConfig:
+        def __init__(self, scale: int) -> None:
+            self.scale = scale
+
+    @qd.data_oriented
+    class State:
+        def __init__(self, x, cfg):
+            self.x = x
+            self.cfg = cfg
+
+    x = qd.ndarray(qd.i32, shape=(4,))
+    state = State(x=x, cfg=CustomConfig(scale=3))
+
+    @qd.kernel(fastcache=True)
+    def run(s: qd.template()):
+        scale = s.cfg.scale  # makes ``__qd_s__qd_cfg`` and ``__qd_s__qd_cfg__qd_scale`` live
+        for i in range(4):
+            s.x[i] = i * scale
+
+    run(state)
+    _out, err = capfd.readouterr()
+    np.testing.assert_array_equal(x.to_numpy(), np.arange(4) * 3)
+
+    obs = run._primal.src_ll_cache_observations
+    assert obs.cache_key_generated is False, "unrecognised type at kernel-read path must disable fastcache"
+    assert "[FASTCACHE][UNKNOWN_TYPE]" in err
+    assert CustomConfig.__name__ in err
+    assert "[FASTCACHE][INVALID_FUNC]" in err
+
+
+@test_utils.test(arch=qd.cpu)
+def test_data_oriented_kernel_read_primitive_distinguishes_cache_key(tmp_path, monkeypatch) -> None:
+    """Rule 3 (data_oriented works) + pruning correctness: when the kernel reads a primitive member,
+    its value is baked into the kernel and must drive a distinct cache entry per value. Two State
+    instances differing only in ``n`` (read by the kernel) cold-compile separately and both load
+    from disk on the second process."""
+    from quadrants._test_tools import qd_init_same_arch
+
+    launch_kernel_orig = qd.lang.kernel_impl.Kernel.launch_kernel
+    captured = []
+
+    def launch_kernel(self, key, t_kernel, compiled_kernel_data, *args, qd_stream=None):
+        if self.func.__name__ == "run":
+            captured.append(compiled_kernel_data)
+        return launch_kernel_orig(self, key, t_kernel, compiled_kernel_data, *args, qd_stream=qd_stream)
+
+    monkeypatch.setattr("quadrants.lang.kernel_impl.Kernel.launch_kernel", launch_kernel)
+
+    @qd.data_oriented
+    class State:
+        def __init__(self, x, n):
+            self.x = x
+            self.n = n  # primitive, baked into kernel via ``for i in range(s.n)``
+
+    @qd.kernel(fastcache=True)
+    def run(s: qd.template()):
+        for i in range(s.n):
+            s.x[i] = i + s.n
+
+    qd_init_same_arch(offline_cache_file_path=str(tmp_path), offline_cache=True)
+    a = State(x=qd.ndarray(qd.i32, shape=(4,)), n=2)
+    b = State(x=qd.ndarray(qd.i32, shape=(4,)), n=3)
+    run(a)
+    run(b)
+    assert captured[-2] is None and captured[-1] is None, "different ``n`` → both cold-compile"
+
+    qd_init_same_arch(offline_cache_file_path=str(tmp_path), offline_cache=True)
+    a = State(x=qd.ndarray(qd.i32, shape=(4,)), n=2)
+    b = State(x=qd.ndarray(qd.i32, shape=(4,)), n=3)
+    run(a)
+    run(b)
+    assert captured[-2] is not None and captured[-1] is not None, "both ``n`` values should load distinct artifacts"
+    np.testing.assert_array_equal(a.x.to_numpy()[:2], np.array([2, 3], dtype=np.int32))
+    np.testing.assert_array_equal(b.x.to_numpy()[:3], np.array([3, 4, 5], dtype=np.int32))
+
+
+@test_utils.test(arch=qd.cpu)
+def test_data_oriented_kernel_unread_primitive_does_not_affect_cache(tmp_path, monkeypatch) -> None:
+    """Rule 1: kernel-unused primitive members do not affect the cache key. Mirror of the opaque
+    case for primitives. Two State instances differing only in ``unused_n`` must share the cache."""
+    from quadrants._test_tools import qd_init_same_arch
+
+    launch_kernel_orig = qd.lang.kernel_impl.Kernel.launch_kernel
+    captured = []
+
+    def launch_kernel(self, key, t_kernel, compiled_kernel_data, *args, qd_stream=None):
+        if self.func.__name__ == "run":
+            captured.append(compiled_kernel_data)
+        return launch_kernel_orig(self, key, t_kernel, compiled_kernel_data, *args, qd_stream=qd_stream)
+
+    monkeypatch.setattr("quadrants.lang.kernel_impl.Kernel.launch_kernel", launch_kernel)
+
+    @qd.data_oriented
+    class State:
+        def __init__(self, x, unused_n):
+            self.x = x
+            self.unused_n = unused_n  # kernel never reads this
+
+    @qd.kernel(fastcache=True)
+    def run(s: qd.template()):
+        for i in range(4):
+            s.x[i] = s.x[i] + 1
+
+    qd_init_same_arch(offline_cache_file_path=str(tmp_path), offline_cache=True)
+    a = State(x=qd.ndarray(qd.i32, shape=(4,)), unused_n=2)
+    b = State(x=qd.ndarray(qd.i32, shape=(4,)), unused_n=99)
+    run(a)
+    run(b)
+
+    qd_init_same_arch(offline_cache_file_path=str(tmp_path), offline_cache=True)
+    a = State(x=qd.ndarray(qd.i32, shape=(4,)), unused_n=2)
+    b = State(x=qd.ndarray(qd.i32, shape=(4,)), unused_n=99)
+    run(a)
+    run(b)
+    assert captured[-2] is not None, "first instance should load from disk"
+    assert captured[-1] is not None, "second instance (different unused_n) should ALSO load from disk"
+
+
+@test_utils.test(arch=qd.cpu)
+def test_data_oriented_qd_func_chain_propagation_distinguishes_cache_key(tmp_path, monkeypatch) -> None:
+    """Pruning chain propagation through ``@qd.func`` calls (``record_after_call`` extension):
+    when the kernel calls ``f(self.dofs)`` and ``f`` reads ``s.x``, the kernel's pruning set
+    must include ``__qd_self__qd_dofs__qd_x`` so that changes to the inner ndarray's dtype
+    invalidate the cache. Two States differing in ``dofs.x``'s dtype must cold-compile separately."""
+    from quadrants._test_tools import qd_init_same_arch
+
+    launch_kernel_orig = qd.lang.kernel_impl.Kernel.launch_kernel
+    captured = []
+
+    def launch_kernel(self, key, t_kernel, compiled_kernel_data, *args, qd_stream=None):
+        if self.func.__name__ == "run":
+            captured.append(compiled_kernel_data)
+        return launch_kernel_orig(self, key, t_kernel, compiled_kernel_data, *args, qd_stream=qd_stream)
+
+    monkeypatch.setattr("quadrants.lang.kernel_impl.Kernel.launch_kernel", launch_kernel)
+
+    @qd.data_oriented
+    class Dofs:
+        def __init__(self, x):
+            self.x = x
+
+    @qd.data_oriented
+    class State:
+        def __init__(self, dofs):
+            self.dofs = dofs
+
+    @qd.func
+    def write_dofs(d: qd.template(), v: qd.i32):
+        d.x[0] = v
+
+    @qd.kernel(fastcache=True)
+    def run(s: qd.template()):
+        write_dofs(s.dofs, 7)
+
+    qd_init_same_arch(offline_cache_file_path=str(tmp_path), offline_cache=True)
+    a = State(dofs=Dofs(x=qd.ndarray(qd.i32, shape=(4,))))
+    b = State(dofs=Dofs(x=qd.ndarray(qd.f32, shape=(4,))))
+    run(a)
+    run(b)
+    assert captured[-2] is None and captured[-1] is None, "differing dofs.x dtype → both cold-compile"
+
+    qd_init_same_arch(offline_cache_file_path=str(tmp_path), offline_cache=True)
+    a = State(dofs=Dofs(x=qd.ndarray(qd.i32, shape=(4,))))
+    b = State(dofs=Dofs(x=qd.ndarray(qd.f32, shape=(4,))))
+    run(a)
+    run(b)
+    assert captured[-2] is not None and captured[-1] is not None, "both dtypes load distinct artifacts"
