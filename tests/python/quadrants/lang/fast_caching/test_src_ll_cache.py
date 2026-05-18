@@ -142,10 +142,14 @@ def test_src_ll_cache_arg_warnings(tmp_path: pathlib.Path, capfd) -> None:
 
     k1(foo=RandomClass())
     _out, err = capfd.readouterr()
-    assert "[FASTCACHE][PARAM_INVALID]" in err
+    # Unrecognised types now fall back to a deterministic ``type(v).__qualname__`` hash (instead of silently
+    # disabling fastcache via the old ``[PARAM_INVALID]`` / ``[INVALID_FUNC]`` dead-end), and emit an
+    # ``[UNKNOWN_TYPE]`` warning once per type so a new tensor-like type added to Quadrants without explicit
+    # args-hasher handling still gets noticed in the logs. ``[PARAM_INVALID]`` is gone.
+    assert "[FASTCACHE][UNKNOWN_TYPE]" in err
     assert RandomClass.__name__ in err
-    assert "[FASTCACHE][INVALID_FUNC]" in err
-    assert k1.__name__ in err
+    assert "[FASTCACHE][PARAM_INVALID]" not in err
+    assert "[FASTCACHE][INVALID_FUNC]" not in err
 
     @qd.kernel
     def not_pure_k1(foo: qd.Template) -> None:
@@ -153,8 +157,10 @@ def test_src_ll_cache_arg_warnings(tmp_path: pathlib.Path, capfd) -> None:
 
     not_pure_k1(foo=RandomClass())
     _out, err = capfd.readouterr()
+    # Without ``@qd.pure``, fastcache is not active at all — neither the new UNKNOWN_TYPE nor the old
+    # PARAM_INVALID / INVALID_FUNC warnings should fire.
+    assert "[FASTCACHE][UNKNOWN_TYPE]" not in err
     assert "[FASTCACHE][PARAM_INVALID]" not in err
-    assert RandomClass.__name__ not in err
     assert "[FASTCACHE][INVALID_FUNC]" not in err
     assert k1.__name__ not in err
 
