@@ -300,18 +300,13 @@ def data_oriented(cls=None, *, stable_members: bool = False):
 
     Args:
         cls (Class): the class to be decorated.
-        stable_members (bool): per-call launch performance hint, unrelated to fastcache. If
-            ``True``, declares that the class's ndarray-typed members are allocated once and
-            never reassigned between kernel calls. Quadrants will skip a per-call walk of the
-            instance's attributes in (a) the template-mapper's spec-key construction and (b)
-            the launch-context cache's live-ndarray-id fold-in (~1-2 us/call savings on
-            Genesis-style containers with several ndarray attrs). Reassigning a member on a
-            ``stable_members`` class is undefined behaviour — the previously-compiled kernel
-            will be reused even if the new ndarray has different dtype/ndim/layout. May also
-            be set as a class-level attribute ``_qd_stable_members = True`` (equivalent).
-            Note: this flag does **not** affect the fastcache argument hasher; opaque-typed
-            members are silently skipped from the fastcache key for all data_oriented classes
-            by default.
+        stable_members (bool): if ``True``, declares that the class's ndarray-typed members are
+            allocated once and never reassigned between kernel calls. Quadrants will skip a
+            per-call walk of the instance's attributes (~1-2 us/call savings on Genesis-style
+            containers with several ndarray attrs). Reassigning a member on a ``stable_members``
+            class is undefined behaviour — the previously-compiled kernel will be reused even if
+            the new ndarray has different dtype/ndim/layout. May also be set as a class-level
+            attribute ``_qd_stable_members = True`` (equivalent).
 
     Returns:
         The decorated class (or, when called with arguments, a decorator).
