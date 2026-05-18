@@ -46,7 +46,7 @@ from quadrants.lang.exception import QuadrantsRuntimeTypeError
 from quadrants.lang.expr import Expr
 from quadrants.lang.matrix import MatrixType
 from quadrants.lang.snode import SNode
-from quadrants.lang.util import is_data_oriented, to_quadrants_type
+from quadrants.lang.util import is_data_oriented, is_dataclass_instance, to_quadrants_type
 from quadrants.types import (
     buffer_view_type,
     ndarray_type,
@@ -89,7 +89,7 @@ def _build_struct_nd_paths(obj: Any, prefix: tuple, out: list, _seen: "set[int] 
     # and bounds the walk to a finite depth regardless of the graph shape.
     if _seen is None:
         _seen = {id(obj)}
-    if dataclasses.is_dataclass(obj) and not isinstance(obj, type):
+    if is_dataclass_instance(obj):
         children = ((f.name, getattr(obj, f.name)) for f in dataclasses.fields(obj))
     else:
         # ``NamedTuple`` (decorated as ``@qd.data_oriented``) has no instance ``__dict__`` — fall back to ``_asdict()``
@@ -107,7 +107,7 @@ def _build_struct_nd_paths(obj: Any, prefix: tuple, out: list, _seen: "set[int] 
         v_type = type(v)
         if issubclass(v_type, Ndarray):
             out.append(chain)
-        elif is_data_oriented(v) or (dataclasses.is_dataclass(v) and not isinstance(v, type)):
+        elif is_data_oriented(v) or is_dataclass_instance(v):
             v_id = id(v)
             if v_id in _seen:
                 continue

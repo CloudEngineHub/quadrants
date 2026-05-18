@@ -363,6 +363,21 @@ def is_data_oriented(obj: Any) -> bool:
     return False
 
 
+def is_dataclass_instance(obj: Any) -> bool:
+    # Metaclass-safe replacement for ``dataclasses.is_dataclass(obj) and not isinstance(obj, type)``. The stdlib
+    # implementation calls ``hasattr(type(obj), '__dataclass_fields__')``, which delegates to the metaclass
+    # ``__getattr__`` for missing names. Pathological metaclasses (Pydantic's ``ModelMetaclass``) recurse infinitely
+    # on arbitrary attribute lookups and blow the stack. Walking the MRO and probing ``__dict__`` directly avoids
+    # any descriptor / ``__getattr__`` machinery, mirroring ``is_data_oriented`` above. Also folds in the
+    # ``not isinstance(obj, type)`` guard since callers always pair the two.
+    if isinstance(obj, type):
+        return False
+    for klass in type(obj).__mro__:
+        if "__dataclass_fields__" in klass.__dict__:
+            return True
+    return False
+
+
 def is_qd_template(annotation: Any) -> bool:
     return annotation is Template or type(annotation) is Template
 

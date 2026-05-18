@@ -34,7 +34,7 @@ from quadrants.lang.exception import (
 from quadrants.lang.matrix import MatrixType
 from quadrants.lang.stream import stream_parallel
 from quadrants.lang.struct import StructType
-from quadrants.lang.util import is_data_oriented, to_quadrants_type
+from quadrants.lang.util import is_data_oriented, is_dataclass_instance, to_quadrants_type
 from quadrants.types import annotations, buffer_view_type, ndarray_type, primitive_types
 
 
@@ -253,14 +253,14 @@ class FunctionDefTransformer:
         # stable for the duration of this compile and we never need to revisit a node since the ndarray-set rooted at
         # it doesn't depend on the path we took to reach it.
         def _walk_obj(obj, arg_idx, path, seen):
-            if dataclasses.is_dataclass(obj) and not isinstance(obj, type):
+            if is_dataclass_instance(obj):
                 for field in dataclasses.fields(obj):
                     child = getattr(obj, field.name)
                     if isinstance(child, _TensorClass):
                         child = child._unwrap()
                     if isinstance(child, _ndarray.Ndarray):
                         _register_ndarray(child, arg_idx, (*path, field.name))
-                    elif (dataclasses.is_dataclass(child) and not isinstance(child, type)) or is_data_oriented(child):
+                    elif is_dataclass_instance(child) or is_data_oriented(child):
                         child_id = id(child)
                         if child_id in seen:
                             continue
@@ -272,9 +272,7 @@ class FunctionDefTransformer:
                         attr_val = attr_val._unwrap()
                     if isinstance(attr_val, _ndarray.Ndarray):
                         _register_ndarray(attr_val, arg_idx, (*path, attr_name))
-                    elif (dataclasses.is_dataclass(attr_val) and not isinstance(attr_val, type)) or is_data_oriented(
-                        attr_val
-                    ):
+                    elif is_dataclass_instance(attr_val) or is_data_oriented(attr_val):
                         attr_id = id(attr_val)
                         if attr_id in seen:
                             continue
@@ -320,7 +318,7 @@ class FunctionDefTransformer:
                 val = val._unwrap()
             if isinstance(val, _ndarray.Ndarray):
                 continue
-            if dataclasses.is_dataclass(val) and not isinstance(val, type):
+            if is_dataclass_instance(val):
                 _walk_obj(val, i, (), {id(val)})
             elif hasattr(val, "__dict__"):
                 _walk_obj(val, i, (), {id(val)})

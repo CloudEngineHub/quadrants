@@ -16,7 +16,7 @@ from .._quadrants_callable import BoundQuadrantsCallable, QuadrantsCallable
 from ..field import ScalarField
 from ..kernel_arguments import ArgMetadata
 from ..matrix import MatrixField, MatrixNdarray, VectorNdarray
-from ..util import is_data_oriented
+from ..util import is_data_oriented, is_dataclass_instance
 from .hash_utils import hash_iterable_strings
 
 _FIELD_TYPES = (ScalarField, MatrixField)
@@ -196,7 +196,7 @@ def stringify_obj_type(
         _mark_warn_if_not_tensor_annotation(arg_meta)
         _mark_hit_recognised_unsupported()
         return None
-    if dataclasses.is_dataclass(obj):
+    if is_dataclass_instance(obj):
         return dataclass_to_repr(raise_on_templated_floats, path, obj)
     if is_data_oriented(obj):
         # ``@qd.data_oriented(stable_members=True)``: the class promises its member *set* and *types* don't change
