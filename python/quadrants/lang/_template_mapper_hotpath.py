@@ -140,12 +140,21 @@ def _collect_struct_nd_descriptors(arg: Any, out: list) -> None:
     reachable from ``arg``. Used by the template-mapper to refine the spec key for ``@qd.data_oriented`` args holding
     ndarrays — see the data_oriented branch in ``_extract_arg``.
     """
+    # The path cache is keyed on ``type(arg)`` and assumes the *set* of ndarray-reachable attribute chains is stable
+    # across instances of the same class. That holds for the typical ``@qd.data_oriented`` container, but Genesis
+    # ``FEMSolver`` / ``MPMSolver`` / ``SPHSolver`` and similar can hold polymorphic children (e.g. ``self.material``
+    # of a different concrete subclass) or swap a ``qd.Tensor``'s underlying impl between an ``Ndarray`` and a
+    # ``MatrixField``. When the leaf at a cached path is no longer an ``Ndarray`` we silently skip it: ``v.element_type``
+    # / ``v.shape`` / ``v._qd_layout`` are Ndarray-only accessors. The per-instance ``weakref(arg)`` part of the spec
+    # key still ensures correct cache discrimination across instances.
     for chain in _struct_nd_paths_for(arg):
         v = arg
         for a in chain:
             v = getattr(v, a)
         if type(v) in _TENSOR_WRAPPER_TYPES:
             v = v._unwrap()
+        if not isinstance(v, Ndarray):
+            continue
         type_id = id(v.element_type)
         element_type = type_id if type_id in primitive_types.type_ids else v.element_type
         out.append((".".join(chain), element_type, len(v.shape), v.grad is not None, v._qd_layout))

@@ -53,6 +53,15 @@ class FastcacheSkip(enum.Enum):
 _should_warn = False
 
 
+# Counter set by the data_oriented walker when entering a ``_qd_stable_members`` object. While nonzero, the
+# unknown-type branch of ``stringify_obj_type`` returns ``None`` silently instead of logging
+# ``[FASTCACHE][PARAM_INVALID]``. ``stable_members=True`` is the user's promise that the class's member set / types
+# don't change after construction — under that promise, opaque members like ``RigidSolver._uid`` (a
+# ``genesis.utils.uid.UID``) don't affect kernel codegen so they can be skipped silently rather than killing
+# fastcache for the whole call. Single-threaded by construction (the hasher only runs during JIT compile).
+_skip_unknown_warn_depth = 0
+
+
 def _mark_warn_if_not_tensor_annotation(arg_meta: ArgMetadata | None) -> None:
     """Flag that a warning is needed if the Field didn't arrive through a qd.Tensor annotation."""
     global _should_warn  # pylint: disable=global-statement
@@ -174,6 +183,14 @@ def stringify_obj_type(
     if dataclasses.is_dataclass(obj):
         return dataclass_to_repr(raise_on_templated_floats, path, obj)
     if is_data_oriented(obj):
+        # ``@qd.data_oriented(stable_members=True)``: the class promises its member *set* and *types* don't change
+        # after construction. Under that contract, unrecognised member types (e.g. Genesis's ``RigidSolver._uid`` of
+        # type ``genesis.utils.uid.UID``, or any other opaque metadata) are treated as inert from fastcache's
+        # perspective: they don't affect kernel codegen so they can be skipped silently rather than killing fastcache
+        # for the whole call. Without this, migrating a kernel from a standalone ``@qd.kernel`` function to a method
+        # on a ``@qd.data_oriented`` class disables fastcache the moment the class holds any opaque metadata, even
+        # though the kernel's compiled output would be identical.
+        stable_members = bool(type(obj).__dict__.get("_qd_stable_members"))
         child_repr_l = ["da"]
         _dict = {}
         try:
@@ -182,26 +199,37 @@ def stringify_obj_type(
             _dict = _asdict()
         except AttributeError:
             _dict = obj.__dict__
-        for k, v in _dict.items():
-            # Skip Quadrants method-descriptor cache entries. ``QuadrantsCallable.__get__``
-            # stashes the per-instance ``BoundQuadrantsCallable`` on ``instance.__dict__`` so
-            # that subsequent ``instance.method`` lookups skip the descriptor allocation;
-            # those entries are not data and must not invalidate the fastcache key.
-            v_type = type(v)
-            if v_type is QuadrantsCallable or v_type is BoundQuadrantsCallable:
-                continue
-            _child_repr = stringify_obj_type(raise_on_templated_floats, (*path, k), v, ArgMetadata(Template, ""))
-            if _child_repr is None:
-                if _should_warn:
-                    _logging.warn(
-                        f"A kernel that has been marked as eligible for fast cache was passed 1 or more parameters "
-                        f"that are not, in fact, eligible for fast cache: one of the parameters was a "
-                        f"@qd.data_oriented object, and one of its children was not eligible. The data oriented "
-                        f"object was of type {type(obj)} and the child {k}={type(v)} was not eligible. For "
-                        f"information, the path of the value was {path}."
-                    )
-                return None
-            child_repr_l.append(f"{k}: {_child_repr}")
+        global _skip_unknown_warn_depth  # pylint: disable=global-statement
+        if stable_members:
+            _skip_unknown_warn_depth += 1
+        try:
+            for k, v in _dict.items():
+                # Skip Quadrants method-descriptor cache entries. ``QuadrantsCallable.__get__``
+                # stashes the per-instance ``BoundQuadrantsCallable`` on ``instance.__dict__`` so
+                # that subsequent ``instance.method`` lookups skip the descriptor allocation;
+                # those entries are not data and must not invalidate the fastcache key.
+                v_type = type(v)
+                if v_type is QuadrantsCallable or v_type is BoundQuadrantsCallable:
+                    continue
+                _child_repr = stringify_obj_type(raise_on_templated_floats, (*path, k), v, ArgMetadata(Template, ""))
+                if _child_repr is None:
+                    if stable_members:
+                        # Member is opaque to fastcache; under the stable_members contract it's inert and skipping
+                        # is safe. Don't kill fastcache for the whole call.
+                        continue
+                    if _should_warn:
+                        _logging.warn(
+                            f"A kernel that has been marked as eligible for fast cache was passed 1 or more "
+                            f"parameters that are not, in fact, eligible for fast cache: one of the parameters was a "
+                            f"@qd.data_oriented object, and one of its children was not eligible. The data oriented "
+                            f"object was of type {type(obj)} and the child {k}={type(v)} was not eligible. For "
+                            f"information, the path of the value was {path}."
+                        )
+                    return None
+                child_repr_l.append(f"{k}: {_child_repr}")
+        finally:
+            if stable_members:
+                _skip_unknown_warn_depth -= 1
         return ", ".join(child_repr_l)
     if issubclass(arg_type, (numbers.Number, np.number)):
         if _is_template(arg_meta):
@@ -218,6 +246,11 @@ def stringify_obj_type(
         return "np.bool_"
     if isinstance(obj, enum.Enum):
         return f"enum-{obj.name}-{obj.value}"
+    if _skip_unknown_warn_depth > 0:
+        # Inside a ``stable_members=True`` data_oriented walk: opaque members are tolerated by contract, so don't log
+        # the per-member ``[FASTCACHE][PARAM_INVALID]`` warning. The data_oriented walker reads the returned ``None``
+        # and skips this member.
+        return None
     _mark_should_warn()
     # The bit in caps should not be modified without updating corresponding test
     # The rest of free text can be freely modified

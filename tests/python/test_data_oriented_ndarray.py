@@ -953,6 +953,48 @@ def test_data_oriented_with_pydantic_like_child():
 
 
 @test_utils.test(arch=qd.cpu)
+def test_data_oriented_polymorphic_attr_across_instances():
+    """The path cache in ``_struct_nd_paths_cache`` is keyed on ``type(arg)`` and assumes the set of
+    ndarray-reachable attribute chains is stable across instances. Some real-world ``@qd.data_oriented``
+    containers (Genesis FEMSolver / MPMSolver / SPHSolver, etc.) hold polymorphic children whose
+    types differ between instances — e.g. ``self.material.x`` is an ``Ndarray`` on instance A and
+    a ``qd.field`` (``MatrixField``) on instance B. ``_collect_struct_nd_descriptors`` walks cached
+    paths verbatim and must not crash with ``'MatrixField' object has no attribute 'element_type'``
+    when a path's leaf is no longer an ``Ndarray``; it should silently skip the stale entry."""
+    N = 4
+
+    @qd.data_oriented
+    class State:
+        def __init__(self, x):
+            self.x = x
+
+    # First instance: ``self.x`` is an Ndarray. The walker emits path ``('x',)`` and caches it.
+    x_nd = qd.ndarray(qd.i32, shape=(N,))
+    state_a = State(x=x_nd)
+
+    @qd.kernel
+    def run(s: qd.template()):
+        for i in range(N):
+            s.x[i] = i + 1
+
+    run(state_a)
+    np.testing.assert_array_equal(x_nd.to_numpy(), np.arange(1, N + 1))
+
+    # Second instance of the SAME class, ``self.x`` is now a ``qd.field`` (MatrixField via Vector.field).
+    # The cached path ``('x',)`` from instance A points to a non-Ndarray on this instance — the descriptor
+    # walk must skip it cleanly rather than crash on ``v.element_type``.
+    f = qd.Vector.field(2, qd.i32, shape=(N,))
+    state_b = State(x=f)
+
+    @qd.kernel
+    def run_field(s: qd.template()):
+        for i in range(N):
+            s.x[i] = [i, i + 1]
+
+    run_field(state_b)
+
+
+@test_utils.test(arch=qd.cpu)
 def test_data_oriented_with_cyclic_attr_graph():
     """A ``@qd.data_oriented`` class whose attribute graph contains a cycle
     (``parent.child.parent is parent``). Walker must not re-enter the cycle."""
