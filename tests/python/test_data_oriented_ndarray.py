@@ -902,10 +902,10 @@ def test_data_oriented_field_only_no_speckey_change():
 
 
 def test_is_data_oriented_safe_on_pydantic_like_metaclass():
-    """``is_data_oriented`` must not invoke ``__getattr__`` on the class (or metaclass),
-    so it stays safe in the presence of pathological metaclasses whose ``__getattr__``
-    blows the Python recursion limit on arbitrary attribute lookups (e.g. Pydantic's
-    ``ModelMetaclass`` when probed for a name not in its private-attrs cache)."""
+    """``is_data_oriented`` must not invoke ``__getattr__`` on the class (or metaclass), so it stays safe in the
+    presence of pathological metaclasses whose ``__getattr__`` blows the Python recursion limit on arbitrary
+    attribute lookups (e.g. Pydantic's ``ModelMetaclass`` when probed for a name not in its private-attrs cache).
+    """
 
     from quadrants.lang.util import is_data_oriented
 
@@ -922,9 +922,9 @@ def test_is_data_oriented_safe_on_pydantic_like_metaclass():
 
 @test_utils.test(arch=qd.cpu)
 def test_data_oriented_with_pydantic_like_child():
-    """A ``@qd.data_oriented`` class holding a child whose metaclass has the recursing
-    ``__getattr__`` (Pydantic-style). Walker must classify the child as non-data-oriented
-    and continue without blowing the stack."""
+    """A ``@qd.data_oriented`` class holding a child whose metaclass has the recursing ``__getattr__``
+    (Pydantic-style). Walker must classify the child as non-data-oriented and continue without blowing the stack.
+    """
     N = 4
 
     class RecursingMeta(type):

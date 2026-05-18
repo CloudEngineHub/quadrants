@@ -159,9 +159,14 @@ def _collect_struct_nd_descriptors(arg: Any, out: list) -> None:
             v = v._unwrap()
         if not isinstance(v, Ndarray):
             continue
+        # ``Ndarray.shape`` can legitimately be ``None`` (uninitialised ``_physical_shape``); such an instance
+        # has no meaningful spec contribution, so skip it rather than crashing on ``len(None)``.
+        shape = v.shape
+        if shape is None:
+            continue
         type_id = id(v.element_type)
         element_type = type_id if type_id in primitive_types.type_ids else v.element_type
-        out.append((".".join(chain), element_type, len(v.shape), v.grad is not None, v._qd_layout))
+        out.append((".".join(chain), element_type, len(shape), v.grad is not None, v._qd_layout))
 
 
 def _extract_arg(raise_on_templated_floats: bool, arg: Any, annotation: AnnotationType, arg_name: str) -> Any:

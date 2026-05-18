@@ -1,5 +1,5 @@
 from functools import partial
-from typing import Any, TypeAlias
+from typing import Any, TypeAlias, cast
 from weakref import ReferenceType
 
 from quadrants.lang import impl
@@ -121,10 +121,13 @@ class TemplateMapper:
         for i in self.template_slot_locations:
             arg = args[i]
             cls = type(arg)
-            paths = _arg_nd_paths_or_none.get(cls, _UNCLASSIFIED)
-            if paths is _UNCLASSIFIED:
+            cached = _arg_nd_paths_or_none.get(cls, _UNCLASSIFIED)
+            if cached is _UNCLASSIFIED:
                 paths = _classify_for_args_hash(arg)
                 _arg_nd_paths_or_none[cls] = paths
+            else:
+                # Narrow the ``object`` sentinel union back to the actual cached value type.
+                paths = cast("list[tuple] | None", cached)
             if paths is None:
                 continue
             for chain in paths:

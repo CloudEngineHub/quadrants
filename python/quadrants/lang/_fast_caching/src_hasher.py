@@ -61,7 +61,6 @@ from .fast_caching_types import HashedFunctionSourceInfo
 from .hash_utils import hash_iterable_strings
 from .python_side_cache import PythonSideCache
 
-
 # Prefix bytes mixed into L1 / L2 keys so they cannot collide even if the underlying inputs happen to hash to
 # the same string. The original single-level cache key (kept for backward-compat reads via ``load`` below) had
 # no such prefix; the new two-level scheme uses ``l1:`` and ``l2:`` markers so old single-level entries from
@@ -110,11 +109,11 @@ def compute_narrow_args_hash(
     Returns ``None`` if a recognised-but-unsupported tensor-like type forces fastcache off — the caller emits
     the appropriate user-visible diagnostic via the ``FastcacheSkip.WARN`` branch.
     """
-    args_hash = args_hasher.hash_args(
-        raise_on_templated_floats, args, arg_metas, pruning_paths=pruning_paths
-    )
+    args_hash = args_hasher.hash_args(raise_on_templated_floats, args, arg_metas, pruning_paths=pruning_paths)
     if isinstance(args_hash, FastcacheSkip):
         if args_hash is FastcacheSkip.WARN:
+            # the bit in caps at start should not be modified without modifying corresponding text
+            # freetext bit can be freely modified
             _logging.warn(
                 f"[FASTCACHE][INVALID_FUNC] The pure function {kernel_source_info.function_name} could not be "
                 "fast cached, because one or more parameter types were invalid"

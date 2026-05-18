@@ -241,9 +241,8 @@ class FunctionDefTransformer:
         pass needs every reachable ndarray in the cache for ``build_Attribute`` to resolve
         the accesses that *will* populate the set).
         """
-        from quadrants.lang.util import cook_dtype  # pylint: disable=C0415
-
         from quadrants.lang._pruning import Pruning  # pylint: disable=C0415
+        from quadrants.lang.util import cook_dtype  # pylint: disable=C0415
 
         cache = ctx.global_context.ndarray_to_any_array
         launch_info = ctx.global_context.struct_ndarray_launch_info
@@ -261,9 +260,7 @@ class FunctionDefTransformer:
         # arg slots get rebound to the wrong ndarrays at launch, and physics silently breaks.
         prune_from_flat_names = pruning.enforcing and not getattr(pruning, "pass_0_ran", False)
         kernel_used_flat_names = (
-            pruning.used_vars_by_func_id.get(Pruning.KERNEL_FUNC_ID, set())
-            if prune_from_flat_names
-            else None
+            pruning.used_vars_by_func_id.get(Pruning.KERNEL_FUNC_ID, set()) if prune_from_flat_names else None
         )
 
         # Cycle-safe walker: Genesis object graphs have cross-references (e.g. solver <-> scene <-> sim) so we must

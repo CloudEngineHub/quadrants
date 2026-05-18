@@ -76,8 +76,8 @@ class Pruning:
         # therefore unreliable — in that case ``_predeclare_struct_ndarrays`` falls back to
         # registering every reachable ndarray (same as the historical behavior).
         self.pass_0_ran: bool = False
-        # Kernel-arg-rooted attribute chains used by each func, in flat-name form
-        # (``__qd_self__qd_dofs__qd_x``). Populated by ``ASTTransformer.build_Attribute``
+        # Kernel-arg-rooted attribute chains used by each func, in flat-name form (``__qd_self__qd_dofs__qd_x``).
+        # Populated by ``ASTTransformer.build_Attribute``
         # for non-flattened kernel args (data_oriented / qd.template). Kept *separate* from
         # ``used_vars_by_func_id`` because the latter drives ``struct_locals`` on the enforcing
         # pass (line ~230 of kernel.py), and ``FlattenAttributeNameTransformer`` would rewrite
@@ -202,9 +202,12 @@ class Pruning:
                 caller_flat, root_id = flat
                 if not root_id.startswith("__qd_"):
                     callee_param_name = kwarg.arg
-                    self._propagate_chain_paths(
-                        callee_chain_paths, callee_param_name, caller_flat, chain_paths_to_propagate
-                    )
+                    # ``kwarg.arg`` is ``None`` for double-star unpacking (``**kwargs``);
+                    # chain propagation requires a concrete parameter name so just skip.
+                    if callee_param_name is not None:
+                        self._propagate_chain_paths(
+                            callee_chain_paths, callee_param_name, caller_flat, chain_paths_to_propagate
+                        )
             arg_id += 1
         self.used_vars_by_func_id[my_func_id].update(vars_to_unprune)
         self.kernel_arg_chain_paths_by_func_id[my_func_id].update(chain_paths_to_propagate)
