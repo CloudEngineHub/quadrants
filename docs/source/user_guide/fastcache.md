@@ -180,15 +180,9 @@ The args hasher walks compound-type kernel parameters recursively. For each leaf
 
 **`@qd.data_oriented`:** the walker descends into `vars(obj)`, narrowed by pruning info. For each walked child:
 
-- `qd.ndarray` member, kernel-read — `(dtype, ndim, layout)` is included in the cache key. Element values are not.
-- `qd.ndarray` member, kernel-unused — *skipped*. Changes to its dtype/ndim/layout don't invalidate the cache.
-- Primitive (`int` / `float` / `bool` / `enum.Enum`) member, kernel-read — value is baked into the kernel (same semantics as a `qd.Template` primitive). Two instances of the same class with different primitive member values that the kernel reads get different cache entries.
-- Primitive member, kernel-unused — *skipped* (the kernel cannot read it so its value cannot affect codegen).
-- Nested `@qd.data_oriented` member — recurses (with these same rules).
-- Nested `dataclasses.dataclass` member — recurses (with the dataclass rules below).
-- Opaque member (anything fastcache doesn't recognise), kernel-unused — *skipped*.
-- Opaque member, kernel-read — fastcache is disabled for the call with a one-shot `[FASTCACHE][UNKNOWN_TYPE]` warning. To make the type cacheable, add explicit handling to `args_hasher.py::stringify_obj_type`.
-- `qd.field` member, kernel-read — fastcache is disabled for the call (recognised-but-unsupported). A `qd.field` member at a kernel-*unused* path is simply skipped (no diagnostic).
+- `qd.ndarray` member — `(dtype, ndim, layout)` is included in the cache key. Element values are not.
+- Primitive (`int` / `float` / `bool` / `enum.Enum`) member — value is baked into the kernel (same semantics as a `qd.Template` primitive). Two instances of the same class with different primitive member values get different cache entries.
+- Nested `@qd.data_oriented` member — recurses.
 
 **`dataclasses.dataclass`:** the walker descends into the declared members. For each member, only the *type* is included in the cache key by default — **not** the value. To include a member's value, annotate it:
 
