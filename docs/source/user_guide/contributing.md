@@ -2,7 +2,7 @@
 
 ## Good practice reminder
 
-* *testing*: Any new features or modified code should be tested. Run the test suite with `python tests/run_tests.py` — see [unit_testing.md](unit_testing.md) for how to scope by file / keyword / arch, how the `slow` and `sample` markers interact, and how to reproduce a single CI failure.
+* *testing*: Any new features or modified code should be tested. see [unit_testing.md](unit_testing.md)
 * *format/linter*: Before pushing any commits, ensure you set up `pre-commit` and run it using `pre-commit run -a`
 * No need to force push to keep a clean history as the merging is eventually done by squashing commits.
 
