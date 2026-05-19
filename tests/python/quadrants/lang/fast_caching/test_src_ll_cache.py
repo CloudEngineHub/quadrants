@@ -441,6 +441,63 @@ def test_src_ll_cache_self_arg_checked(tmp_path: pathlib.Path) -> None:
     assert my_do.k1._primal.src_ll_cache_observations.cache_validated
 
 
+@test_utils.test()
+def test_src_ll_cache_hit_predeclare_struct_ndarrays_pruned(tmp_path: pathlib.Path) -> None:
+    """Pin the cache-hit fix for ``_predeclare_struct_ndarrays``: on a fastcache hit pass 0 is skipped so the
+    ``id(nd)``-keyed used-ndarray set is empty; without flat-name fallback pruning every reachable ndarray gets
+    registered, scrambling the kernel's arg-slot bindings (e.g. a kernel compiled to write ``state.b`` ends up
+    writing ``state.a`` at launch). The fix uses the cached ``used_vars_by_func_id[KERNEL_FUNC_ID]`` flat-name
+    set to gate registration on the cache-hit branch, reproducing the exact ndarray set the originating compile
+    produced.
+
+    The test exercises both the cold (cache-store) and hot (cache-load) paths in the same process via
+    ``qd.reset()`` cycles, and asserts both that the ndarray the kernel writes to is the *correct* one and that
+    the other ndarrays are untouched — without the fix the value would land in ``state.a`` (the first
+    insertion-order ndarray) instead of ``state.b``.
+    """
+    import numpy as np  # local import keeps the test module's top-level deps unchanged
+
+    arch = getattr(qd, qd.lang.impl.current_cfg().arch.name)
+    N = 4
+
+    @qd.data_oriented
+    class State:
+        def __init__(self) -> None:
+            self.a = qd.ndarray(qd.i32, shape=(N,))
+            self.b = qd.ndarray(qd.i32, shape=(N,))
+            self.c = qd.ndarray(qd.i32, shape=(N,))
+
+    @qd.pure
+    @qd.kernel
+    def write_b(s: qd.template()) -> None:
+        for i in range(N):
+            s.b[i] = (i + 1) * 17
+
+    # Cold: cache-miss path populates the fastcache (including the kernel-used flat-name set folded in by
+    # ``_fold_struct_nd_paths_into_pruning``).
+    qd.reset()
+    qd.init(arch=arch, offline_cache_file_path=str(tmp_path), offline_cache=True)
+    state = State()
+    write_b(state)
+    assert write_b._primal.src_ll_cache_observations.cache_key_generated
+    assert not write_b._primal.src_ll_cache_observations.cache_loaded
+    np.testing.assert_array_equal(state.b.to_numpy(), np.array([17, 34, 51, 68], dtype=np.int32))
+    np.testing.assert_array_equal(state.a.to_numpy(), np.zeros(N, dtype=np.int32))
+    np.testing.assert_array_equal(state.c.to_numpy(), np.zeros(N, dtype=np.int32))
+
+    # Hot: cache-hit path skips pass 0; this is the branch the fix protects. Without flat-name pruning all three
+    # ndarrays would be registered in insertion order, displacing ``state.b`` from the slot the kernel was
+    # compiled to write — and the write would land in ``state.a`` instead.
+    qd.reset()
+    qd.init(arch=arch, offline_cache_file_path=str(tmp_path), offline_cache=True)
+    state = State()
+    write_b(state)
+    assert write_b._primal.src_ll_cache_observations.cache_loaded, "expected a fastcache hit on the second run"
+    np.testing.assert_array_equal(state.b.to_numpy(), np.array([17, 34, 51, 68], dtype=np.int32))
+    np.testing.assert_array_equal(state.a.to_numpy(), np.zeros(N, dtype=np.int32))
+    np.testing.assert_array_equal(state.c.to_numpy(), np.zeros(N, dtype=np.int32))
+
+
 class ModifySubFuncKernelArgs(pydantic.BaseModel):
     arch: str
     offline_cache_file_path: str

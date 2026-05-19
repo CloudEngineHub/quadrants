@@ -1012,7 +1012,8 @@ def test_data_oriented_polymorphic_attribute_set_across_instances():
     np.testing.assert_array_equal(state_lean.x.to_numpy(), np.arange(1, N + 1))
 
     # Inverse direction: a different class so per-class cache (if used by __slots__ fallback) starts fresh; first
-    # instance lacks 'extra', second has it. Verifies the second instance's 'extra' ndarray is correctly walked.
+    # instance lacks 'extra', second has it. The kernel actually *reads* ``s.extra`` so the inverse-direction
+    # silent miscache (which only manifests when the kernel touches the conditional attr) is exercised end-to-end.
     @qd.data_oriented
     class PolyState2:
         def __init__(self, with_extra: bool):
@@ -1020,11 +1021,33 @@ def test_data_oriented_polymorphic_attribute_set_across_instances():
             if with_extra:
                 self.extra = qd.ndarray(qd.i32, shape=(N,))
 
+    @qd.kernel
+    def run_using_extra(s: qd.template()):
+        for i in range(N):
+            s.x[i] = s.extra[i] * 10
+
+    # Walk the lean instance first (no 'extra'), populating any per-class state with the *narrow* attribute set.
+    # With the old per-class cache, this would lock in paths = [('x',)] for the class — and the next instance's
+    # ``extra`` would be silently absent from args_hash and from the kernel spec, leading to a wrong-shape kernel
+    # or a stale-cache hit when ``extra`` is later reassigned.
     state_lean2 = PolyState2(with_extra=False)
     run(state_lean2)
+    np.testing.assert_array_equal(state_lean2.x.to_numpy(), np.arange(1, N + 1))
+
+    # Now the polymorphic-attr-bearing instance. The per-instance walk must include ``('extra',)`` so that
+    # ``state_full2.extra``'s shape/id participates in the spec and the kernel compiles correctly.
     state_full2 = PolyState2(with_extra=True)
-    run(state_full2)
-    np.testing.assert_array_equal(state_full2.x.to_numpy(), np.arange(1, N + 1))
+    state_full2.extra.from_numpy(np.array([2, 3, 5, 7], dtype=np.int32))
+    run_using_extra(state_full2)
+    np.testing.assert_array_equal(state_full2.x.to_numpy(), np.array([20, 30, 50, 70], dtype=np.int32))
+
+    # Reassignment-detection check: swap ``state_full2.extra`` to a different ndarray. The per-instance walk caches
+    # the *path list* ([('x',), ('extra',)]) on the instance, but the per-call args_hash still folds in
+    # ``id(getattr(state_full2, 'extra'))`` — so a swap should miss the spec-key cache and re-specialise.
+    state_full2.extra = qd.ndarray(qd.i32, shape=(N,))
+    state_full2.extra.from_numpy(np.array([11, 13, 17, 19], dtype=np.int32))
+    run_using_extra(state_full2)
+    np.testing.assert_array_equal(state_full2.x.to_numpy(), np.array([110, 130, 170, 190], dtype=np.int32))
 
 
 @test_utils.test(arch=qd.cpu)
