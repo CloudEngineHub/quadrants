@@ -393,6 +393,7 @@ def _make_spd(np_dtype=np.float32, seed: int = 42):
     return (B @ B.T + _TILE * np.eye(_TILE)).astype(np_dtype)
 
 
+@pytest.mark.slow
 @pytest.mark.parametrize("tensor_type", [qd.ndarray, qd.field])
 @pytest.mark.parametrize("qd_dtype", _QD_DTYPES)
 @test_utils.test(arch=qd.gpu)
@@ -1131,6 +1132,7 @@ def test_tile16_load_store_partial_rows(qd_dtype, nrows):
     np.testing.assert_allclose(result, expected)
 
 
+@pytest.mark.slow
 @pytest.mark.parametrize("tensor_type", [qd.ndarray, qd.field])
 @pytest.mark.parametrize("qd_dtype", _QD_DTYPES)
 @test_utils.test(arch=qd.gpu)
@@ -1237,6 +1239,7 @@ def test_tile16_potrf_then_trsm(tensor_type, qd_dtype):
 # -- SharedArray tests --
 
 
+@pytest.mark.slow
 @test_utils.test(arch=qd.gpu)
 def test_tile16_shared_array_roundtrip():
     """Load from field -> tile -> SharedArray -> tile -> field, verify data survives."""
@@ -1309,6 +1312,7 @@ def test_tile16_shared_array_partial_cols(partial_store, partial_load):
         np.testing.assert_allclose(result[:, NCOLS:], -1.0)
 
 
+@pytest.mark.slow
 @test_utils.test(arch=qd.gpu)
 def test_tile16_shared_array_cholesky():
     """Cholesky via tiles, L stored in SharedArray, verify reconstruction."""
@@ -1434,6 +1438,7 @@ def test_tile16_vec_proxy_syr_sub_2d(tensor_type):
     np.testing.assert_allclose(out.to_numpy(), R - np.outer(col, col), atol=1e-5)
 
 
+@pytest.mark.slow
 @pytest.mark.parametrize("tensor_type", [qd.ndarray, qd.field])
 @test_utils.test(arch=qd.gpu)
 def test_tile16_vec_proxy_syr_sub_3d(tensor_type):
@@ -1774,6 +1779,7 @@ def test_proxy_default_dtype_survives_reinit(tensor_type):
     assert result32.dtype == np.float32
 
 
+@pytest.mark.slow
 @test_utils.test(arch=[qd.cuda])
 def test_tile16_cholesky_blocked_demo():
     """Smoke-test that misc/demos/cholesky_blocked.py runs to completion."""
