@@ -65,10 +65,25 @@ def pytest_configure(config):
     )
     # IMPORTANT: pick the seed on the *controller* here, not inside pytest_collection_modifyitems. With pytest-xdist
     # the latter runs on every worker, so workers would each pick different seeds and sample different subsets,
-    # breaking the contract that a single ``--sample-seed`` describes the entire run. ``config`` is replicated to
-    # xdist workers, so once we set ``sample_seed`` here every worker sees the same value.
-    if not config.getoption("--no-sample") and config.getoption("--sample-seed") is None:
+    # breaking the contract that a single ``--sample-seed`` describes the entire run. The controller -> worker handoff
+    # uses xdist's ``workerinput`` dict (populated in ``pytest_configure_node`` below); workers read from there in
+    # ``pytest_configure``. Runtime-set ``config.option`` attributes are NOT auto-replicated to workers.
+    if hasattr(config, "workerinput"):
+        # xdist worker: read seed from controller via workerinput.
+        seed = config.workerinput.get("sample_seed")
+        if seed is not None:
+            config.option.sample_seed = seed
+    elif not config.getoption("--no-sample") and config.getoption("--sample-seed") is None:
+        # Controller (or non-xdist run): pick the run's seed once.
         config.option.sample_seed = random.randrange(0, 2**31)
+
+
+def pytest_configure_node(node):
+    # xdist hook: runs on the controller for each worker about to be spawned. Stash the run-wide sample seed in the
+    # worker's ``workerinput`` dict so ``pytest_configure`` on the worker side picks up the same value.
+    seed = node.config.getoption("--sample-seed")
+    if seed is not None:
+        node.workerinput["sample_seed"] = seed
 
 
 def pytest_report_header(config):
