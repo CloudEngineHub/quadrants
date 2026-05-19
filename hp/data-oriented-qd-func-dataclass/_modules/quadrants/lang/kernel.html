@@ -379,7 +379,6 @@
 <span class="kn">from</span><span class="w"> </span><span class="nn">quadrants.types.enums</span><span class="w"> </span><span class="kn">import</span> <span class="n">AutodiffMode</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">quadrants.types.utils</span><span class="w"> </span><span class="kn">import</span> <span class="n">is_signed</span>
 
-<span class="kn">from</span><span class="w"> </span><span class="nn">._dataclass_util</span><span class="w"> </span><span class="kn">import</span> <span class="n">create_flat_name</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">._func_base</span><span class="w"> </span><span class="kn">import</span> <span class="n">FuncBase</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">._kernel_types</span><span class="w"> </span><span class="kn">import</span> <span class="p">(</span>
     <span class="n">ArgsHash</span><span class="p">,</span>
@@ -904,7 +903,7 @@
                     <span class="c1"># args walks nothing — every (arg_idx, attr_chain) pair gets the same hash regardless</span>
                     <span class="c1"># of dtype, so changing ``state.x``&#39;s dtype no longer invalidates the cache (the</span>
                     <span class="c1"># ``test_data_oriented_ndarray_fastcache_dtype_key_distinct`` pin caught this).</span>
-                    <span class="bp">self</span><span class="o">.</span><span class="n">_fold_struct_nd_paths_into_pruning</span><span class="p">(</span><span class="n">key</span><span class="p">,</span> <span class="n">pruning</span><span class="p">)</span>
+                    <span class="n">pruning</span><span class="o">.</span><span class="n">fold_struct_nd_paths</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_struct_ndarray_launch_info_by_key</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">key</span><span class="p">,</span> <span class="p">[]),</span> <span class="bp">self</span><span class="o">.</span><span class="n">arg_metas</span><span class="p">)</span>
                     <span class="c1"># Fold non-ndarray kernel-arg-rooted chain paths (primitives, opaque members, nested</span>
                     <span class="c1"># struct paths) collected by ``ASTTransformer.build_Attribute``&#39;s ``_qd_arg_chain``</span>
                     <span class="c1"># tracking. Kept separate from ``used_vars_by_func_id`` during compile (would otherwise</span>
@@ -912,7 +911,7 @@
                     <span class="c1"># ``Pruning.kernel_arg_chain_paths_by_func_id``. This fold + the existing ``used_vars``</span>
                     <span class="c1"># assignment to ``used_py_dataclass_parameters_by_key_enforcing`` share the same set</span>
                     <span class="c1"># by reference, so the final fastcache L1 entry sees all kernel-accessed paths.</span>
-                    <span class="bp">self</span><span class="o">.</span><span class="n">_fold_kernel_arg_chain_paths_into_pruning</span><span class="p">(</span><span class="n">pruning</span><span class="p">)</span>
+                    <span class="n">pruning</span><span class="o">.</span><span class="n">fold_kernel_arg_chain_paths</span><span class="p">()</span>
                 <span class="k">else</span><span class="p">:</span>
                     <span class="k">for</span> <span class="n">used_parameters</span> <span class="ow">in</span> <span class="n">pruning</span><span class="o">.</span><span class="n">used_vars_by_func_id</span><span class="o">.</span><span class="n">values</span><span class="p">():</span>
                         <span class="n">new_used_parameters</span> <span class="o">=</span> <span class="nb">set</span><span class="p">()</span>
@@ -933,67 +932,6 @@
             <span class="c1"># Post-compile fastcache bookkeeping. See ``_maybe_persist_l1_and_set_l2_key`` docstring.</span>
             <span class="bp">self</span><span class="o">.</span><span class="n">_maybe_persist_l1_and_set_l2_key</span><span class="p">(</span><span class="n">key</span><span class="p">,</span> <span class="n">py_args</span><span class="p">)</span></div>
 
-
-    <span class="k">def</span><span class="w"> </span><span class="nf">_fold_struct_nd_paths_into_pruning</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">key</span><span class="p">:</span> <span class="s2">&quot;CompiledKernelKeyType&quot;</span><span class="p">,</span> <span class="n">pruning</span><span class="p">:</span> <span class="n">Pruning</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
-<span class="w">        </span><span class="sd">&quot;&quot;&quot;Add data_oriented (and dataclass-nested) ndarray attribute chains to the kernel&#39;s pruning flat</span>
-<span class="sd">        name set so ``args_hasher.hash_args`` narrow-walks them correctly.</span>
-
-<span class="sd">        Background: pruning&#39;s ``used_vars_by_func_id[KERNEL_FUNC_ID]`` is populated by AST walking of flat</span>
-<span class="sd">        names produced by ``FlattenAttributeNameTransformer`` — but that transformer only flattens *dataclass*</span>
-<span class="sd">        args. ``@qd.data_oriented`` args (template-typed) stay as ``Attribute(value=Name(self), attr=…)`` in</span>
-<span class="sd">        the AST and don&#39;t contribute to ``used_vars_by_func_id``. Their kernel-accessed ndarray paths *are*</span>
-<span class="sd">        recorded — in ``struct_ndarray_launch_info`` as ``(arg_id_vec[0], arg_idx, attr_chain)`` — but only</span>
-<span class="sd">        for ndarray members.</span>
-
-<span class="sd">        Convert each ``(arg_idx, attr_chain)`` to a flat name like ``__qd_&lt;arg_name&gt;__qd_&lt;chain[0]&gt;__qd_…``</span>
-<span class="sd">        and union all prefixes into the pruning set. After this fold, narrowing in args_hasher matches the</span>
-<span class="sd">        same convention used for dataclass args.</span>
-
-<span class="sd">        Limitation: non-ndarray data_oriented members (primitive ints/floats whose values are baked in at</span>
-<span class="sd">        compile, opaque Python objects) are *not* tracked anywhere as kernel-accessed. The narrow walk</span>
-<span class="sd">        cannot distinguish &quot;kernel reads this primitive&quot; from &quot;kernel does not read this primitive&quot;. The</span>
-<span class="sd">        ``args_hasher.stringify_obj_type`` data_oriented branch handles this conservatively by walking *all*</span>
-<span class="sd">        attrs of a data_oriented container — narrowing only suppresses subtrees explicitly absent from the</span>
-<span class="sd">        pruning set. So for a data_oriented arg with mostly-ndarray members, the cache key correctly</span>
-<span class="sd">        depends on the ndarray paths it uses; for one with primitive members whose values matter, those</span>
-<span class="sd">        members are still folded into the hash (qualname-fallback / value paths).</span>
-<span class="sd">        &quot;&quot;&quot;</span>
-        <span class="n">nd_info</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_struct_ndarray_launch_info_by_key</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">key</span><span class="p">)</span>
-        <span class="k">if</span> <span class="ow">not</span> <span class="n">nd_info</span><span class="p">:</span>
-            <span class="k">return</span>
-        <span class="n">kernel_used</span><span class="p">:</span> <span class="nb">set</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="n">pruning</span><span class="o">.</span><span class="n">used_vars_by_func_id</span><span class="p">[</span><span class="n">Pruning</span><span class="o">.</span><span class="n">KERNEL_FUNC_ID</span><span class="p">]</span>
-        <span class="k">for</span> <span class="n">_arg_id_cpp</span><span class="p">,</span> <span class="n">arg_idx</span><span class="p">,</span> <span class="n">attr_chain</span> <span class="ow">in</span> <span class="n">nd_info</span><span class="p">:</span>
-            <span class="k">if</span> <span class="n">arg_idx</span> <span class="o">&lt;</span> <span class="mi">0</span> <span class="ow">or</span> <span class="n">arg_idx</span> <span class="o">&gt;=</span> <span class="nb">len</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">arg_metas</span><span class="p">):</span>
-                <span class="k">continue</span>
-            <span class="n">arg_name</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">arg_metas</span><span class="p">[</span><span class="n">arg_idx</span><span class="p">]</span><span class="o">.</span><span class="n">name</span>
-            <span class="k">if</span> <span class="ow">not</span> <span class="n">arg_name</span><span class="p">:</span>
-                <span class="k">continue</span>
-            <span class="n">flat</span> <span class="o">=</span> <span class="n">arg_name</span>
-            <span class="k">for</span> <span class="n">attr</span> <span class="ow">in</span> <span class="n">attr_chain</span><span class="p">:</span>
-                <span class="n">flat</span> <span class="o">=</span> <span class="n">create_flat_name</span><span class="p">(</span><span class="n">flat</span><span class="p">,</span> <span class="n">attr</span><span class="p">)</span>
-                <span class="n">kernel_used</span><span class="o">.</span><span class="n">add</span><span class="p">(</span><span class="n">flat</span><span class="p">)</span>
-
-    <span class="nd">@staticmethod</span>
-    <span class="k">def</span><span class="w"> </span><span class="nf">_fold_kernel_arg_chain_paths_into_pruning</span><span class="p">(</span><span class="n">pruning</span><span class="p">:</span> <span class="n">Pruning</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
-<span class="w">        </span><span class="sd">&quot;&quot;&quot;Merge the kernel&#39;s chain-paths set into ``used_vars_by_func_id[KERNEL_FUNC_ID]`` *after* both</span>
-<span class="sd">        compile passes have completed.</span>
-
-<span class="sd">        Background: ``ASTTransformer.build_Attribute`` records every kernel-arg-rooted attribute chain</span>
-<span class="sd">        (e.g. ``__qd_self__qd_n``, ``__qd_self__qd_cfg``) into</span>
-<span class="sd">        ``pruning.kernel_arg_chain_paths_by_func_id`` rather than ``used_vars_by_func_id``, because the</span>
-<span class="sd">        latter is read on the enforcing pass to build ``struct_locals`` for</span>
-<span class="sd">        ``FlattenAttributeNameTransformer``. If chain names appeared there, the transformer would rewrite</span>
-<span class="sd">        ``self.n`` into ``Name(&#39;__qd_self__qd_n&#39;)`` and ``build_Name`` would fail to find such a variable.</span>
-
-<span class="sd">        Doing the merge here — after pass 1, just like ``_fold_struct_nd_paths_into_pruning`` —</span>
-<span class="sd">        avoids that interaction while still making the chain paths available to the fastcache args-hash</span>
-<span class="sd">        narrow walk. The set on ``used_py_dataclass_parameters_by_key_enforcing[key]`` is the *same*</span>
-<span class="sd">        object as ``used_vars_by_func_id[KERNEL_FUNC_ID]`` (assigned by reference at end of pass 0), so</span>
-<span class="sd">        updating one updates both.&quot;&quot;&quot;</span>
-        <span class="n">kernel_chain_paths</span> <span class="o">=</span> <span class="n">pruning</span><span class="o">.</span><span class="n">kernel_arg_chain_paths_by_func_id</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">Pruning</span><span class="o">.</span><span class="n">KERNEL_FUNC_ID</span><span class="p">)</span>
-        <span class="k">if</span> <span class="ow">not</span> <span class="n">kernel_chain_paths</span><span class="p">:</span>
-            <span class="k">return</span>
-        <span class="n">pruning</span><span class="o">.</span><span class="n">used_vars_by_func_id</span><span class="p">[</span><span class="n">Pruning</span><span class="o">.</span><span class="n">KERNEL_FUNC_ID</span><span class="p">]</span><span class="o">.</span><span class="n">update</span><span class="p">(</span><span class="n">kernel_chain_paths</span><span class="p">)</span>
 
     <span class="k">def</span><span class="w"> </span><span class="nf">_maybe_persist_l1_and_set_l2_key</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">key</span><span class="p">:</span> <span class="s2">&quot;CompiledKernelKeyType&quot;</span><span class="p">,</span> <span class="n">py_args</span><span class="p">:</span> <span class="nb">tuple</span><span class="p">[</span><span class="n">Any</span><span class="p">,</span> <span class="o">...</span><span class="p">])</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
 <span class="w">        </span><span class="sd">&quot;&quot;&quot;After a successful materialize, persist L1 (if missing) and set ``fast_checksum`` to the L2 key.</span>
