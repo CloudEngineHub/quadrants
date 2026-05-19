@@ -295,8 +295,8 @@ def stringify_obj_type(
     if isinstance(obj, VectorNdarray):
         return f"[ndv-{obj.n}-{obj.dtype}-{len(obj.shape)}{_layout_tag}]"  # type: ignore[arg-type]
     if isinstance(obj, ScalarField):
-        # Recognised-but-unsupported: shape/dtype affect kernel codegen but fastcache doesn't yet hash them. Disable
-        # fastcache for the whole call.
+        # disabled for now, because we need to think about how to handle field offset
+        # etc
         # TODO: think about whether there is a way to include fields
         _mark_warn_if_not_tensor_annotation(arg_meta)
         return _FAIL_FASTCACHE
@@ -307,7 +307,8 @@ def stringify_obj_type(
     if isinstance(obj, np.ndarray):
         return f"[np-{obj.dtype}-{obj.ndim}]"
     if isinstance(obj, MatrixField):
-        # Recognised-but-unsupported, same as ScalarField above.
+        # disabled for now, because we need to think about how to handle field offset
+        # etc
         # TODO: think about whether there is a way to include fields
         _mark_warn_if_not_tensor_annotation(arg_meta)
         return _FAIL_FASTCACHE
