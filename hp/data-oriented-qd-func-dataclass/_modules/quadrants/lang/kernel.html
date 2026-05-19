@@ -895,22 +895,21 @@
                         <span class="n">ctx</span><span class="o">.</span><span class="n">global_context</span><span class="p">,</span> <span class="s2">&quot;struct_ndarray_launch_info&quot;</span><span class="p">,</span> <span class="p">[]</span>
                     <span class="p">)</span>
                     <span class="c1"># Fold data_oriented ndarray attribute chains into the kernel&#39;s used-flat-names set so</span>
-                    <span class="c1"># ``args_hasher.hash_args`` can narrow data_oriented walks too. ``used_vars_by_func_id``</span>
-                    <span class="c1"># only contains flat names from dataclass-arg expansion in</span>
-                    <span class="c1"># ``extract_struct_locals_from_context``; data_oriented args don&#39;t go through that</span>
-                    <span class="c1"># expansion, so accesses like ``self.x`` on an ndarray member are only tracked via</span>
-                    <span class="c1"># ``struct_ndarray_launch_info``. Without this fold, narrow hashing for data_oriented</span>
-                    <span class="c1"># args walks nothing — every (arg_idx, attr_chain) pair gets the same hash regardless</span>
-                    <span class="c1"># of dtype, so changing ``state.x``&#39;s dtype no longer invalidates the cache (the</span>
+                    <span class="c1"># ``args_hasher.hash_args`` can narrow data_oriented walks too. ``used_vars_by_func_id`` only</span>
+                    <span class="c1"># contains flat names from dataclass-arg expansion in ``extract_struct_locals_from_context``;</span>
+                    <span class="c1"># data_oriented args don&#39;t go through that expansion, so accesses like ``self.x`` on an ndarray</span>
+                    <span class="c1"># member are only tracked via ``struct_ndarray_launch_info``. Without this fold, narrow hashing</span>
+                    <span class="c1"># for data_oriented args walks nothing — every (arg_idx, attr_chain) pair gets the same hash</span>
+                    <span class="c1"># regardless of dtype, so changing ``state.x``&#39;s dtype no longer invalidates the cache (the</span>
                     <span class="c1"># ``test_data_oriented_ndarray_fastcache_dtype_key_distinct`` pin caught this).</span>
                     <span class="n">pruning</span><span class="o">.</span><span class="n">fold_struct_nd_paths</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_struct_ndarray_launch_info_by_key</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">key</span><span class="p">,</span> <span class="p">[]),</span> <span class="bp">self</span><span class="o">.</span><span class="n">arg_metas</span><span class="p">)</span>
-                    <span class="c1"># Fold non-ndarray kernel-arg-rooted chain paths (primitives, opaque members, nested</span>
-                    <span class="c1"># struct paths) collected by ``ASTTransformer.build_Attribute``&#39;s ``_qd_arg_chain``</span>
-                    <span class="c1"># tracking. Kept separate from ``used_vars_by_func_id`` during compile (would otherwise</span>
-                    <span class="c1"># poison ``struct_locals`` and break codegen) — see the field-level docstring on</span>
-                    <span class="c1"># ``Pruning.kernel_arg_chain_paths_by_func_id``. This fold + the existing ``used_vars``</span>
-                    <span class="c1"># assignment to ``used_py_dataclass_parameters_by_key_enforcing`` share the same set</span>
-                    <span class="c1"># by reference, so the final fastcache L1 entry sees all kernel-accessed paths.</span>
+                    <span class="c1"># Fold non-ndarray kernel-arg-rooted chain paths (primitives, opaque members, nested struct</span>
+                    <span class="c1"># paths) collected by ``ASTTransformer.build_Attribute``&#39;s ``_qd_arg_chain`` tracking. Kept</span>
+                    <span class="c1"># separate from ``used_vars_by_func_id`` during compile (would otherwise poison ``struct_locals``</span>
+                    <span class="c1"># and break codegen) — see the field-level docstring on</span>
+                    <span class="c1"># ``Pruning.kernel_arg_chain_paths_by_func_id``. This fold + the existing ``used_vars`` assignment</span>
+                    <span class="c1"># to ``used_py_dataclass_parameters_by_key_enforcing`` share the same set by reference, so the</span>
+                    <span class="c1"># final fastcache L1 entry sees all kernel-accessed paths.</span>
                     <span class="n">pruning</span><span class="o">.</span><span class="n">fold_kernel_arg_chain_paths</span><span class="p">()</span>
                 <span class="k">else</span><span class="p">:</span>
                     <span class="k">for</span> <span class="n">used_parameters</span> <span class="ow">in</span> <span class="n">pruning</span><span class="o">.</span><span class="n">used_vars_by_func_id</span><span class="o">.</span><span class="n">values</span><span class="p">():</span>
@@ -939,14 +938,14 @@
 <span class="sd">        Called at the end of ``materialize`` once both passes have completed (or once pass 1 has completed</span>
 <span class="sd">        with a loaded artifact). Two responsibilities:</span>
 
-<span class="sd">          1. If L1 was missing (``self._pruning_paths_from_l1 is None``), write the freshly-computed</span>
-<span class="sd">             pruning info so the next call from a new process can skip the args-walk warm-up.</span>
+<span class="sd">          1. If L1 was missing (``self._pruning_paths_from_l1 is None``), write the freshly-computed pruning info so</span>
+<span class="sd">             the next call from a new process can skip the args-walk warm-up.</span>
 
-<span class="sd">          2. If ``fast_checksum`` is still None (which means either L1 was missing, or L1 hit but phase 2</span>
-<span class="sd">             of ``_try_load_fastcache`` saw a FIELD-related FastcacheSkip — in which case we keep ``None``</span>
-<span class="sd">             and the post-compile ``src_hasher.store`` is skipped), compute the narrow args hash *now*</span>
-<span class="sd">             using the just-populated pruning info and derive the L2 key. The post-launch ``src_hasher.store``</span>
-<span class="sd">             call uses ``self.fast_checksum`` as the L2 key.</span>
+<span class="sd">          2. If ``fast_checksum`` is still None (which means either L1 was missing, or L1 hit but phase 2 of</span>
+<span class="sd">             ``_try_load_fastcache`` saw a FIELD-related FastcacheSkip — in which case we keep ``None`` and the</span>
+<span class="sd">             post-compile ``src_hasher.store`` is skipped), compute the narrow args hash *now* using the just-</span>
+<span class="sd">             populated pruning info and derive the L2 key. The post-launch ``src_hasher.store`` call uses</span>
+<span class="sd">             ``self.fast_checksum`` as the L2 key.</span>
 
 <span class="sd">        Side-effect helper; split out from ``materialize`` to keep the compile loop readable.</span>
 <span class="sd">        &quot;&quot;&quot;</span>
@@ -1006,12 +1005,11 @@
             <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">_struct_ndarray_launch_info_by_key</span><span class="p">:</span>
                 <span class="n">struct_nd_info</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_struct_ndarray_launch_info_by_key</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">key</span><span class="p">)</span>
                 <span class="k">if</span> <span class="n">struct_nd_info</span><span class="p">:</span>
-                    <span class="c1"># Data_oriented containers marked ``_qd_stable_members = True`` (or decorated</span>
-                    <span class="c1"># with ``@qd.data_oriented(stable_members=True)``) promise their ndarray</span>
-                    <span class="c1"># members are never reassigned, so we exclude them from the per-call</span>
-                    <span class="c1"># ``_resolve_struct_ndarray`` walk that builds ``args_hash``. This is a</span>
-                    <span class="c1"># *launch-time perf hint only* and has no fastcache role — fastcache derives</span>
-                    <span class="c1"># its key from kernel-pruning info regardless of this flag.</span>
+                    <span class="c1"># Data_oriented containers marked ``_qd_stable_members = True`` (or decorated with</span>
+                    <span class="c1"># ``@qd.data_oriented(stable_members=True)``) promise their ndarray members are never reassigned,</span>
+                    <span class="c1"># so we exclude them from the per-call ``_resolve_struct_ndarray`` walk that builds ``args_hash``.</span>
+                    <span class="c1"># This is a *launch-time perf hint only* and has no fastcache role — fastcache derives its key</span>
+                    <span class="c1"># from kernel-pruning info regardless of this flag.</span>
                     <span class="bp">self</span><span class="o">.</span><span class="n">_mutable_nd_cached_val</span> <span class="o">=</span> <span class="p">[</span>
                         <span class="p">(</span><span class="n">idx</span><span class="p">,</span> <span class="n">chain</span><span class="p">)</span>
                         <span class="k">for</span> <span class="n">_</span><span class="p">,</span> <span class="n">idx</span><span class="p">,</span> <span class="n">chain</span> <span class="ow">in</span> <span class="n">struct_nd_info</span>

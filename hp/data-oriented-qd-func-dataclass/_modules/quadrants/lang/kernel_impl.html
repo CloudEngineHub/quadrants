@@ -636,8 +636,8 @@
 <span class="sd">        stable_members (bool): launch-context perf hint — if ``True``, declares that the class&#39;s ndarray-typed members</span>
 <span class="sd">            are allocated once and never reassigned between kernel calls. Quadrants will skip the per-call ndarray-</span>
 <span class="sd">            reference walk that ``Kernel.launch_kernel`` uses to detect ndarray reassignment on mutable containers</span>
-<span class="sd">            (~1-2 us/call savings on Genesis-style containers with dozens of ndarray attrs). Reassigning a member on a</span>
-<span class="sd">            ``stable_members`` class is undefined behaviour — the previously-compiled kernel will be reused even if</span>
+<span class="sd">            (~1-2 us/call savings on Genesis-style containers with dozens of ndarray attrs). Reassigning a member on</span>
+<span class="sd">            a ``stable_members`` class is undefined behaviour — the previously-compiled kernel will be reused even if</span>
 <span class="sd">            the new ndarray has different dtype/ndim/layout. May also be set as a class-level attribute</span>
 <span class="sd">            ``_qd_stable_members = True`` (equivalent).</span>
 
@@ -668,8 +668,8 @@
                 <span class="k">raise</span> <span class="nb">type</span><span class="p">(</span><span class="n">e</span><span class="p">)(</span><span class="s2">&quot;</span><span class="se">\n</span><span class="s2">&quot;</span> <span class="o">+</span> <span class="nb">str</span><span class="p">(</span><span class="n">e</span><span class="p">))</span> <span class="kn">from</span><span class="w"> </span><span class="kc">None</span>
 
         <span class="n">ret</span> <span class="o">=</span> <span class="n">QuadrantsCallable</span><span class="p">(</span><span class="n">fun</span><span class="p">,</span> <span class="n">_kernel_indirect</span><span class="p">)</span>
-        <span class="c1"># setattr-after-class doesn&#39;t trigger __set_name__; set the name explicitly so</span>
-        <span class="c1"># QuadrantsCallable.__get__ can cache the BoundQuadrantsCallable on instance.__dict__.</span>
+        <span class="c1"># setattr-after-class doesn&#39;t trigger __set_name__; set the name explicitly so QuadrantsCallable.__get__ can</span>
+        <span class="c1"># cache the BoundQuadrantsCallable on instance.__dict__.</span>
         <span class="n">ret</span><span class="o">.</span><span class="n">_attr_name</span> <span class="o">=</span> <span class="n">attr_name</span>
         <span class="k">if</span> <span class="n">is_property</span><span class="p">:</span>
             <span class="n">ret</span> <span class="o">=</span> <span class="nb">property</span><span class="p">(</span><span class="n">ret</span><span class="p">)</span>

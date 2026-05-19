@@ -419,17 +419,16 @@
         <span class="k">if</span> <span class="ow">not</span> <span class="n">pruning</span><span class="o">.</span><span class="n">enforcing</span> <span class="ow">and</span> <span class="ow">not</span> <span class="n">ctx</span><span class="o">.</span><span class="n">expanding_dataclass_call_parameters</span> <span class="ow">and</span> <span class="n">node</span><span class="o">.</span><span class="n">id</span><span class="o">.</span><span class="n">startswith</span><span class="p">(</span><span class="s2">&quot;__qd_&quot;</span><span class="p">):</span>
             <span class="n">ctx</span><span class="o">.</span><span class="n">global_context</span><span class="o">.</span><span class="n">pruning</span><span class="o">.</span><span class="n">mark_used</span><span class="p">(</span><span class="n">ctx</span><span class="o">.</span><span class="n">func</span><span class="o">.</span><span class="n">func_id</span><span class="p">,</span> <span class="n">node</span><span class="o">.</span><span class="n">id</span><span class="p">)</span>
         <span class="c1"># Track chains rooted at non-flattened parameter names: top-level ``@qd.kernel`` args</span>
-        <span class="c1"># (``ctx.kernel_args``) and ``@qd.func`` params (``ctx.fn_param_names``). Both appear in the</span>
-        <span class="c1"># AST as bare names (``self`` for a data_oriented kernel arg; ``static_rigid_sim_config`` for</span>
-        <span class="c1"># a ``qd.template()`` func arg bound to a ``@qd.data_oriented`` instance).</span>
-        <span class="c1"># ``build_Attribute`` propagates this annotation through ``state.dofs.x`` chains and</span>
-        <span class="c1"># ``mark_kernel_arg_chain_used``-s the flat name. The kernel&#39;s pruning narrow walk picks them</span>
-        <span class="c1"># up directly (kernel case) or after ``record_after_call`` propagates the callee&#39;s func-arg</span>
-        <span class="c1"># chains back through the call boundary (func case): e.g. ``func(s=self._sub)`` where ``func``</span>
-        <span class="c1"># reads ``s.x`` ends up with ``__qd_self__qd__sub__qd_x`` recorded in the kernel&#39;s pruning,</span>
-        <span class="c1"># so the args-hasher hashes that primitive value into the fastcache key.</span>
-        <span class="c1"># Dataclass args go through ``FlattenAttributeNameTransformer`` and reach this branch as</span>
-        <span class="c1"># already-flat ``__qd_…`` Names, handled by the block above via ``mark_used``.</span>
+        <span class="c1"># (``ctx.kernel_args``) and ``@qd.func`` params (``ctx.fn_param_names``). Both appear in the AST as bare</span>
+        <span class="c1"># names (``self`` for a data_oriented kernel arg; ``static_rigid_sim_config`` for a ``qd.template()`` func</span>
+        <span class="c1"># arg bound to a ``@qd.data_oriented`` instance). ``build_Attribute`` propagates this annotation through</span>
+        <span class="c1"># ``state.dofs.x`` chains and ``mark_kernel_arg_chain_used``-s the flat name. The kernel&#39;s pruning narrow</span>
+        <span class="c1"># walk picks them up directly (kernel case) or after ``record_after_call`` propagates the callee&#39;s func-arg</span>
+        <span class="c1"># chains back through the call boundary (func case): e.g. ``func(s=self._sub)`` where ``func`` reads ``s.x``</span>
+        <span class="c1"># ends up with ``__qd_self__qd__sub__qd_x`` recorded in the kernel&#39;s pruning, so the args-hasher hashes that</span>
+        <span class="c1"># primitive value into the fastcache key.</span>
+        <span class="c1"># Dataclass args go through ``FlattenAttributeNameTransformer`` and reach this branch as already-flat</span>
+        <span class="c1"># ``__qd_…`` Names, handled by the block above via ``mark_used``.</span>
         <span class="k">if</span> <span class="ow">not</span> <span class="n">node</span><span class="o">.</span><span class="n">id</span><span class="o">.</span><span class="n">startswith</span><span class="p">(</span><span class="s2">&quot;__qd_&quot;</span><span class="p">)</span> <span class="ow">and</span> <span class="p">(</span><span class="n">node</span><span class="o">.</span><span class="n">id</span> <span class="ow">in</span> <span class="n">ctx</span><span class="o">.</span><span class="n">kernel_args</span> <span class="ow">or</span> <span class="n">node</span><span class="o">.</span><span class="n">id</span> <span class="ow">in</span> <span class="n">ctx</span><span class="o">.</span><span class="n">fn_param_names</span><span class="p">):</span>
             <span class="n">node</span><span class="o">.</span><span class="n">_qd_arg_chain</span> <span class="o">=</span> <span class="n">node</span><span class="o">.</span><span class="n">id</span>  <span class="c1"># type: ignore[attr-defined]</span>
         <span class="k">else</span><span class="p">:</span>
@@ -1107,10 +1106,9 @@
         <span class="kn">from</span><span class="w"> </span><span class="nn">quadrants.lang._ndarray</span><span class="w"> </span><span class="kn">import</span> <span class="n">Ndarray</span>  <span class="c1"># pylint: disable=C0415</span>
 
         <span class="n">pruning</span> <span class="o">=</span> <span class="n">ctx</span><span class="o">.</span><span class="n">global_context</span><span class="o">.</span><span class="n">pruning</span>
-        <span class="c1"># Mirror ``build_Name``&#39;s mark_used gate: only mark on the non-enforcing first pass</span>
-        <span class="c1"># and not during synthetic per-leaf argument expansion for ``@qd.func`` calls. The</span>
-        <span class="c1"># callee body&#39;s own accesses (which run with ``expanding_dataclass_call_parameters</span>
-        <span class="c1"># = False``) are what we want to count.</span>
+        <span class="c1"># Mirror ``build_Name``&#39;s mark_used gate: only mark on the non-enforcing first pass and not during synthetic</span>
+        <span class="c1"># per-leaf argument expansion for ``@qd.func`` calls. The callee body&#39;s own accesses (which run with</span>
+        <span class="c1"># ``expanding_dataclass_call_parameters = False``) are what we want to count.</span>
         <span class="n">should_mark</span> <span class="o">=</span> <span class="ow">not</span> <span class="n">pruning</span><span class="o">.</span><span class="n">enforcing</span> <span class="ow">and</span> <span class="ow">not</span> <span class="n">ctx</span><span class="o">.</span><span class="n">expanding_dataclass_call_parameters</span>
         <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">value</span><span class="p">,</span> <span class="n">Ndarray</span><span class="p">):</span>
             <span class="n">cache</span> <span class="o">=</span> <span class="n">ctx</span><span class="o">.</span><span class="n">global_context</span><span class="o">.</span><span class="n">ndarray_to_any_array</span>
@@ -1121,8 +1119,8 @@
                     <span class="n">pruning</span><span class="o">.</span><span class="n">used_struct_ndarray_ids</span><span class="o">.</span><span class="n">add</span><span class="p">(</span><span class="n">key</span><span class="p">)</span>
                 <span class="k">return</span> <span class="n">arr</span>
             <span class="k">return</span> <span class="n">value</span>
-        <span class="c1"># Pre-promoted ``AnyArray`` flowing through an inlined ``@qd.func`` body. Mark the</span>
-        <span class="c1"># underlying ndarray as used so it survives the enforcing-pass pruning.</span>
+        <span class="c1"># Pre-promoted ``AnyArray`` flowing through an inlined ``@qd.func`` body. Mark the underlying ndarray as used</span>
+        <span class="c1"># so it survives the enforcing-pass pruning.</span>
         <span class="k">if</span> <span class="n">should_mark</span><span class="p">:</span>
             <span class="n">src_id</span> <span class="o">=</span> <span class="nb">getattr</span><span class="p">(</span><span class="n">value</span><span class="p">,</span> <span class="s2">&quot;_qd_source_ndarray_id&quot;</span><span class="p">,</span> <span class="kc">None</span><span class="p">)</span>
             <span class="k">if</span> <span class="n">src_id</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
@@ -1238,10 +1236,9 @@
                             <span class="n">warnings</span><span class="o">.</span><span class="n">warn</span><span class="p">(</span><span class="n">message</span><span class="p">)</span>
                         <span class="k">else</span><span class="p">:</span>
                             <span class="k">raise</span> <span class="n">exception</span><span class="o">.</span><span class="n">QuadrantsCompilationError</span><span class="p">(</span><span class="n">message</span><span class="p">)</span>
-        <span class="c1"># Propagate the kernel-arg-rooted chain annotation and record this access in pruning&#39;s *separate*</span>
-        <span class="c1"># chain-paths set. ``build_Name`` sets ``_qd_arg_chain`` on non-flattened kernel args (e.g.</span>
-        <span class="c1"># data_oriented ``self``); each Attribute access in the chain extends it</span>
-        <span class="c1"># (``self`` → ``__qd_self__qd_x`` → ``__qd_self__qd_x__qd_y``).</span>
+        <span class="c1"># Propagate the kernel-arg-rooted chain annotation and record this access in pruning&#39;s *separate* chain-paths</span>
+        <span class="c1"># set. ``build_Name`` sets ``_qd_arg_chain`` on non-flattened kernel args (e.g. data_oriented ``self``); each</span>
+        <span class="c1"># Attribute access in the chain extends it (``self`` → ``__qd_self__qd_x`` → ``__qd_self__qd_x__qd_y``).</span>
         <span class="c1">#</span>
         <span class="c1"># Why not ``mark_used``? On the enforcing pass, ``Kernel.materialize`` uses ``pruning.used_vars_by_func_id`` as</span>
         <span class="c1"># ``struct_locals``, which drives ``FlattenAttributeNameTransformer`` — adding ``__qd_self__qd_x`` there would</span>
