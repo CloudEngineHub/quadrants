@@ -65,6 +65,10 @@ def _test_python(args, default_dir="python"):
             marks_expr = f"({marks_expr}) and not slow" if marks_expr else "not slow"
         if marks_expr:
             pytest_args += ["-m", marks_expr]
+        if args.sample_seed is not None:
+            pytest_args += [f"--sample-seed={args.sample_seed}"]
+        if args.no_sample:
+            pytest_args += ["--no-sample"]
         if args.failed_first:
             pytest_args += ["--failed-first"]
         if args.fail_fast:
@@ -178,6 +182,24 @@ def test():
         action="store_true",
         help="Include tests marked `slow` (excluded by default). Has no effect if -m is "
         "given an explicit expression that already mentions `slow`.",
+    )
+    parser.add_argument(
+        "--sample-seed",
+        required=False,
+        default=None,
+        type=int,
+        dest="sample_seed",
+        help="Seed for @pytest.mark.sample subsampling. Defaults to a fresh seed picked per run "
+        "(printed in the report header). Pass the seed from a failing CI run to reproduce its sample.",
+    )
+    parser.add_argument(
+        "--no-sample",
+        required=False,
+        default=False,
+        dest="no_sample",
+        action="store_true",
+        help="Disable @pytest.mark.sample subsampling -- run every parametrize case of every marked test. "
+        "Use for exhaustive CI release gates / coverage-debt audits.",
     )
     parser.add_argument(
         "-f",
