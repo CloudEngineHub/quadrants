@@ -290,10 +290,18 @@ def stringify_obj_type(
     arg_type = type(obj)
     _layout = getattr(obj, "_qd_layout", None)
     _layout_tag = "" if _layout is None else f"-L{_layout!r}"
+    # needs_grad is part of the parameter struct layout that ``insert_ndarray_param`` bakes into the compiled
+    # artifact (the slot includes a grad pointer iff needs_grad=True). Two ndarrays with identical dtype + ndim
+    # but differing needs_grad MUST hash distinctly, otherwise the L2 narrow args_hash collides and the cached
+    # artifact's slot is mis-matched at launch (the launch picks the _QD_ARRAY vs _QD_ARRAY_WITH_GRAD bucket
+    # off ``v.grad is not None``, against a slot whose grad-presence was fixed at compile time) — yielding
+    # silent miscomputation or runtime OOB depending on slot offset alignment.
     if isinstance(obj, ScalarNdarray):
-        return f"[nd-{obj.dtype}-{len(obj.shape)}{_layout_tag}]"  # type: ignore[arg-type]
+        _grad_tag = "-g" if obj.grad is not None else ""
+        return f"[nd-{obj.dtype}-{len(obj.shape)}{_layout_tag}{_grad_tag}]"  # type: ignore[arg-type]
     if isinstance(obj, VectorNdarray):
-        return f"[ndv-{obj.n}-{obj.dtype}-{len(obj.shape)}{_layout_tag}]"  # type: ignore[arg-type]
+        _grad_tag = "-g" if obj.grad is not None else ""
+        return f"[ndv-{obj.n}-{obj.dtype}-{len(obj.shape)}{_layout_tag}{_grad_tag}]"  # type: ignore[arg-type]
     if isinstance(obj, ScalarField):
         # disabled for now, because we need to think about how to handle field offset
         # etc
@@ -301,7 +309,8 @@ def stringify_obj_type(
         _mark_warn_if_not_tensor_annotation(arg_meta)
         return _FAIL_FASTCACHE
     if isinstance(obj, MatrixNdarray):
-        return f"[ndm-{obj.m}-{obj.n}-{obj.dtype}-{len(obj.shape)}{_layout_tag}]"  # type: ignore[arg-type]
+        _grad_tag = "-g" if obj.grad is not None else ""
+        return f"[ndm-{obj.m}-{obj.n}-{obj.dtype}-{len(obj.shape)}{_layout_tag}{_grad_tag}]"  # type: ignore[arg-type]
     if isinstance(obj, torch_type):
         return f"[pt-{obj.dtype}-{obj.ndim}]"  # type: ignore
     if isinstance(obj, np.ndarray):
