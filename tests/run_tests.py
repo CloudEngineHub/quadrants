@@ -1,6 +1,7 @@
 import argparse
 import importlib.util
 import os
+import random
 
 
 def _test_python(args, default_dir="python"):
@@ -65,10 +66,18 @@ def _test_python(args, default_dir="python"):
             marks_expr = f"({marks_expr}) and not slow" if marks_expr else "not slow"
         if marks_expr:
             pytest_args += ["-m", marks_expr]
-        if args.sample_seed is not None:
-            pytest_args += [f"--sample-seed={args.sample_seed}"]
         if args.no_sample:
             pytest_args += ["--no-sample"]
+        else:
+            # Pick the run's @pytest.mark.sample seed here (before pytest is launched) and pass it via --sample-seed on
+            # argv. This is the most reliable way to propagate the seed to xdist workers: xdist forwards argv to every
+            # worker subprocess, so all workers and the controller see the exact same value, sample identical subsets,
+            # and xdist's collection-consistency check passes. (Setting the seed inside ``pytest_configure`` doesn't
+            # work because ``os.environ`` mutation there happens after xdist has already snapshotted the env it ships
+            # to workers, and ``pytest_configure_node`` only fires for conftests at the rootdir level.)
+            if args.sample_seed is None:
+                args.sample_seed = random.randrange(0, 2**31)
+            pytest_args += [f"--sample-seed={args.sample_seed}"]
         if args.failed_first:
             pytest_args += ["--failed-first"]
         if args.fail_fast:

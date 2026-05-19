@@ -63,25 +63,19 @@ def pytest_configure(config):
         "`fraction` (0..1) or `n` (>= 1). Seed printed in report header; rerun the same sample with "
         "--sample-seed=<S>; rerun every case with --no-sample; rerun a single failing case by pasting its nodeid.",
     )
-    # IMPORTANT: pick the seed on the *controller* once, then propagate it to every xdist worker. ``pytest_configure``
-    # runs on the controller AND on every worker; without explicit propagation each worker would draw a fresh seed,
-    # sample a different subset, and xdist would abort collection with "Different tests were collected between gw0 and
-    # gwN". We use an environment variable (``QD_SAMPLE_SEED``) because xdist's popen gateway inherits ``os.environ``
-    # from the controller -- this works regardless of conftest depth, unlike the ``pytest_configure_node`` /
-    # ``workerinput`` hook which only fires for conftests at the rootdir level.
-    if config.getoption("--no-sample"):
-        pass  # Sampler disabled; no seed needed.
-    elif config.getoption("--sample-seed") is not None:
-        # Explicit ``--sample-seed=N`` is already on argv -> xdist forwards argv to workers, so every process sees it.
-        pass
-    elif "QD_SAMPLE_SEED" in os.environ:
-        # Worker (or re-entrant run): inherit the seed the controller picked.
-        config.option.sample_seed = int(os.environ["QD_SAMPLE_SEED"])
-    else:
-        # Controller (or non-xdist run): pick the seed once and publish it for workers.
-        seed = random.randrange(0, 2**31)
-        config.option.sample_seed = seed
-        os.environ["QD_SAMPLE_SEED"] = str(seed)
+    # Seed propagation contract: the seed must reach the controller AND every xdist worker as the same value, or
+    # xdist's collection-consistency check fails with "Different tests were collected between gw0 and gwN". argv is
+    # forwarded by xdist to every worker, so we require the seed to live on argv as ``--sample-seed=N``. ``tests/
+    # run_tests.py`` picks a seed once per run and injects it; direct ``pytest`` invocations either pass
+    # ``--sample-seed`` explicitly (reproducibility) or fall back to a single-process seed picked below. We do NOT
+    # mutate ``os.environ`` here -- env-var inheritance into xdist worker subprocesses is not guaranteed for runtime
+    # mutations, only for vars present when pytest itself was launched.
+    if (
+        not config.getoption("--no-sample")
+        and config.getoption("--sample-seed") is None
+        and not hasattr(config, "workerinput")  # single-process / non-xdist controller only.
+    ):
+        config.option.sample_seed = random.randrange(0, 2**31)
 
 
 def pytest_report_header(config):
