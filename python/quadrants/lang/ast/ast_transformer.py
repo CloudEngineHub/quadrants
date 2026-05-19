@@ -818,14 +818,13 @@ class ASTTransformer(Builder):
         # data_oriented ``self``); each Attribute access in the chain extends it
         # (``self`` → ``__qd_self__qd_x`` → ``__qd_self__qd_x__qd_y``).
         #
-        # Why not ``mark_used``? On the enforcing pass, ``Kernel.materialize`` uses
-        # ``pruning.used_vars_by_func_id`` as ``struct_locals``, which drives
-        # ``FlattenAttributeNameTransformer`` — adding ``__qd_self__qd_x`` there would make the transformer
-        # rewrite ``self.x`` into ``Name('__qd_self__qd_x')``, and ``build_Name`` would then fail to find
-        # such a variable. ``mark_kernel_arg_chain_used`` puts the chain into a *separate* per-func set
-        # that's merged into ``used_vars_by_func_id[KERNEL_FUNC_ID]`` only *after* both compile passes,
-        # by ``Kernel._fold_kernel_arg_chain_paths_into_pruning`` — so the fastcache args-hash narrow walk
-        # picks them up without breaking codegen.
+        # Why not ``mark_used``? On the enforcing pass, ``Kernel.materialize`` uses ``pruning.used_vars_by_func_id`` as
+        # ``struct_locals``, which drives ``FlattenAttributeNameTransformer`` — adding ``__qd_self__qd_x`` there would
+        # make the transformer rewrite ``self.x`` into ``Name('__qd_self__qd_x')``, and ``build_Name`` would then fail
+        # to find such a variable. ``mark_kernel_arg_chain_used`` puts the chain into a *separate* per-func set that's
+        # merged into ``used_vars_by_func_id[KERNEL_FUNC_ID]`` only *after* both compile passes, by
+        # ``Pruning.fold_kernel_arg_chain_paths`` — so the fastcache args-hash narrow walk picks them up without
+        # breaking codegen.
         parent_chain = getattr(node.value, "_qd_arg_chain", None)
         if parent_chain is not None:
             flat = create_flat_name(parent_chain, node.attr)
