@@ -409,7 +409,7 @@
                   
   <section class="tex2jax_ignore mathjax_ignore" id="unit-testing">
 <h1>Unit testing<a class="headerlink" href="#unit-testing" title="Link to this heading">#</a></h1>
-<p>This page documents how to run, write, and tune the Quadrants Python unit test suite. For one-shot setup of the build / dev environment, see <a class="reference internal" href="contributing.html"><span class="std std-doc">contributing.md</span></a>.</p>
+<p>This page documents how to run, write, and tune the Quadrants Python unit test suite. For setup of the build / dev environment, see <a class="reference internal" href="contributing.html"><span class="std std-doc">contributing.md</span></a>.</p>
 <section id="running-the-tests">
 <h2>Running the tests<a class="headerlink" href="#running-the-tests" title="Link to this heading">#</a></h2>
 <p>The test suite is run via the project’s launcher, <strong>not</strong> by invoking <code class="docutils literal notranslate"><span class="pre">pytest</span></code> directly:</p>
@@ -438,26 +438,14 @@
 <span class="n">python</span> <span class="n">tests</span><span class="o">/</span><span class="n">run_tests</span><span class="o">.</span><span class="n">py</span> <span class="o">-</span><span class="n">x</span>
 </pre></div>
 </div>
-<p>The target architecture can also be set via <code class="docutils literal notranslate"><span class="pre">QD_WANTED_ARCHS</span></code> (comma-separated; supports <code class="docutils literal notranslate"><span class="pre">^arch</span></code> to exclude rather than include). Per-test timeouts default to 600 s and are enforced by <code class="docutils literal notranslate"><span class="pre">pytest_hardtle</span></code>, a CFFI-compiled C watchdog that can kill tests hung in native GPU calls even when the GIL is held.</p>
-</section>
-<section id="kernel-compilation-cache">
-<h2>Kernel compilation cache<a class="headerlink" href="#kernel-compilation-cache" title="Link to this heading">#</a></h2>
-<p>During each test session the kernel compilation cache lives in a fresh, empty temp directory created by pytest’s <a class="reference external" href="https://docs.pytest.org/en/stable/how-to/tmp_path.html"><code class="docutils literal notranslate"><span class="pre">tmp_path_factory</span></code></a> — typically <code class="docutils literal notranslate"><span class="pre">/tmp/pytest-of-&lt;user&gt;/pytest-&lt;N&gt;/qdcache0/</span></code>. Old session directories are cleaned up automatically by pytest’s retention policy. This cache is separate from the user-facing <code class="docutils literal notranslate"><span class="pre">~/.cache/quadrants/</span></code> cache, and avoids recompiling identical kernels after each <code class="docutils literal notranslate"><span class="pre">qd.reset()</span></code> / <code class="docutils literal notranslate"><span class="pre">qd.init()</span></code> cycle within a session.</p>
-</section>
-<section id="per-file-timing-breakdown">
-<h2>Per-file timing breakdown<a class="headerlink" href="#per-file-timing-breakdown" title="Link to this heading">#</a></h2>
-<p>Set <code class="docutils literal notranslate"><span class="pre">QD_FILE_TIMING=1</span></code> to print a per-file duration summary at the end of the session:</p>
-<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">QD_FILE_TIMING</span><span class="o">=</span><span class="mi">1</span> <span class="n">python</span> <span class="n">tests</span><span class="o">/</span><span class="n">run_tests</span><span class="o">.</span><span class="n">py</span>
-</pre></div>
-</div>
-<p>This is enabled by default in the Mac CI job; the results appear in the GitHub Actions job summary and are the primary tool for identifying slow test files.</p>
+<p>The target architecture can also be set via <code class="docutils literal notranslate"><span class="pre">QD_WANTED_ARCHS</span></code> (comma-separated; supports <code class="docutils literal notranslate"><span class="pre">^arch</span></code> to exclude rather than include).</p>
 </section>
 <section id="markers">
 <h2>Markers<a class="headerlink" href="#markers" title="Link to this heading">#</a></h2>
 <p>Tests can opt into two project-specific markers, in addition to pytest’s built-in ones (<code class="docutils literal notranslate"><span class="pre">skip</span></code>, <code class="docutils literal notranslate"><span class="pre">xfail</span></code>, etc.).</p>
 <section id="pytest-mark-slow">
 <h3><code class="docutils literal notranslate"><span class="pre">&#64;pytest.mark.slow</span></code><a class="headerlink" href="#pytest-mark-slow" title="Link to this heading">#</a></h3>
-<p>Marks a test (or, more commonly, a specific <code class="docutils literal notranslate"><span class="pre">pytest.param(...)</span></code> case inside a parametrize list) as <strong>slow</strong> — long enough that the default test suite skips it. <code class="docutils literal notranslate"><span class="pre">tests/run_tests.py</span></code> adds <code class="docutils literal notranslate"><span class="pre">-m</span> <span class="pre">&quot;not</span> <span class="pre">slow&quot;</span></code> to the pytest invocation by default; pass <code class="docutils literal notranslate"><span class="pre">--run-slow</span></code> to opt back in:</p>
+<p>Marks a test as <strong>slow</strong>. <code class="docutils literal notranslate"><span class="pre">tests/run_tests.py</span></code> adds <code class="docutils literal notranslate"><span class="pre">-m</span> <span class="pre">&quot;not</span> <span class="pre">slow&quot;</span></code> to the pytest invocation by default; pass <code class="docutils literal notranslate"><span class="pre">--run-slow</span></code> to opt back in:</p>
 <div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="c1"># default: skip slow</span>
 <span class="n">python</span> <span class="n">tests</span><span class="o">/</span><span class="n">run_tests</span><span class="o">.</span><span class="n">py</span>
 
@@ -470,20 +458,20 @@
 </div>
 <p>The marker is used in two patterns:</p>
 <ol class="arabic">
-<li><p><strong>Whole-test slow</strong>: rare. The whole test always takes a long time and there’s no smaller variant.</p>
+<li><p><strong>Whole-test slow</strong>: the whole test takes a long time.</p>
 <div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="nd">@pytest</span><span class="o">.</span><span class="n">mark</span><span class="o">.</span><span class="n">slow</span>
 <span class="k">def</span><span class="w"> </span><span class="nf">test_thing_that_is_always_slow</span><span class="p">():</span>
     <span class="o">...</span>
 </pre></div>
 </div>
 </li>
-<li><p><strong>Slow-marked parametrize case</strong> (preferred when applicable): a test parametrizes over a size axis and the large value is slow but the small value is cheap. The small value stays in the default suite as a smoke test; the large value moves to the slow lane. This is the dominant pattern in <code class="docutils literal notranslate"><span class="pre">tests/python/test_eig.py</span></code>, <code class="docutils literal notranslate"><span class="pre">test_linalg.py</span></code>, <code class="docutils literal notranslate"><span class="pre">test_ad_gdar_diffmpm.py</span></code>, etc.</p>
+<li><p><strong>Slow-marked parametrize case</strong>:</p>
 <div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="nd">@pytest</span><span class="o">.</span><span class="n">mark</span><span class="o">.</span><span class="n">parametrize</span><span class="p">(</span><span class="s2">&quot;n&quot;</span><span class="p">,</span> <span class="p">[</span><span class="mi">4</span><span class="p">,</span> <span class="n">pytest</span><span class="o">.</span><span class="n">param</span><span class="p">(</span><span class="mi">12</span><span class="p">,</span> <span class="n">marks</span><span class="o">=</span><span class="n">pytest</span><span class="o">.</span><span class="n">mark</span><span class="o">.</span><span class="n">slow</span><span class="p">)])</span>
 <span class="k">def</span><span class="w"> </span><span class="nf">test_sym_eig_general</span><span class="p">(</span><span class="n">n</span><span class="p">):</span>
     <span class="o">...</span>
 </pre></div>
 </div>
-<p>With this pattern the default suite still exercises the code path; the slow lane just adds the larger-size variant for full coverage.</p>
+<p>In this specific example the default suite still exercises the code path; the slow lane just adds the larger-size variant for full coverage.</p>
 </li>
 </ol>
 </section>
@@ -494,9 +482,9 @@
 <li><p>the test’s parametrize space is large (≥ ~16 cases),</p></li>
 <li><p>each parametrize case is roughly independent (covering an independent corner case rather than a single bug class),</p></li>
 <li><p>running every case every CI run is overkill, and</p></li>
-<li><p>coverage convergence over many runs is acceptable for that test.</p></li>
+<li><p>asymptotic coverage over many runs is acceptable.</p></li>
 </ul>
-<p>Apply it like any other marker, above the existing parametrize stack:</p>
+<p>Apply it like any other marker:</p>
 <div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="nd">@pytest</span><span class="o">.</span><span class="n">mark</span><span class="o">.</span><span class="n">sample</span><span class="p">(</span><span class="n">n</span><span class="o">=</span><span class="mi">6</span><span class="p">)</span>                     <span class="c1"># keep 6 of N cases per run</span>
 <span class="c1"># OR</span>
 <span class="nd">@pytest</span><span class="o">.</span><span class="n">mark</span><span class="o">.</span><span class="n">sample</span><span class="p">(</span><span class="n">fraction</span><span class="o">=</span><span class="mf">0.25</span><span class="p">)</span>           <span class="c1"># keep 25% of cases per run, min 1</span>
@@ -508,8 +496,7 @@
     <span class="o">...</span>
 </pre></div>
 </div>
-<p><strong>Convergence math.</strong> With <code class="docutils literal notranslate"><span class="pre">keep_n</span> <span class="pre">/</span> <span class="pre">total</span> <span class="pre">=</span> <span class="pre">k</span> <span class="pre">/</span> <span class="pre">N</span></code>, the probability that a <em>specific</em> parametrize case has been hit after <code class="docutils literal notranslate"><span class="pre">r</span></code> runs is <code class="docutils literal notranslate"><span class="pre">1</span> <span class="pre">-</span> <span class="pre">(1</span> <span class="pre">-</span> <span class="pre">k/N)^r</span></code>. For <code class="docutils literal notranslate"><span class="pre">n=6</span></code> out of 32 (<code class="docutils literal notranslate"><span class="pre">test_tile16_load_store</span></code>): ~65% after 5 runs, ~88% after 10, ~98% after 20. Combined with our CI cadence and the fact that any persistent bug surface lights up across multiple PRs, this gives effectively full coverage on a many-PR horizon at a fraction of the per-PR cost.</p>
-<p><strong>How to reproduce.</strong> Three levels of reproducibility:</p>
+<p><strong>How to reproduce failing tests.</strong> Three levels of reproducibility:</p>
 <ol class="arabic">
 <li><p><strong>One failing case</strong> — paste the failing nodeid from the CI log. Pytest already prints the full nodeid on failure:</p>
 <div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">FAILED</span> <span class="n">tests</span><span class="o">/</span><span class="n">python</span><span class="o">/</span><span class="n">test_tile16</span><span class="o">.</span><span class="n">py</span><span class="p">::</span><span class="n">test_tile16_load_store</span><span class="p">[</span><span class="n">arch</span><span class="o">=</span><span class="n">cuda</span><span class="o">-</span><span class="n">qd_dtype0</span><span class="o">-</span><span class="n">ndarray</span><span class="o">-</span><span class="mi">16</span><span class="o">-</span><span class="mi">32</span><span class="o">-</span><span class="mi">4</span><span class="o">-</span><span class="mi">8</span><span class="o">-</span><span class="mi">7</span><span class="o">-</span><span class="mi">11</span><span class="p">]</span>
@@ -540,8 +527,6 @@
 </ol>
 <p><strong>Per-test RNG independence.</strong> Each <code class="docutils literal notranslate"><span class="pre">&#64;sample</span></code>-marked test’s subsample is seeded from <code class="docutils literal notranslate"><span class="pre">(global_seed,</span> <span class="pre">test_nodeid_prefix)</span></code>, so adding / renaming / tweaking the mark on <code class="docutils literal notranslate"><span class="pre">test_A</span></code> does NOT shift the sample of <code class="docutils literal notranslate"><span class="pre">test_B</span></code>. Routine refactors don’t cause samples to migrate file-wide.</p>
 <p><strong>Composition with <code class="docutils literal notranslate"><span class="pre">slow</span></code>.</strong> Sampling runs <strong>after</strong> marker-based filtering. With <code class="docutils literal notranslate"><span class="pre">--run-slow</span></code> not passed (the default), slow-marked parametrize cases drop out first, then the sampler sub-selects from the remaining (fast) cases. The intersection is the right composition: <code class="docutils literal notranslate"><span class="pre">--no-sample</span> <span class="pre">--run-slow</span></code> is the truly-exhaustive combo.</p>
-<p><strong>xdist note.</strong> The seed is picked on the controller in <code class="docutils literal notranslate"><span class="pre">pytest_configure</span></code> (not in the per-worker <code class="docutils literal notranslate"><span class="pre">pytest_collection_modifyitems</span></code>), so all xdist workers see the same seed and produce the same sample. This is intentional — without this, each worker would subsample independently and <code class="docutils literal notranslate"><span class="pre">--sample-seed=&lt;S&gt;</span></code> wouldn’t reproduce.</p>
-<p><strong>When <em>not</em> to use <code class="docutils literal notranslate"><span class="pre">&#64;sample</span></code>.</strong> If the test’s parametrize axes are not roughly independent — e.g. axis A’s bug surface only lights up when axis B is at a specific value — sampling can miss the interaction. Use <code class="docutils literal notranslate"><span class="pre">&#64;slow</span></code> on the expensive subset instead, and keep the full Cartesian product for the cheap subset.</p>
 </section>
 </section>
 <section id="writing-new-tests">
@@ -565,16 +550,29 @@
 <li><p><code class="docutils literal notranslate"><span class="pre">test_utils.expected_archs()</span></code> — list of archs that the current <code class="docutils literal notranslate"><span class="pre">QD_WANTED_ARCHS</span></code> allows. Used to skip tests with no satisfiable arch.</p></li>
 </ul>
 </section>
-<section id="ci-checks">
-<h2>CI checks<a class="headerlink" href="#ci-checks" title="Link to this heading">#</a></h2>
-<p>A subset of CI jobs care about the test suite specifically:</p>
-<ul class="simple">
-<li><p><strong>linux / macosx / win</strong> — build and run the full python suite on each platform.</p></li>
-<li><p><strong>test-gpu</strong> — GPU-specific tests on the cluster.</p></li>
-<li><p><strong>coverage report</strong> — a one-line diff coverage summary is posted as a PR comment, with kernel-level branch coverage. See <a class="reference internal" href="kernel_coverage.html"><span class="std std-doc">Kernel code coverage</span></a>.</p></li>
-<li><p><strong>Test coverage check (<code class="docutils literal notranslate"><span class="pre">check_test_coverage.yml</span></code>)</strong> — an AI agent that flags new or modified non-test source code that doesn’t have corresponding test coverage in the PR.</p></li>
-</ul>
-<p>See <a class="reference internal" href="contributing.html"><span class="std std-doc">contributing.md</span></a> for the full list of CI checks (linters, pyright, link checking, PR change report, etc.).</p>
+<section id="advanced">
+<h2>Advanced<a class="headerlink" href="#advanced" title="Link to this heading">#</a></h2>
+<p>Optional knobs and runtime details. The defaults work for most contributors.</p>
+<section id="per-test-timeout">
+<h3>Per-test timeout<a class="headerlink" href="#per-test-timeout" title="Link to this heading">#</a></h3>
+<p>Per-test timeouts default to 600 s and are enforced by <code class="docutils literal notranslate"><span class="pre">pytest_hardtle</span></code>, a CFFI-compiled C watchdog that can kill tests hung in native GPU calls even when the GIL is held.</p>
+</section>
+<section id="kernel-compilation-cache">
+<h3>Kernel compilation cache<a class="headerlink" href="#kernel-compilation-cache" title="Link to this heading">#</a></h3>
+<p>During each test session the kernel compilation cache lives in a fresh, empty temp directory created by pytest’s <a class="reference external" href="https://docs.pytest.org/en/stable/how-to/tmp_path.html"><code class="docutils literal notranslate"><span class="pre">tmp_path_factory</span></code></a> — typically <code class="docutils literal notranslate"><span class="pre">/tmp/pytest-of-&lt;user&gt;/pytest-&lt;N&gt;/qdcache0/</span></code>. Old session directories are cleaned up automatically by pytest’s retention policy. This cache is separate from the user-facing <code class="docutils literal notranslate"><span class="pre">~/.cache/quadrants/</span></code> cache, and avoids recompiling identical kernels after each <code class="docutils literal notranslate"><span class="pre">qd.reset()</span></code> / <code class="docutils literal notranslate"><span class="pre">qd.init()</span></code> cycle within a session.</p>
+</section>
+<section id="per-file-timing-breakdown">
+<h3>Per-file timing breakdown<a class="headerlink" href="#per-file-timing-breakdown" title="Link to this heading">#</a></h3>
+<p>Set <code class="docutils literal notranslate"><span class="pre">QD_FILE_TIMING=1</span></code> to print a per-file duration summary at the end of the session:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">QD_FILE_TIMING</span><span class="o">=</span><span class="mi">1</span> <span class="n">python</span> <span class="n">tests</span><span class="o">/</span><span class="n">run_tests</span><span class="o">.</span><span class="n">py</span>
+</pre></div>
+</div>
+<p>This is enabled by default in the Mac CI job; the results appear in the GitHub Actions job summary and are the primary tool for identifying slow test files.</p>
+</section>
+<section id="sample-xdist-seed-propagation">
+<h3><code class="docutils literal notranslate"><span class="pre">&#64;sample</span></code> + xdist seed propagation<a class="headerlink" href="#sample-xdist-seed-propagation" title="Link to this heading">#</a></h3>
+<p><code class="docutils literal notranslate"><span class="pre">tests/run_tests.py</span></code> picks the per-run sample seed before pytest is launched and passes it via <code class="docutils literal notranslate"><span class="pre">--sample-seed=&lt;S&gt;</span></code> on argv. xdist forwards argv to every worker, so all workers see the same seed and produce identical samples; without this, each worker would subsample independently and <code class="docutils literal notranslate"><span class="pre">--sample-seed=&lt;S&gt;</span></code> wouldn’t reproduce. The per-test RNG inside <code class="docutils literal notranslate"><span class="pre">pytest_collection_modifyitems</span></code> is then derived deterministically via <code class="docutils literal notranslate"><span class="pre">sha256(f&quot;{seed}|{nodeid_prefix}&quot;)</span></code>, which is what makes the <strong>Per-test RNG independence</strong> property above hold.</p>
+</section>
 </section>
 </section>
 
@@ -626,15 +624,19 @@
   <nav id="pst-page-toc-nav" class="page-toc" aria-labelledby="pst-page-navigation-heading-2">
     <ul class="pst-show_toc_level nav section-nav flex-column">
 <li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#running-the-tests">Running the tests</a></li>
-<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#kernel-compilation-cache">Kernel compilation cache</a></li>
-<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#per-file-timing-breakdown">Per-file timing breakdown</a></li>
 <li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#markers">Markers</a><ul class="nav section-nav flex-column">
 <li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#pytest-mark-slow"><code class="docutils literal notranslate"><span class="pre">@pytest.mark.slow</span></code></a></li>
 <li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#pytest-mark-sample"><code class="docutils literal notranslate"><span class="pre">@pytest.mark.sample(...)</span></code></a></li>
 </ul>
 </li>
 <li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#writing-new-tests">Writing new tests</a></li>
-<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#ci-checks">CI checks</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#advanced">Advanced</a><ul class="nav section-nav flex-column">
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#per-test-timeout">Per-test timeout</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#kernel-compilation-cache">Kernel compilation cache</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#per-file-timing-breakdown">Per-file timing breakdown</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#sample-xdist-seed-propagation"><code class="docutils literal notranslate"><span class="pre">@sample</span></code> + xdist seed propagation</a></li>
+</ul>
+</li>
 </ul>
   </nav></div>
 
