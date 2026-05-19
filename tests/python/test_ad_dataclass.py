@@ -1,7 +1,7 @@
 """Differentiation through ``dataclasses.dataclass`` containers.
 
-These tests pin that gradients flow correctly when kernel arguments are wrapped in plain Python
-dataclasses, across the tensor types Quadrants exposes:
+These tests pin that gradients flow correctly when kernel arguments are wrapped in plain Python dataclasses, across the
+tensor types Quadrants exposes:
 
 * ``qd.ndarray`` — typed-dataclass annotation + ``qd.template()`` path; gradient via ``kernel.grad()``.
 * ``qd.field`` — ``qd.template()`` path; gradient via ``qd.ad.Tape``.
@@ -105,7 +105,7 @@ def test_ad_dataclass_ndarray_template():
 # ----------------------------------------------------------------------------
 
 
-@test_utils.test(default_fp=qd.f64, require=qd.extension.adstack)
+@test_utils.test(default_fp=qd.f64, require=[qd.extension.adstack, qd.extension.data64])
 def test_ad_dataclass_field_template_tape():
     """dataclass holding qd.fields, passed via qd.template(), gradient via qd.ad.Tape."""
     N = 5
@@ -178,7 +178,7 @@ def test_ad_dataclass_tensor_ndarray_backend():
     np.testing.assert_allclose(a.grad.to_numpy(), b.to_numpy())
 
 
-@test_utils.test(default_fp=qd.f64, require=qd.extension.adstack)
+@test_utils.test(default_fp=qd.f64, require=[qd.extension.adstack, qd.extension.data64])
 def test_ad_dataclass_tensor_field_backend_tape():
     """dataclass holding qd.tensor(..., backend=FIELD) members; field-AD via qd.ad.Tape.
 
