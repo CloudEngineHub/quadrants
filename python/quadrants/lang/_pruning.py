@@ -77,17 +77,15 @@ class Pruning:
         # registering every reachable ndarray (same as the historical behavior).
         self.pass_0_ran: bool = False
         # Kernel-arg-rooted attribute chains used by each func, in flat-name form (``__qd_self__qd_dofs__qd_x``).
-        # Populated by ``ASTTransformer.build_Attribute``
-        # for non-flattened kernel args (data_oriented / qd.template). Kept *separate* from
-        # ``used_vars_by_func_id`` because the latter drives ``struct_locals`` on the enforcing
-        # pass (line ~230 of kernel.py), and ``FlattenAttributeNameTransformer`` would rewrite
-        # ``s.x`` → ``Name('__qd_s__qd_x')`` if these chain names appeared there — yielding a
-        # ``QuadrantsNameError: Name "__qd_s__qd_x" is not defined``. ``record_after_call``
-        # propagates entries from callee to caller (so ``f(self.dofs)`` where ``f`` reads
-        # ``s.x`` ends up with ``__qd_self__qd_dofs__qd_x`` in the kernel's set). After both
-        # compile passes, ``Kernel._fold_kernel_arg_chain_paths_into_pruning`` merges the
-        # kernel's set into ``used_vars_by_func_id[KERNEL_FUNC_ID]`` so fastcache stores them
-        # in L1 and the args_hasher narrow walk picks them up.
+        # Populated by ``ASTTransformer.build_Attribute`` for non-flattened kernel args (data_oriented / qd.template).
+        # Kept *separate* from ``used_vars_by_func_id`` because the latter drives ``struct_locals`` on the enforcing
+        # pass (line ~230 of kernel.py), and ``FlattenAttributeNameTransformer`` would rewrite ``s.x`` →
+        # ``Name('__qd_s__qd_x')`` if these chain names appeared there — yielding a ``QuadrantsNameError: Name
+        # "__qd_s__qd_x" is not defined``. ``record_after_call`` propagates entries from callee to caller (so
+        # ``f(self.dofs)`` where ``f`` reads ``s.x`` ends up with ``__qd_self__qd_dofs__qd_x`` in the kernel's set).
+        # After both compile passes, ``Pruning.fold_kernel_arg_chain_paths`` merges the kernel's set into
+        # ``used_vars_by_func_id[KERNEL_FUNC_ID]`` so fastcache stores them in L1 and the args_hasher narrow walk
+        # picks them up.
         self.kernel_arg_chain_paths_by_func_id: dict[int, set[str]] = defaultdict(set)
 
     def mark_used(self, func_id: int, parameter_flat_name: str) -> None:
@@ -97,8 +95,8 @@ class Pruning:
     def mark_kernel_arg_chain_used(self, func_id: int, chain_flat_name: str) -> None:
         """Record a kernel-arg-rooted attribute chain (e.g. ``__qd_self__qd_dofs__qd_x``).
 
-        Stored separately from ``used_vars_by_func_id`` — see the docstring on
-        ``kernel_arg_chain_paths_by_func_id`` for why."""
+        Stored separately from ``used_vars_by_func_id`` — see the docstring on ``kernel_arg_chain_paths_by_func_id``
+        for why."""
         assert not self.enforcing
         self.kernel_arg_chain_paths_by_func_id[func_id].add(chain_flat_name)
 

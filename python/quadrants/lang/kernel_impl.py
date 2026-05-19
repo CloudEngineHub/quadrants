@@ -320,10 +320,9 @@ def data_oriented(cls=None, *, stable_members: bool = False):
         return lambda c: data_oriented(c, stable_members=stable_members)
 
     def make_kernel_indirect(fun, is_property, attr_name):
-        # Capture the primal at decoration time so the per-call path skips the
-        # ``_BoundedDifferentiableMethod`` allocation. The class itself is validated when
-        # ``_BoundedDifferentiableMethod`` is invoked via the `.grad()` path; for the common
-        # primal call here we replicate the check inline.
+        # Capture the primal at decoration time so the per-call path skips the ``_BoundedDifferentiableMethod``
+        # allocation. The class itself is validated when ``_BoundedDifferentiableMethod`` is invoked via the
+        # ``.grad()`` path; for the common primal call here we replicate the check inline.
         primal = fun._primal
 
         @wraps(fun)
