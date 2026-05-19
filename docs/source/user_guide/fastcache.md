@@ -183,6 +183,8 @@ The args hasher walks compound-type kernel parameters recursively. For each leaf
 - `qd.ndarray` member — `(dtype, ndim, layout)` is included in the cache key. Element values are not.
 - Primitive (`int` / `float` / `bool` / `enum.Enum`) member — value is baked into the kernel (same semantics as a `qd.Template` primitive). Two instances of the same class with different primitive member values get different cache entries.
 - Nested `@qd.data_oriented` member — recurses.
+- Nested `dataclasses.dataclass` member — recurses (with the dataclass rules below).
+- `qd.field` member — fastcache is disabled for the entire kernel call. The kernel still runs via normal compilation; a warn-level log line is emitted.
 
 **`dataclasses.dataclass`:** the walker descends into the declared members. For each member, only the *type* is included in the cache key by default — **not** the value. To include a member's value, annotate it:
 
