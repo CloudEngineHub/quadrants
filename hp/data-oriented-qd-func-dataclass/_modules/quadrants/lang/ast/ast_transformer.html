@@ -1098,13 +1098,11 @@
 <span class="w">        </span><span class="sd">&quot;&quot;&quot;If *value* is a bare ``Ndarray`` that was pre-declared as a kernel arg (in ``_predeclare_struct_ndarrays``),</span>
 <span class="sd">        return the ``AnyArray`` proxy from the cache. Otherwise return *value* unchanged.</span>
 
-<span class="sd">        Also records the source ndarray id in ``pruning.used_struct_ndarray_ids`` on the</span>
-<span class="sd">        non-enforcing first pass, so that the enforcing second-pass</span>
-<span class="sd">        ``_predeclare_struct_ndarrays`` can skip ndarrays that the kernel never actually</span>
-<span class="sd">        accesses. Both ``Ndarray`` instances and pre-existing ``AnyArray`` proxies (tagged</span>
-<span class="sd">        with ``_qd_source_ndarray_id``) are handled — the latter is the case for accesses</span>
-<span class="sd">        in inlined ``@qd.func`` bodies whose params were bound to already-promoted proxies</span>
-<span class="sd">        by Option A in ``call_transformer``.</span>
+<span class="sd">        Also records the source ndarray id in ``pruning.used_struct_ndarray_ids`` on the non-enforcing first pass, so</span>
+<span class="sd">        that the enforcing second-pass ``_predeclare_struct_ndarrays`` can skip ndarrays that the kernel never actually</span>
+<span class="sd">        accesses. Both ``Ndarray`` instances and pre-existing ``AnyArray`` proxies (tagged with</span>
+<span class="sd">        ``_qd_source_ndarray_id``) are handled — the latter is the case for accesses in inlined ``@qd.func`` bodies</span>
+<span class="sd">        whose params were bound to already-promoted proxies by Option A in ``call_transformer``.</span>
 <span class="sd">        &quot;&quot;&quot;</span>
         <span class="kn">from</span><span class="w"> </span><span class="nn">quadrants.lang._ndarray</span><span class="w"> </span><span class="kn">import</span> <span class="n">Ndarray</span>  <span class="c1"># pylint: disable=C0415</span>
 
