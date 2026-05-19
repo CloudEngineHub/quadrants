@@ -1,4 +1,5 @@
 import gc
+import hashlib
 import os
 import random
 import sys
@@ -113,11 +114,6 @@ def pytest_collection_modifyitems(config, items):
     if config.getoption("--no-sample"):
         return
     seed = config.getoption("--sample-seed")
-    sys.stderr.write(
-        f"[QD_SAMPLE_DEBUG] pid={os.getpid()} workerinput={hasattr(config, 'workerinput')} "
-        f"seed-opt={seed} argv={sys.argv} env-QD={os.environ.get('QD_SAMPLE_SEED')}\n"
-    )
-    sys.stderr.flush()
     if seed is None:
         # Defensive: pytest_configure didn't run (e.g. someone imported this module manually). Nothing to do.
         return
@@ -149,6 +145,10 @@ def pytest_collection_modifyitems(config, items):
         #     Routine refactors don't cause failures to migrate file-wide.
         #   - Locality: when debugging, you can reason about one test's sample without simulating all the others' RNG
         #     advances.
+        # Seed mixing uses sha256 of a canonical ``f"{seed}|{key}"`` rather than ``random.Random((seed, key))``: tuple
+        # seeding goes through ``_sha512(repr(a).encode())`` in CPython 3.10+ which IS deterministic in principle but
+        # raises a ``DeprecationWarning: Seeding based on hashing is deprecated`` and is slated for removal. We pin to
+        # an explicit hash so the sample is reproducible across Python versions and not at the mercy of stdlib churn.
         # CRITICAL: ``rng.sample(group_sorted, ...)`` rather than ``rng.sample(group, ...)``. xdist workers each run
         # ``pytest_collection_modifyitems`` independently and pytest does NOT guarantee that ``items`` (and therefore
         # ``group``) lands in the same in-memory order on every worker. With the same seed but a differently-ordered
@@ -157,7 +157,8 @@ def pytest_collection_modifyitems(config, items):
         # "Different tests were collected between gw0 and gwN". Sorting by ``nodeid`` (a content-derived total order)
         # forces every worker to sample from an identical sequence.
         group_sorted = sorted(group, key=lambda it: it.nodeid)
-        rng = random.Random((seed, key))
+        mixed = int.from_bytes(hashlib.sha256(f"{seed}|{key}".encode()).digest()[:8], "big")
+        rng = random.Random(mixed)
         kept_nodeids = {it.nodeid for it in rng.sample(group_sorted, k=keep_n)}
         for it in group:
             (keep if it.nodeid in kept_nodeids else deselected).append(it)
