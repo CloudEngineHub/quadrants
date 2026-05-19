@@ -8,7 +8,7 @@
 
 ## Running tests
 
-See [unit_testing.md](unit_testing.md) for the full reference: launcher flags, env vars, the `slow` / `sample` markers, how to reproduce a single failing parametrize case, and how to do exhaustive runs for release gates.
+See [unit_testing.md](unit_testing.md).
 
 ## Creating your build/dev environment
 

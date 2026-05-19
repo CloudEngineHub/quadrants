@@ -74,7 +74,7 @@ The marker is used in two patterns:
        ...
    ```
 
-   With this pattern the default suite still exercises the code path; the slow lane just adds the larger-size variant for full coverage.
+   In this specific example the default suite still exercises the code path; the slow lane just adds the larger-size variant for full coverage.
 
 ### `@pytest.mark.sample(...)`
 
@@ -85,7 +85,7 @@ Marks a single heavily-parametrized test as opting in to **per-run stochastic su
 - running every case every CI run is overkill, and
 - asymptotic coverage over many runs is acceptable.
 
-Apply it like any other marker. Position within the decorator stack is irrelevant — pytest attaches function-level markers to the test regardless of order, so `@pytest.mark.sample` can sit anywhere above or below the `@pytest.mark.parametrize` decorators:
+Apply it like any other marker:
 
 ```python
 @pytest.mark.sample(n=6)                     # keep 6 of N cases per run
@@ -99,7 +99,7 @@ def test_thing(size, dtype, layout):
     ...
 ```
 
-**How to reproduce.** Three levels of reproducibility:
+**How to reproduce failing tests.** Three levels of reproducibility:
 
 1. **One failing case** — paste the failing nodeid from the CI log. Pytest already prints the full nodeid on failure:
 
