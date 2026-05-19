@@ -1,6 +1,6 @@
 # Unit testing
 
-This page documents how to run, write, and tune the Quadrants Python unit test suite. For one-shot setup of the build / dev environment, see [contributing.md](contributing.md).
+This page documents how to run, write, and tune the Quadrants Python unit test suite. For setup of the build / dev environment, see [contributing.md](contributing.md).
 
 ## Running the tests
 
@@ -35,21 +35,7 @@ python tests/run_tests.py -f
 python tests/run_tests.py -x
 ```
 
-The target architecture can also be set via `QD_WANTED_ARCHS` (comma-separated; supports `^arch` to exclude rather than include). Per-test timeouts default to 600 s and are enforced by `pytest_hardtle`, a CFFI-compiled C watchdog that can kill tests hung in native GPU calls even when the GIL is held.
-
-## Kernel compilation cache
-
-During each test session the kernel compilation cache lives in a fresh, empty temp directory created by pytest's [`tmp_path_factory`](https://docs.pytest.org/en/stable/how-to/tmp_path.html) — typically `/tmp/pytest-of-<user>/pytest-<N>/qdcache0/`. Old session directories are cleaned up automatically by pytest's retention policy. This cache is separate from the user-facing `~/.cache/quadrants/` cache, and avoids recompiling identical kernels after each `qd.reset()` / `qd.init()` cycle within a session.
-
-## Per-file timing breakdown
-
-Set `QD_FILE_TIMING=1` to print a per-file duration summary at the end of the session:
-
-```
-QD_FILE_TIMING=1 python tests/run_tests.py
-```
-
-This is enabled by default in the Mac CI job; the results appear in the GitHub Actions job summary and are the primary tool for identifying slow test files.
+The target architecture can also be set via `QD_WANTED_ARCHS` (comma-separated; supports `^arch` to exclude rather than include).
 
 ## Markers
 
@@ -57,7 +43,7 @@ Tests can opt into two project-specific markers, in addition to pytest's built-i
 
 ### `@pytest.mark.slow`
 
-Marks a test (or, more commonly, a specific `pytest.param(...)` case inside a parametrize list) as **slow** — long enough that the default test suite skips it. `tests/run_tests.py` adds `-m "not slow"` to the pytest invocation by default; pass `--run-slow` to opt back in:
+Marks a test as **slow**. `tests/run_tests.py` adds `-m "not slow"` to the pytest invocation by default; pass `--run-slow` to opt back in:
 
 ```
 # default: skip slow
@@ -72,7 +58,7 @@ python tests/run_tests.py -m slow --run-slow
 
 The marker is used in two patterns:
 
-1. **Whole-test slow**: rare. The whole test always takes a long time and there's no smaller variant.
+1. **Whole-test slow**: the whole test takes a long time.
 
    ```python
    @pytest.mark.slow
@@ -80,7 +66,7 @@ The marker is used in two patterns:
        ...
    ```
 
-2. **Slow-marked parametrize case** (preferred when applicable): a test parametrizes over a size axis and the large value is slow but the small value is cheap. The small value stays in the default suite as a smoke test; the large value moves to the slow lane. This is the dominant pattern in `tests/python/test_eig.py`, `test_linalg.py`, `test_ad_gdar_diffmpm.py`, etc.
+2. **Slow-marked parametrize case**:
 
    ```python
    @pytest.mark.parametrize("n", [4, pytest.param(12, marks=pytest.mark.slow)])
@@ -97,9 +83,9 @@ Marks a single heavily-parametrized test as opting in to **per-run stochastic su
 - the test's parametrize space is large (≥ ~16 cases),
 - each parametrize case is roughly independent (covering an independent corner case rather than a single bug class),
 - running every case every CI run is overkill, and
-- coverage convergence over many runs is acceptable for that test.
+- asymptotic coverage over many runs is acceptable.
 
-Apply it like any other marker, above the existing parametrize stack:
+Apply it like any other marker. Position within the decorator stack is irrelevant — pytest attaches function-level markers to the test regardless of order, so `@pytest.mark.sample` can sit anywhere above or below the `@pytest.mark.parametrize` decorators:
 
 ```python
 @pytest.mark.sample(n=6)                     # keep 6 of N cases per run
@@ -112,8 +98,6 @@ Apply it like any other marker, above the existing parametrize stack:
 def test_thing(size, dtype, layout):
     ...
 ```
-
-**Convergence math.** With `keep_n / total = k / N`, the probability that a *specific* parametrize case has been hit after `r` runs is `1 - (1 - k/N)^r`. For `n=6` out of 32 (`test_tile16_load_store`): ~65% after 5 runs, ~88% after 10, ~98% after 20. Combined with our CI cadence and the fact that any persistent bug surface lights up across multiple PRs, this gives effectively full coverage on a many-PR horizon at a fraction of the per-PR cost.
 
 **How to reproduce.** Three levels of reproducibility:
 
@@ -155,10 +139,6 @@ def test_thing(size, dtype, layout):
 
 **Composition with `slow`.** Sampling runs **after** marker-based filtering. With `--run-slow` not passed (the default), slow-marked parametrize cases drop out first, then the sampler sub-selects from the remaining (fast) cases. The intersection is the right composition: `--no-sample --run-slow` is the truly-exhaustive combo.
 
-**xdist note.** The seed is picked on the controller in `pytest_configure` (not in the per-worker `pytest_collection_modifyitems`), so all xdist workers see the same seed and produce the same sample. This is intentional — without this, each worker would subsample independently and `--sample-seed=<S>` wouldn't reproduce.
-
-**When *not* to use `@sample`.** If the test's parametrize axes are not roughly independent — e.g. axis A's bug surface only lights up when axis B is at a specific value — sampling can miss the interaction. Use `@slow` on the expensive subset instead, and keep the full Cartesian product for the cheap subset.
-
 ## Writing new tests
 
 The standard recipe combines `@test_utils.test(...)` (arch / option matrix) with `@pytest.mark.parametrize`:
@@ -182,13 +162,28 @@ Common helpers in `tests/test_utils.py`:
 - `test_utils.skip_if_f64_unsupported(dtype)` — skip the current test at runtime if `dtype == qd.f64` and the active backend can't carry f64 through buffer I/O (Metal, MoltenVK on Darwin). Use inside a parametrized test that sweeps both f32 and f64.
 - `test_utils.expected_archs()` — list of archs that the current `QD_WANTED_ARCHS` allows. Used to skip tests with no satisfiable arch.
 
-## CI checks
+## Advanced
 
-A subset of CI jobs care about the test suite specifically:
+Optional knobs and runtime details. The defaults work for most contributors.
 
-- **linux / macosx / win** — build and run the full python suite on each platform.
-- **test-gpu** — GPU-specific tests on the cluster.
-- **coverage report** — a one-line diff coverage summary is posted as a PR comment, with kernel-level branch coverage. See [Kernel code coverage](kernel_coverage.md).
-- **Test coverage check (`check_test_coverage.yml`)** — an AI agent that flags new or modified non-test source code that doesn't have corresponding test coverage in the PR.
+### Per-test timeout
 
-See [contributing.md](contributing.md) for the full list of CI checks (linters, pyright, link checking, PR change report, etc.).
+Per-test timeouts default to 600 s and are enforced by `pytest_hardtle`, a CFFI-compiled C watchdog that can kill tests hung in native GPU calls even when the GIL is held.
+
+### Kernel compilation cache
+
+During each test session the kernel compilation cache lives in a fresh, empty temp directory created by pytest's [`tmp_path_factory`](https://docs.pytest.org/en/stable/how-to/tmp_path.html) — typically `/tmp/pytest-of-<user>/pytest-<N>/qdcache0/`. Old session directories are cleaned up automatically by pytest's retention policy. This cache is separate from the user-facing `~/.cache/quadrants/` cache, and avoids recompiling identical kernels after each `qd.reset()` / `qd.init()` cycle within a session.
+
+### Per-file timing breakdown
+
+Set `QD_FILE_TIMING=1` to print a per-file duration summary at the end of the session:
+
+```
+QD_FILE_TIMING=1 python tests/run_tests.py
+```
+
+This is enabled by default in the Mac CI job; the results appear in the GitHub Actions job summary and are the primary tool for identifying slow test files.
+
+### `@sample` + xdist seed propagation
+
+`tests/run_tests.py` picks the per-run sample seed before pytest is launched and passes it via `--sample-seed=<S>` on argv. xdist forwards argv to every worker, so all workers see the same seed and produce identical samples; without this, each worker would subsample independently and `--sample-seed=<S>` wouldn't reproduce. The per-test RNG inside `pytest_collection_modifyitems` is then derived deterministically via `sha256(f"{seed}|{nodeid_prefix}")`, which is what makes the **Per-test RNG independence** property above hold.
