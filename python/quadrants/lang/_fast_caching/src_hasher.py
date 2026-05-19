@@ -20,9 +20,9 @@ Safety implication
 ------------------
 A kernel-unused path's contents (any type, including unrecognised tensor-likes) is *guaranteed* not to affect kernel
 codegen, so dropping it from the hash is correct by construction. Paths the kernel *does* read still go through
-``args_hasher.stringify_obj_type`` which falls back to a ``type(v).__qualname__``-based string for unrecognised types
-and emits a one-shot ``[FASTCACHE][UNKNOWN_TYPE]`` warning, so a missed type registration is impossible to miss but
-doesn't silently disable fastcache.
+``args_hasher.stringify_obj_type``; if it encounters an unrecognised type at such a path it fails the call's fastcache
+loudly (one-shot ``[FASTCACHE][UNKNOWN_TYPE]`` warning identifying the offending ``type(v).__qualname__``), so a missed
+type registration is impossible to miss and cannot serve stale cached results.
 """
 
 import json
