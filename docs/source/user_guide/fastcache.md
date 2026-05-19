@@ -178,7 +178,7 @@ On the first run you'll see `cache_stored=True` but `cache_loaded=False`. On the
 
 The args hasher walks compound-type kernel parameters recursively. For each leaf member it decides what (if anything) contributes to the cache key. The headline rules:
 
-**`@qd.data_oriented`:** the walker descends into `vars(obj)`, narrowed by pruning info — *every* child (ndarray, primitive, opaque, nested struct) is subject to the pruning check. For each walked child:
+**`@qd.data_oriented`:** the walker descends into `vars(obj)`, narrowed by pruning info. For each walked child:
 
 - `qd.ndarray` member, kernel-read — `(dtype, ndim, layout)` is included in the cache key. Element values are not.
 - `qd.ndarray` member, kernel-unused — *skipped*. Changes to its dtype/ndim/layout don't invalidate the cache.
