@@ -1,20 +1,5 @@
 """Two-level fastcache key derivation and persistence.
 
-Background (pre-refactor)
--------------------------
-Fastcache used a single cache key derived from source + config + a *wide* args hash that walked every member of
-every container argument. That walk was brittle:
-
-  - Encountering any unrecognised type silently disabled fastcache (``[FASTCACHE][PARAM_INVALID]`` warning +
-    ``None`` return); a single Genesis ``RigidSolver._uid`` member killed the cache for the whole solver.
-
-  - Working around it via ``@qd.data_oriented(stable_members=True)`` opt-in only swapped one brittleness for another:
-    a new tensor-like type added later but missed in args_hasher's recognised set would be silently skipped, serving
-    stale cached results.
-
-Both fundamentally stem from the wide walk *blindly* visiting paths the kernel never reads. The pre-refactor design
-had no way to know which paths actually mattered before compile.
-
 Two-level cache
 ---------------
 The fastcache now exposes pruning information (already produced during compile) as a first-class lookup so the args
