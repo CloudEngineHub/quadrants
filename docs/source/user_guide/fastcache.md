@@ -149,7 +149,7 @@ The args hasher enforces two strict invariants:
 - **Kernel-unused members of unrecognised types are also fine.** Pruning narrowing skips them before the type-recognition check runs.
 - **Kernel-read members of unrecognised types fail fastcache loudly.** Either add explicit handling in `quadrants/lang/_fast_caching/args_hasher.py::stringify_obj_type` (for new tensor-like types whose dtype/shape matter), or move the access out of the kernel-read path (for opaque metadata that shouldn't be there in the first place).
 
-`qd.field` / `ScalarField` / `MatrixField` are *recognised-but-unsupported*: their shape/dtype would affect codegen but fastcache doesn't yet know how to safely include them, so encountering one at a kernel-read path disables fastcache for the call (with a warn-level diagnostic).
+`qd.field` / `ScalarField` / `MatrixField` are *recognised-but-unsupported*: encountering one at a kernel-read path disables fastcache for the call (with a warn-level diagnostic).
 
 ## Advanced
 
