@@ -1528,8 +1528,8 @@
                     <span class="s2">&quot;the number of the loop variables.&quot;</span>
                 <span class="p">)</span>
             <span class="c1"># ``physical_to_canonical[p]`` is the canonical (user-visible) axis index that receives</span>
-            <span class="c1"># the decomposed index for physical nesting level ``p``. For the identity / ``layout=None``</span>
-            <span class="c1"># case this is ``[0, 1, ..., n-1]`` and the emitted IR matches the pre-layout codegen</span>
+            <span class="c1"># the decomposed index for physical nesting level ``p``. For the identity / ``axes=None``</span>
+            <span class="c1"># case this is ``[0, 1, ..., n-1]`` and the emitted IR matches the pre-``axes=`` codegen</span>
             <span class="c1"># byte-for-byte.</span>
             <span class="n">physical_to_canonical</span> <span class="o">=</span> <span class="n">ndrange_var</span><span class="o">.</span><span class="n">_physical_to_canonical</span>
             <span class="n">n_levels</span> <span class="o">=</span> <span class="nb">len</span><span class="p">(</span><span class="n">ndrange_var</span><span class="o">.</span><span class="n">dimensions</span><span class="p">)</span>
@@ -1584,8 +1584,8 @@
 
             <span class="n">ctx</span><span class="o">.</span><span class="n">create_variable</span><span class="p">(</span><span class="n">target</span><span class="p">,</span> <span class="n">target_var</span><span class="p">)</span>
             <span class="n">I</span> <span class="o">=</span> <span class="n">impl</span><span class="o">.</span><span class="n">expr_init</span><span class="p">(</span><span class="n">ndrange_loop_var</span><span class="p">)</span>
-            <span class="c1"># See ``build_ndrange_for`` above for the layout semantics. The grouped target_var is a</span>
-            <span class="c1"># vector indexed by canonical axis, so element ``physical_to_canonical[p]`` (not ``p``)</span>
+            <span class="c1"># See ``build_ndrange_for`` above for the ``axes=`` semantics. The grouped target_var</span>
+            <span class="c1"># is a vector indexed by canonical axis, so element ``physical_to_canonical[p]`` (not ``p``)</span>
             <span class="c1"># receives the decomposition of physical level ``p``.</span>
             <span class="n">physical_to_canonical</span> <span class="o">=</span> <span class="n">ndrange_var</span><span class="o">.</span><span class="n">_physical_to_canonical</span>
             <span class="n">n_levels</span> <span class="o">=</span> <span class="nb">len</span><span class="p">(</span><span class="n">ndrange_var</span><span class="o">.</span><span class="n">dimensions</span><span class="p">)</span>
