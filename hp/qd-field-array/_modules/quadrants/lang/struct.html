@@ -1052,8 +1052,10 @@
         <span class="n">entries</span><span class="o">.</span><span class="n">_Struct__dtype</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">dtype</span>
         <span class="n">struct</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">cast</span><span class="p">(</span><span class="n">entries</span><span class="p">)</span>
         <span class="n">struct</span><span class="o">.</span><span class="n">_Struct__dtype</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">dtype</span>
-        <span class="c1"># Propagate the register-array group metadata onto the Struct instance so the AST transformer can detect</span>
-        <span class="c1"># indexed-group access (``obj.r``) on the per-trace expression.</span>
+        <span class="c1"># Tag the freshly-built Struct expression-object (representing this ``Tile()`` instantiation in the kernel&#39;s</span>
+        <span class="c1"># IR) with the unpacked-array group dictionary, so ``ASTTransformer.build_Attribute`` can recognise</span>
+        <span class="c1"># ``obj.r`` as a group name. The transformer inspects the instance, not the StructType, so the metadata has</span>
+        <span class="c1"># to live here.</span>
         <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">_unpacked_groups</span><span class="p">:</span>
             <span class="n">struct</span><span class="o">.</span><span class="n">_qd_unpacked_groups</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_unpacked_groups</span>
         <span class="k">return</span> <span class="n">struct</span>
