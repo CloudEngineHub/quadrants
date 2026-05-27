@@ -21,6 +21,7 @@ matrix_vector_per_thread
 linalg_per_thread
 tensor
 compound_types
+register_array
 buffer_view
 static
 sub_functions

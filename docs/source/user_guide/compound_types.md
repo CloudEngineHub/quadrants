@@ -159,3 +159,5 @@ class Particle:
     vel: qd.types.vector(3, qd.f32)
     mass: qd.f32
 ```
+
+For larger statically-indexed groups (e.g. a row or tile of scalars that you want SROA to register-promote independently), see {doc}`register_array`.
