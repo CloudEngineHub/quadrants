@@ -1,7 +1,7 @@
 # pyright: reportInvalidTypeForm=false
-"""Tests for ``qd.register_array(N, dtype)`` on ``@qd.dataclass``.
+"""Tests for ``qd.unpacked_array(N, dtype)`` on ``@qd.dataclass``.
 
-``register_array`` gives users an ergonomic indexed-write syntax on a per-thread struct, while keeping the underlying
+``unpacked_array`` gives users an ergonomic indexed-write syntax on a per-thread struct, while keeping the underlying
 storage as N separate named scalar fields so SROA + ``mem2reg`` can register-promote each slot independently. The
 static-index case must lower to a direct field reference; PTX must be byte-identical to the named-field equivalent.
 """
@@ -26,18 +26,18 @@ def _qd_init_cuda():
 # ---------------------------------------------------------------------------
 
 
-def test_register_array_construction_python_scope():
-    """A dataclass with ``r: qd.register_array(N, dtype)`` should construct as if it had N named scalar fields named
+def test_unpacked_array_construction_python_scope():
+    """A dataclass with ``r: qd.unpacked_array(N, dtype)`` should construct as if it had N named scalar fields named
     ``_r0.._r{N-1}``."""
     _qd_init_cuda()
 
     @qd.dataclass
     class Tile:
-        r: qd.register_array(4, qd.f32)
+        r: qd.unpacked_array(4, qd.f32)
 
     # The underlying struct type should report N synthetic scalar members plus expose ``r`` as a group name.
-    assert hasattr(Tile, "_register_groups")
-    groups = Tile._register_groups
+    assert hasattr(Tile, "_unpacked_groups")
+    groups = Tile._unpacked_groups
     assert "r" in groups
     count, dtype, _ = groups["r"]
     assert count == 4
@@ -54,13 +54,13 @@ def test_register_array_construction_python_scope():
 # ---------------------------------------------------------------------------
 
 
-def test_register_array_static_index_write_then_read():
+def test_unpacked_array_static_index_write_then_read():
     """Write to ``t.r[0..3]`` with python-int indices, then read back."""
     _qd_init_cuda()
 
     @qd.dataclass
     class Tile:
-        r: qd.register_array(4, qd.f32)
+        r: qd.unpacked_array(4, qd.f32)
 
     out = qd.field(dtype=qd.f32, shape=(4,))
 
@@ -81,14 +81,14 @@ def test_register_array_static_index_write_then_read():
     np.testing.assert_array_equal(out.to_numpy(), np.array([1, 2, 3, 4], dtype=np.float32))
 
 
-def test_register_array_qd_static_loop_index():
+def test_unpacked_array_qd_static_loop_index():
     """Index via a ``qd.static(range(N))`` loop variable. Each iter sees a python-int index, so the lowering must be the
     same direct-field path as the explicit python-int case."""
     _qd_init_cuda()
 
     @qd.dataclass
     class Tile:
-        r: qd.register_array(4, qd.f32)
+        r: qd.unpacked_array(4, qd.f32)
 
     out = qd.field(dtype=qd.f32, shape=(4,))
 
@@ -111,8 +111,8 @@ def test_register_array_qd_static_loop_index():
 
 
 def _build_named_kernel():
-    """Same as test_register_array_static_index_write_then_read but with 4 named ``r0..r3`` fields. Used for PTX byte-
-    equality comparison against the ``register_array`` form."""
+    """Same as test_unpacked_array_static_index_write_then_read but with 4 named ``r0..r3`` fields. Used for PTX byte-
+    equality comparison against the ``unpacked_array`` form."""
 
     @qd.dataclass
     class TileNamed:
@@ -139,10 +139,10 @@ def _build_named_kernel():
     return k, out
 
 
-def _build_register_array_kernel():
+def _build_unpacked_array_kernel():
     @qd.dataclass
     class TileRA:
-        r: qd.register_array(4, qd.f32)
+        r: qd.unpacked_array(4, qd.f32)
 
     out = qd.field(dtype=qd.f32, shape=(4,))
 
@@ -162,7 +162,7 @@ def _build_register_array_kernel():
     return k, out
 
 
-def test_register_array_runtime_index_rejected():
+def test_unpacked_array_runtime_index_rejected():
     """Indexing ``t.r[k]`` with a runtime ``k`` raises a clear error pointing at the python-int / ``qd.static``
     requirement. Long term the runtime case can lower to an explicit cascade; for now the limitation is surfaced
     early so callers don't get a confusing LLVM/SROA failure downstream."""
@@ -170,7 +170,7 @@ def test_register_array_runtime_index_rejected():
 
     @qd.dataclass
     class Tile:
-        r: qd.register_array(4, qd.f32)
+        r: qd.unpacked_array(4, qd.f32)
 
     out = qd.field(dtype=qd.f32, shape=(4,))
 
@@ -185,16 +185,16 @@ def test_register_array_runtime_index_rejected():
     with pytest.raises(Exception) as e:
         k(out)
     msg = str(e.value)
-    assert "register_array" in msg and "python-int" in msg, msg
+    assert "unpacked_array" in msg and "python-int" in msg, msg
 
 
-def test_register_array_oob_static_index():
+def test_unpacked_array_oob_static_index():
     """Static-int out-of-bounds index is caught at trace time with a clear message."""
     _qd_init_cuda()
 
     @qd.dataclass
     class Tile:
-        r: qd.register_array(4, qd.f32)
+        r: qd.unpacked_array(4, qd.f32)
 
     out = qd.field(dtype=qd.f32, shape=(4,))
 
@@ -211,13 +211,13 @@ def test_register_array_oob_static_index():
 
 
 if __name__ == "__main__":
-    test_register_array_construction_python_scope()
+    test_unpacked_array_construction_python_scope()
     print("construction test passed")
-    test_register_array_static_index_write_then_read()
+    test_unpacked_array_static_index_write_then_read()
     print("static-int subscript test passed")
-    test_register_array_qd_static_loop_index()
+    test_unpacked_array_qd_static_loop_index()
     print("qd.static loop-var subscript test passed")
-    test_register_array_runtime_index_rejected()
+    test_unpacked_array_runtime_index_rejected()
     print("runtime-index rejection test passed")
-    test_register_array_oob_static_index()
+    test_unpacked_array_oob_static_index()
     print("static OOB rejection test passed")

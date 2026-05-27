@@ -104,13 +104,13 @@ def expr_init(rhs):
         return rhs
     if isinstance(rhs, Struct):
         new_struct = Struct(rhs.to_dict(include_methods=True, include_ndim=True))
-        # Preserve ``register_array`` group metadata across the rewrap so the AST transformer can still resolve
+        # Preserve ``unpacked_array`` group metadata across the rewrap so the AST transformer can still resolve
         # ``obj.{group}[k]`` on the re-emitted Struct.
-        groups = getattr(rhs, "_qd_register_groups", None)
+        groups = getattr(rhs, "_qd_unpacked_groups", None)
         if groups is not None:
             # setattr (rather than attribute assignment) sidesteps pyright's reportAttributeAccessIssue;
             # ``Struct`` doesn't statically declare this attribute -- it's a per-instance metadata tag.
-            setattr(new_struct, "_qd_register_groups", groups)
+            setattr(new_struct, "_qd_unpacked_groups", groups)
         return new_struct
     if isinstance(rhs, list):
         return [expr_init(e) for e in rhs]

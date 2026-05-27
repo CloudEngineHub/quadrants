@@ -15,11 +15,11 @@ from quadrants.lang.exception import (
 from quadrants.lang.expr import Expr
 from quadrants.lang.field import Field, ScalarField, SNodeHostAccess
 from quadrants.lang.matrix import Matrix, MatrixType
-from quadrants.lang.register_array import (
-    RegisterArray,
-    _expand_register_array_naming,
-    _RegisterArrayRef,
-    register_array,
+from quadrants.lang.unpacked_array import (
+    UnpackedArray,
+    _expand_unpacked_array_naming,
+    _UnpackedArrayRef,
+    unpacked_array,
 )
 from quadrants.lang.util import (
     cook_dtype,
@@ -607,18 +607,18 @@ class StructType(CompoundType):
     def __init__(self, **kwargs):
         self.members = {}
         self.methods = {}
-        # Maps group name -> (count, dtype, naming_fn). Populated when a member annotation is a ``RegisterArray``;
+        # Maps group name -> (count, dtype, naming_fn). Populated when a member annotation is an ``UnpackedArray``;
         # consumed by the AST transformer to rewrite ``obj.{group}[i]`` into a direct synthetic-field reference.
-        self._register_groups: dict = {}
+        self._unpacked_groups: dict = {}
         elements = []
         for k, dtype in kwargs.items():
             if k == "__struct_methods":
                 self.methods = dtype
-            elif isinstance(dtype, RegisterArray):
+            elif isinstance(dtype, UnpackedArray):
                 cooked = cook_dtype(dtype.dtype)
-                self._register_groups[k] = (dtype.count, cooked, _expand_register_array_naming)
+                self._unpacked_groups[k] = (dtype.count, cooked, _expand_unpacked_array_naming)
                 for i in range(dtype.count):
-                    sub = _expand_register_array_naming(k, i)
+                    sub = _expand_unpacked_array_naming(k, i)
                     self.members[sub] = cooked
                     elements.append([cooked, sub])
             elif isinstance(dtype, StructType):
@@ -658,8 +658,8 @@ class StructType(CompoundType):
         struct._Struct__dtype = self.dtype
         # Propagate the register-array group metadata onto the Struct instance so the AST transformer can detect
         # indexed-group access (``obj.r``) on the per-trace expression.
-        if self._register_groups:
-            struct._qd_register_groups = self._register_groups
+        if self._unpacked_groups:
+            struct._qd_unpacked_groups = self._unpacked_groups
         return struct
 
     def __instancecheck__(self, instance):
@@ -852,4 +852,4 @@ def dataclass(cls):
     return StructType(**fields)
 
 
-__all__ = ["Struct", "StructField", "dataclass", "RegisterArray", "register_array", "_RegisterArrayRef"]
+__all__ = ["Struct", "StructField", "dataclass", "UnpackedArray", "unpacked_array", "_UnpackedArrayRef"]
