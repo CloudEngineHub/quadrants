@@ -4406,12 +4406,14 @@ def test_subgroup_bitonic_sort_kv_full_subgroup_matches_tiled():
     k_tiled()
 
     for i in range(block_dim):
-        assert out_keys_full[i] == out_keys_tiled[i], f"lane {i}: full key {out_keys_full[i]} vs tiled {out_keys_tiled[i]}"
-        assert out_vals_full[i] == out_vals_tiled[i], f"lane {i}: full val {out_vals_full[i]} vs tiled {out_vals_tiled[i]}"
+        assert (
+            out_keys_full[i] == out_keys_tiled[i]
+        ), f"lane {i}: full key {out_keys_full[i]} vs tiled {out_keys_tiled[i]}"
+        assert (
+            out_vals_full[i] == out_vals_tiled[i]
+        ), f"lane {i}: full val {out_vals_full[i]} vs tiled {out_vals_tiled[i]}"
     # Plus the actual sortedness check on the full result.
-    sorted_expected = sorted(
-        [((i * 13 + 7) % 128, i) for i in range(block_dim)], key=lambda kv: (kv[0], kv[1])
-    )
+    sorted_expected = sorted([((i * 13 + 7) % 128, i) for i in range(block_dim)], key=lambda kv: (kv[0], kv[1]))
     for i, (ek, ev) in enumerate(sorted_expected):
         assert out_keys_full[i] == ek, f"lane {i}: key {out_keys_full[i]} vs expected {ek}"
         assert out_vals_full[i] == ev, f"lane {i}: val {out_vals_full[i]} vs expected {ev}"
