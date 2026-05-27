@@ -306,7 +306,7 @@
 <li class="toctree-l1"><a class="reference internal" href="linalg_per_thread.html">Per-thread linear algebra</a></li>
 <li class="toctree-l1"><a class="reference internal" href="tensor.html">Tensors</a></li>
 <li class="toctree-l1"><a class="reference internal" href="compound_types.html">Compound types</a></li>
-<li class="toctree-l1"><a class="reference internal" href="register_array.html">Register array</a></li>
+<li class="toctree-l1"><a class="reference internal" href="unpacked_array.html">Unpacked array</a></li>
 <li class="toctree-l1"><a class="reference internal" href="buffer_view.html">BufferView</a></li>
 <li class="toctree-l1"><a class="reference internal" href="static.html">qd.static</a></li>
 <li class="toctree-l1"><a class="reference internal" href="sub_functions.html">Sub-functions</a></li>
@@ -344,6 +344,7 @@
 </ul>
 <p aria-level="2" class="caption" role="heading"><span class="caption-text">Testing</span></p>
 <ul class="nav bd-sidenav">
+<li class="toctree-l1"><a class="reference internal" href="unit_testing.html">Unit testing</a></li>
 <li class="toctree-l1"><a class="reference internal" href="kernel_coverage.html">Kernel code coverage</a></li>
 </ul>
 <p aria-level="2" class="caption" role="heading"><span class="caption-text">Reference</span></p>
@@ -466,6 +467,27 @@
 </div>
 <p><code class="docutils literal notranslate"><span class="pre">I</span></code> is a <code class="docutils literal notranslate"><span class="pre">qd.Vector</span></code> with one element per dimension.</p>
 </section>
+<section id="controlling-iteration-order-with-axes">
+<h3>Controlling iteration order with <code class="docutils literal notranslate"><span class="pre">axes=</span></code><a class="headerlink" href="#controlling-iteration-order-with-axes" title="Link to this heading">#</a></h3>
+<p>By default, <code class="docutils literal notranslate"><span class="pre">qd.ndrange(d0,</span> <span class="pre">d1,</span> <span class="pre">...,</span> <span class="pre">dN-1)</span></code> makes the <strong>last argument the innermost (fastest-varying) axis</strong> in the flat parallel loop: adjacent flat threads differ in the last index. The <code class="docutils literal notranslate"><span class="pre">axes=</span></code> keyword lets you choose a different iteration-nesting order. It’s a tuple of <code class="docutils literal notranslate"><span class="pre">int</span></code> listing the <strong>canonical axis index at each successive iteration-nesting level, outermost first</strong>, and must be a permutation of <code class="docutils literal notranslate"><span class="pre">range(N)</span></code> where <code class="docutils literal notranslate"><span class="pre">N</span></code> is the number of arguments to <code class="docutils literal notranslate"><span class="pre">qd.ndrange</span></code>:</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="nd">@qd</span><span class="o">.</span><span class="n">kernel</span>
+<span class="k">def</span><span class="w"> </span><span class="nf">k</span><span class="p">():</span>
+    <span class="c1"># axis 1 is outermost (slowest-varying), axis 0 is innermost (fastest-varying)</span>
+    <span class="k">for</span> <span class="n">i</span><span class="p">,</span> <span class="n">j</span> <span class="ow">in</span> <span class="n">qd</span><span class="o">.</span><span class="n">ndrange</span><span class="p">(</span><span class="n">M</span><span class="p">,</span> <span class="n">N</span><span class="p">,</span> <span class="n">axes</span><span class="o">=</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="mi">0</span><span class="p">)):</span>
+        <span class="o">...</span>
+</pre></div>
+</div>
+<p>The yielded loop variables (<code class="docutils literal notranslate"><span class="pre">i</span></code>, <code class="docutils literal notranslate"><span class="pre">j</span></code>, …) are still bound to canonical axes 0, 1, … — only the visit order changes. <code class="docutils literal notranslate"><span class="pre">axes=None</span></code> (the default) and the identity permutation <code class="docutils literal notranslate"><span class="pre">(0,</span> <span class="pre">1,</span> <span class="pre">...,</span> <span class="pre">N-1)</span></code> are equivalent and reproduce the default last-argument-innermost order. Mismatched length and non-permutation values are rejected up front with <code class="docutils literal notranslate"><span class="pre">qd.QuadrantsSyntaxError</span></code>; non-integer entries with <code class="docutils literal notranslate"><span class="pre">qd.QuadrantsTypeError</span></code>.</p>
+<p><code class="docutils literal notranslate"><span class="pre">axes=</span></code> is independent of what’s in the loop body: it controls the iteration order regardless of whether the body touches a <code class="docutils literal notranslate"><span class="pre">qd.field</span></code>, a <code class="docutils literal notranslate"><span class="pre">qd.ndarray</span></code>, a <code class="docutils literal notranslate"><span class="pre">qd.tensor</span></code>, a <code class="docutils literal notranslate"><span class="pre">qd.Vector</span></code> / <code class="docutils literal notranslate"><span class="pre">qd.Matrix</span></code> variant, or no tensor at all.</p>
+<p><code class="docutils literal notranslate"><span class="pre">axes=</span></code> is supported by both the plain and <code class="docutils literal notranslate"><span class="pre">qd.grouped</span></code> forms:</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="k">for</span> <span class="n">i</span><span class="p">,</span> <span class="n">j</span> <span class="ow">in</span> <span class="n">qd</span><span class="o">.</span><span class="n">ndrange</span><span class="p">(</span><span class="n">M</span><span class="p">,</span> <span class="n">N</span><span class="p">,</span> <span class="n">axes</span><span class="o">=</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="mi">0</span><span class="p">)):</span>
+    <span class="o">...</span>
+<span class="k">for</span> <span class="n">I</span> <span class="ow">in</span> <span class="n">qd</span><span class="o">.</span><span class="n">grouped</span><span class="p">(</span><span class="n">qd</span><span class="o">.</span><span class="n">ndrange</span><span class="p">(</span><span class="n">M</span><span class="p">,</span> <span class="n">N</span><span class="p">,</span> <span class="n">axes</span><span class="o">=</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="mi">0</span><span class="p">))):</span>
+    <span class="c1"># I[0] is still the canonical axis-0 index, regardless of axes</span>
+    <span class="o">...</span>
+</pre></div>
+</div>
+</section>
 </section>
 <section id="does-gpu-kernel-launch-latency-matter">
 <h2>Does GPU kernel launch latency matter?<a class="headerlink" href="#does-gpu-kernel-launch-latency-matter" title="Link to this heading">#</a></h2>
@@ -579,6 +601,7 @@
 <li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#multi-dimensional-parallelization-with-qd-ndrange">Multi-dimensional parallelization with qd.ndrange</a><ul class="nav section-nav flex-column">
 <li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#syntax">Syntax</a></li>
 <li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#qd-grouped-with-qd-ndrange">qd.grouped with qd.ndrange</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#controlling-iteration-order-with-axes">Controlling iteration order with <code class="docutils literal notranslate"><span class="pre">axes=</span></code></a></li>
 </ul>
 </li>
 <li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#does-gpu-kernel-launch-latency-matter">Does GPU kernel launch latency matter?</a></li>

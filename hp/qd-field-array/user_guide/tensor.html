@@ -306,7 +306,7 @@
 <li class="toctree-l1"><a class="reference internal" href="linalg_per_thread.html">Per-thread linear algebra</a></li>
 <li class="toctree-l1 current active"><a class="current reference internal" href="#">Tensors</a></li>
 <li class="toctree-l1"><a class="reference internal" href="compound_types.html">Compound types</a></li>
-<li class="toctree-l1"><a class="reference internal" href="register_array.html">Register array</a></li>
+<li class="toctree-l1"><a class="reference internal" href="unpacked_array.html">Unpacked array</a></li>
 <li class="toctree-l1"><a class="reference internal" href="buffer_view.html">BufferView</a></li>
 <li class="toctree-l1"><a class="reference internal" href="static.html">qd.static</a></li>
 <li class="toctree-l1"><a class="reference internal" href="sub_functions.html">Sub-functions</a></li>
@@ -344,6 +344,7 @@
 </ul>
 <p aria-level="2" class="caption" role="heading"><span class="caption-text">Testing</span></p>
 <ul class="nav bd-sidenav">
+<li class="toctree-l1"><a class="reference internal" href="unit_testing.html">Unit testing</a></li>
 <li class="toctree-l1"><a class="reference internal" href="kernel_coverage.html">Kernel code coverage</a></li>
 </ul>
 <p aria-level="2" class="caption" role="heading"><span class="caption-text">Reference</span></p>
@@ -534,6 +535,7 @@
 </pre></div>
 </div>
 <p>Any permutation is supported, up to Quadrants’ <code class="docutils literal notranslate"><span class="pre">quadrants_max_num_indices</span></code> (currently 12). <code class="docutils literal notranslate"><span class="pre">layout=None</span></code> and the identity permutation (<code class="docutils literal notranslate"><span class="pre">(0,</span> <span class="pre">1,</span> <span class="pre">...,</span> <span class="pre">N-1)</span></code>) are equivalent and forward no permutation to the underlying allocator.</p>
+<p>For best performance, pair <code class="docutils literal notranslate"><span class="pre">qd.tensor(...,</span> <span class="pre">layout=...)</span></code> with a matching iteration order via <code class="docutils literal notranslate"><span class="pre">qd.ndrange(...,</span> <span class="pre">axes=...)</span></code> (see <a class="reference internal" href="parallelization.html#controlling-iteration-order-with-axes"><span class="std std-ref"><code class="docutils literal notranslate"><span class="pre">parallelization</span></code></span></a>): the permutation has the same meaning in both APIs (canonical axis index at each successive nesting level, outermost first), and using the same value on both lines adjacent flat threads up with adjacent physical memory slots.</p>
 <p>Quadrants rejects mismatched / invalid layouts up front:</p>
 <div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">qd</span><span class="o">.</span><span class="n">tensor</span><span class="p">(</span><span class="n">qd</span><span class="o">.</span><span class="n">f32</span><span class="p">,</span> <span class="n">shape</span><span class="o">=</span><span class="p">(</span><span class="mi">4</span><span class="p">,</span> <span class="mi">5</span><span class="p">),</span> <span class="n">layout</span><span class="o">=</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="mi">1</span><span class="p">,</span> <span class="mi">2</span><span class="p">))</span>   <span class="c1"># ValueError: wrong length</span>
 <span class="n">qd</span><span class="o">.</span><span class="n">tensor</span><span class="p">(</span><span class="n">qd</span><span class="o">.</span><span class="n">f32</span><span class="p">,</span> <span class="n">shape</span><span class="o">=</span><span class="p">(</span><span class="mi">4</span><span class="p">,</span> <span class="mi">5</span><span class="p">),</span> <span class="n">layout</span><span class="o">=</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="mi">0</span><span class="p">))</span>      <span class="c1"># ValueError: not a permutation</span>

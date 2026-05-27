@@ -21,7 +21,7 @@ matrix_vector_per_thread
 linalg_per_thread
 tensor
 compound_types
-register_array
+unpacked_array
 buffer_view
 static
 sub_functions
@@ -83,6 +83,7 @@ init_options
 :maxdepth: 1
 :titlesonly:
 
+unit_testing
 kernel_coverage
 ```
 

@@ -751,7 +751,7 @@
 </li>
       <li><a href="autoapi/quadrants/lang/ops/index.html#quadrants.lang.ops.cos">cos() (in module quadrants.lang.ops)</a>
 </li>
-      <li><a href="autoapi/quadrants/lang/register_array/index.html#quadrants.lang.register_array.RegisterArray.count">count (quadrants.lang.register_array.RegisterArray attribute)</a>
+      <li><a href="autoapi/quadrants/lang/unpacked_array/index.html#quadrants.lang.unpacked_array.UnpackedArray.count">count (quadrants.lang.unpacked_array.UnpackedArray attribute)</a>
 </li>
       <li><a href="autoapi/quadrants/lang/kernel/index.html#quadrants.lang.kernel.Kernel.counter">counter (quadrants.lang.kernel.Kernel attribute)</a>
 </li>
@@ -878,9 +878,9 @@
 </li>
         <li><a href="autoapi/quadrants/lang/matrix/index.html#quadrants.lang.matrix.VectorNdarray.dtype">(quadrants.lang.matrix.VectorNdarray attribute)</a>
 </li>
-        <li><a href="autoapi/quadrants/lang/register_array/index.html#quadrants.lang.register_array.RegisterArray.dtype">(quadrants.lang.register_array.RegisterArray attribute)</a>
-</li>
         <li><a href="autoapi/quadrants/lang/simt/block/index.html#quadrants.lang.simt.block.SharedArray.dtype">(quadrants.lang.simt.block.SharedArray attribute)</a>
+</li>
+        <li><a href="autoapi/quadrants/lang/unpacked_array/index.html#quadrants.lang.unpacked_array.UnpackedArray.dtype">(quadrants.lang.unpacked_array.UnpackedArray attribute)</a>
 </li>
         <li><a href="autoapi/quadrants/linalg/sparse_cg/index.html#quadrants.linalg.sparse_cg.SparseCG.dtype">(quadrants.linalg.sparse_cg.SparseCG attribute)</a>
 </li>
@@ -1721,8 +1721,6 @@
 </li>
         <li><a href="autoapi/quadrants/lang/ops/index.html#module-quadrants.lang.ops">quadrants.lang.ops</a>
 </li>
-        <li><a href="autoapi/quadrants/lang/register_array/index.html#module-quadrants.lang.register_array">quadrants.lang.register_array</a>
-</li>
         <li><a href="autoapi/quadrants/lang/runtime_ops/index.html#module-quadrants.lang.runtime_ops">quadrants.lang.runtime_ops</a>
 </li>
         <li><a href="autoapi/quadrants/lang/shell/index.html#module-quadrants.lang.shell">quadrants.lang.shell</a>
@@ -1748,6 +1746,8 @@
         <li><a href="autoapi/quadrants/lang/stream/index.html#module-quadrants.lang.stream">quadrants.lang.stream</a>
 </li>
         <li><a href="autoapi/quadrants/lang/struct/index.html#module-quadrants.lang.struct">quadrants.lang.struct</a>
+</li>
+        <li><a href="autoapi/quadrants/lang/unpacked_array/index.html#module-quadrants.lang.unpacked_array">quadrants.lang.unpacked_array</a>
 </li>
         <li><a href="autoapi/quadrants/lang/util/index.html#module-quadrants.lang.util">quadrants.lang.util</a>
 </li>
@@ -2293,13 +2293,6 @@
 </li>
       </ul></li>
       <li>
-    quadrants.lang.register_array
-
-      <ul>
-        <li><a href="autoapi/quadrants/lang/register_array/index.html#module-quadrants.lang.register_array">module</a>
-</li>
-      </ul></li>
-      <li>
     quadrants.lang.runtime_ops
 
       <ul>
@@ -2327,8 +2320,6 @@
         <li><a href="autoapi/quadrants/lang/simt/block/index.html#module-quadrants.lang.simt.block">module</a>
 </li>
       </ul></li>
-  </ul></td>
-  <td style="width: 33%; vertical-align: top;"><ul>
       <li>
     quadrants.lang.simt.grid
 
@@ -2336,6 +2327,8 @@
         <li><a href="autoapi/quadrants/lang/simt/grid/index.html#module-quadrants.lang.simt.grid">module</a>
 </li>
       </ul></li>
+  </ul></td>
+  <td style="width: 33%; vertical-align: top;"><ul>
       <li>
     quadrants.lang.simt.reductions
 
@@ -2390,6 +2383,13 @@
 
       <ul>
         <li><a href="autoapi/quadrants/lang/struct/index.html#module-quadrants.lang.struct">module</a>
+</li>
+      </ul></li>
+      <li>
+    quadrants.lang.unpacked_array
+
+      <ul>
+        <li><a href="autoapi/quadrants/lang/unpacked_array/index.html#module-quadrants.lang.unpacked_array">module</a>
 </li>
       </ul></li>
       <li>
@@ -2697,10 +2697,6 @@
       <li><a href="autoapi/quadrants/math/mathimpl/index.html#quadrants.math.mathimpl.reflect">reflect() (in module quadrants.math.mathimpl)</a>
 </li>
       <li><a href="autoapi/quadrants/math/mathimpl/index.html#quadrants.math.mathimpl.refract">refract() (in module quadrants.math.mathimpl)</a>
-</li>
-      <li><a href="autoapi/quadrants/lang/register_array/index.html#quadrants.lang.register_array.register_array">register_array() (in module quadrants.lang.register_array)</a>
-</li>
-      <li><a href="autoapi/quadrants/lang/register_array/index.html#quadrants.lang.register_array.RegisterArray">RegisterArray (class in quadrants.lang.register_array)</a>
 </li>
       <li><a href="autoapi/quadrants/lang/mesh/index.html#quadrants.lang.mesh.MeshInstance.relation_set">relation_set (quadrants.lang.mesh.MeshInstance attribute)</a>
 </li>
@@ -3142,15 +3138,19 @@
 </li>
       <li><a href="autoapi/quadrants/types/primitive_types/index.html#quadrants.types.primitive_types.uint32">uint32 (in module quadrants.types.primitive_types)</a>
 </li>
-  </ul></td>
-  <td style="width: 33%; vertical-align: top;"><ul>
       <li><a href="autoapi/quadrants/types/primitive_types/index.html#quadrants.types.primitive_types.uint64">uint64 (in module quadrants.types.primitive_types)</a>
 </li>
+  </ul></td>
+  <td style="width: 33%; vertical-align: top;"><ul>
       <li><a href="autoapi/quadrants/types/primitive_types/index.html#quadrants.types.primitive_types.uint8">uint8 (in module quadrants.types.primitive_types)</a>
 </li>
       <li><a href="autoapi/quadrants/lang/simt/warp/index.html#quadrants.lang.simt.warp.unique">unique() (in module quadrants.lang.simt.warp)</a>
 </li>
       <li><a href="autoapi/quadrants/lang/matrix/index.html#quadrants.lang.matrix.Matrix.unit">unit() (quadrants.lang.matrix.Matrix static method)</a>
+</li>
+      <li><a href="autoapi/quadrants/lang/unpacked_array/index.html#quadrants.lang.unpacked_array.unpacked_array">unpacked_array() (in module quadrants.lang.unpacked_array)</a>
+</li>
+      <li><a href="autoapi/quadrants/lang/unpacked_array/index.html#quadrants.lang.unpacked_array.UnpackedArray">UnpackedArray (class in quadrants.lang.unpacked_array)</a>
 </li>
       <li><a href="autoapi/quadrants/lang/kernel/index.html#quadrants.lang.kernel.Kernel.use_graph">use_graph (quadrants.lang.kernel.Kernel attribute)</a>
 </li>

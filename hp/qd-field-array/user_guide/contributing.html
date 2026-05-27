@@ -306,7 +306,7 @@
 <li class="toctree-l1"><a class="reference internal" href="linalg_per_thread.html">Per-thread linear algebra</a></li>
 <li class="toctree-l1"><a class="reference internal" href="tensor.html">Tensors</a></li>
 <li class="toctree-l1"><a class="reference internal" href="compound_types.html">Compound types</a></li>
-<li class="toctree-l1"><a class="reference internal" href="register_array.html">Register array</a></li>
+<li class="toctree-l1"><a class="reference internal" href="unpacked_array.html">Unpacked array</a></li>
 <li class="toctree-l1"><a class="reference internal" href="buffer_view.html">BufferView</a></li>
 <li class="toctree-l1"><a class="reference internal" href="static.html">qd.static</a></li>
 <li class="toctree-l1"><a class="reference internal" href="sub_functions.html">Sub-functions</a></li>
@@ -344,6 +344,7 @@
 </ul>
 <p aria-level="2" class="caption" role="heading"><span class="caption-text">Testing</span></p>
 <ul class="nav bd-sidenav">
+<li class="toctree-l1"><a class="reference internal" href="unit_testing.html">Unit testing</a></li>
 <li class="toctree-l1"><a class="reference internal" href="kernel_coverage.html">Kernel code coverage</a></li>
 </ul>
 <p aria-level="2" class="caption" role="heading"><span class="caption-text">Reference</span></p>
@@ -426,7 +427,7 @@
 <section id="good-practice-reminder">
 <h2>Good practice reminder<a class="headerlink" href="#good-practice-reminder" title="Link to this heading">#</a></h2>
 <ul class="simple">
-<li><p><em>testing</em>: Any new features or modified code should be tested. You have to run the test suite using <code class="docutils literal notranslate"><span class="pre">python</span> <span class="pre">tests/run_tests.py</span></code> which sets up the right test environment for <code class="docutils literal notranslate"><span class="pre">pytest</span></code>. CLI arguments are forwarded to <code class="docutils literal notranslate"><span class="pre">pytest</span></code>. Do not use <code class="docutils literal notranslate"><span class="pre">pytest</span></code> directly as it behaves differently. To see a per-file timing breakdown (useful for identifying slow test files), set <code class="docutils literal notranslate"><span class="pre">QD_FILE_TIMING=1</span></code> — e.g. <code class="docutils literal notranslate"><span class="pre">QD_FILE_TIMING=1</span> <span class="pre">python</span> <span class="pre">tests/run_tests.py</span></code>. This is enabled by default in the Mac CI job and the results appear in the GitHub Actions job summary.</p></li>
+<li><p><em>testing</em>: Any new features or modified code should be tested. see <a class="reference internal" href="unit_testing.html"><span class="std std-doc">unit_testing.md</span></a></p></li>
 <li><p><em>format/linter</em>: Before pushing any commits, ensure you set up <code class="docutils literal notranslate"><span class="pre">pre-commit</span></code> and run it using <code class="docutils literal notranslate"><span class="pre">pre-commit</span> <span class="pre">run</span> <span class="pre">-a</span></code></p></li>
 <li><p>No need to force push to keep a clean history as the merging is eventually done by squashing commits.</p></li>
 </ul>
