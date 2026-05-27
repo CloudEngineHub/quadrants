@@ -90,6 +90,14 @@ def bitonic_sort_kv_tiled(key, value, log2_size: template()):
     lowering`) is inherited transparently.
     """
     lane = invocation_id()
+    # ``tile_mask`` is the low ``log2_size`` bits, i.e. the lane-id-within-tile mask.  We AND ``k_mask`` with it when
+    # reading the outer-stage direction bit so the sort treats every tile as an independent ascending sort: without
+    # this, tile 1 (lanes ``[tile_size, 2*tile_size)``) would land "descending" at the final ``k_log2 == log2_size``
+    # stage, because the unmasked ``(lane & tile_size) == 0`` test flips between adjacent tiles.  When
+    # ``log2_size == log2_group_size()`` the mask is a no-op (``k_mask <= tile_size`` always, and ``k_mask < tile_size``
+    # leaves the bit untouched; ``k_mask == tile_size`` zeroes it but every lane in the subgroup already had that bit
+    # clear), so the full-subgroup path lowers to the same IR as without the AND.
+    tile_mask = impl.static((1 << log2_size) - 1)
     for k_log2 in impl.static(range(1, log2_size + 1)):
         k_mask = impl.static(1 << k_log2)
         for j_log2 in impl.static(range(k_log2 - 1, -1, -1)):
@@ -98,7 +106,7 @@ def bitonic_sort_kv_tiled(key, value, log2_size: template()):
             their_key = shuffle(key, partner)
             their_value = shuffle(value, partner)
             i_am_low = (lane & j_mask) == 0
-            ascending = (lane & k_mask) == 0
+            ascending = (lane & k_mask & tile_mask) == 0
             take_min = i_am_low == ascending
             their_lt_mine = (their_key < key) or (their_key == key and their_value < value)
             if take_min:
