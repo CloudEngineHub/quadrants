@@ -17,8 +17,8 @@ from quadrants.lang.field import Field, ScalarField, SNodeHostAccess
 from quadrants.lang.matrix import Matrix, MatrixType
 from quadrants.lang.register_array import (
     RegisterArray,
-    _RegisterArrayRef,
     _expand_register_array_naming,
+    _RegisterArrayRef,
     register_array,
 )
 from quadrants.lang.util import (

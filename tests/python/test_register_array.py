@@ -113,6 +113,7 @@ def test_register_array_qd_static_loop_index():
 def _build_named_kernel():
     """Same as test_register_array_static_index_write_then_read but with 4 named ``r0..r3`` fields. Used for PTX byte-
     equality comparison against the ``register_array`` form."""
+
     @qd.dataclass
     class TileNamed:
         r0: qd.f32

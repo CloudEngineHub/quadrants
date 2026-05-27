@@ -113,17 +113,13 @@ class _RegisterArrayRef:
         i = int(index)
         if i < 0 or i >= self._qd_count:
             raise QuadrantsSyntaxError(
-                f"register_array index out of bounds: {self._qd_group_name}[{i}] "
-                f"(count={self._qd_count})"
+                f"register_array index out of bounds: {self._qd_group_name}[{i}] " f"(count={self._qd_count})"
             )
         field_name = self._qd_naming_fn(self._qd_group_name, i)
         return getattr(self._qd_struct, field_name)
 
     def __repr__(self) -> str:  # pragma: no cover - debug only
-        return (
-            f"<register_array_ref group={self._qd_group_name!r} count={self._qd_count} "
-            f"dtype={self._qd_dtype}>"
-        )
+        return f"<register_array_ref group={self._qd_group_name!r} count={self._qd_count} " f"dtype={self._qd_dtype}>"
 
 
 __all__ = ["RegisterArray", "register_array"]
