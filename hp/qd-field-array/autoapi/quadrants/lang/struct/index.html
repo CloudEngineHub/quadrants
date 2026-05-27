@@ -372,9 +372,6 @@
 <tr class="row-even"><td><p><a class="reference internal" href="#quadrants.lang.struct.StructField" title="quadrants.lang.struct.StructField"><code class="xref py py-obj docutils literal notranslate"><span class="pre">StructField</span></code></a></p></td>
 <td><p>Quadrants struct field with SNode implementation.</p></td>
 </tr>
-<tr class="row-odd"><td><p><a class="reference internal" href="#quadrants.lang.struct.FieldArray" title="quadrants.lang.struct.FieldArray"><code class="xref py py-obj docutils literal notranslate"><span class="pre">FieldArray</span></code></a></p></td>
-<td><p>Type wrapper for a group of N scalar fields exposed via indexed syntax on a <code class="docutils literal notranslate"><span class="pre">&#64;qd.dataclass</span></code>.</p></td>
-</tr>
 </tbody>
 </table>
 </div>
@@ -383,10 +380,7 @@
 <h2>Functions<a class="headerlink" href="#functions" title="Link to this heading">#</a></h2>
 <div class="pst-scrollable-table-container"><table class="autosummary longtable table autosummary">
 <tbody>
-<tr class="row-odd"><td><p><a class="reference internal" href="#quadrants.lang.struct.field_array" title="quadrants.lang.struct.field_array"><code class="xref py py-obj docutils literal notranslate"><span class="pre">field_array</span></code></a>(count, dtype)</p></td>
-<td><p>Declare a group of <code class="docutils literal notranslate"><span class="pre">count</span></code> scalar fields of <code class="docutils literal notranslate"><span class="pre">dtype</span></code> on a <code class="docutils literal notranslate"><span class="pre">&#64;qd.dataclass</span></code>.</p></td>
-</tr>
-<tr class="row-even"><td><p><a class="reference internal" href="#quadrants.lang.struct.dataclass" title="quadrants.lang.struct.dataclass"><code class="xref py py-obj docutils literal notranslate"><span class="pre">dataclass</span></code></a>(cls)</p></td>
+<tr class="row-odd"><td><p><a class="reference internal" href="#quadrants.lang.struct.dataclass" title="quadrants.lang.struct.dataclass"><code class="xref py py-obj docutils literal notranslate"><span class="pre">dataclass</span></code></a>(cls)</p></td>
 <td><p>Converts a class with field annotations and methods into a quadrants struct type.</p></td>
 </tr>
 </tbody>
@@ -693,51 +687,6 @@ between corresponding items can be performed.</p>
 
 </dd></dl>
 
-<dl class="py class">
-<dt class="sig sig-object py" id="quadrants.lang.struct.FieldArray">
-<em class="property"><span class="pre">class</span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">quadrants.lang.struct.</span></span><span class="sig-name descname"><span class="pre">FieldArray</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">count</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">dtype</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../../../../_modules/quadrants/lang/struct.html#FieldArray"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#quadrants.lang.struct.FieldArray" title="Link to this definition">#</a></dt>
-<dd><p>Type wrapper for a group of N scalar fields exposed via indexed syntax on a <code class="docutils literal notranslate"><span class="pre">&#64;qd.dataclass</span></code>.</p>
-<p>See <a class="reference internal" href="#quadrants.lang.struct.field_array" title="quadrants.lang.struct.field_array"><code class="xref py py-func docutils literal notranslate"><span class="pre">field_array()</span></code></a>. <code class="docutils literal notranslate"><span class="pre">field_array(N,</span> <span class="pre">dtype)</span></code> annotations on a dataclass cause the
-StructType to be built with N synthetic scalar fields named <code class="docutils literal notranslate"><span class="pre">_{group}0</span></code> .. <code class="docutils literal notranslate"><span class="pre">_{group}{N-1}</span></code>,
-while the AST transformer rewrites <code class="docutils literal notranslate"><span class="pre">obj.{group}[i]</span></code> to a direct reference to
-<code class="docutils literal notranslate"><span class="pre">obj._{group}{i}</span></code> for python-int / qd.static-resolved indices. PTX/LLVM IR is byte-identical
-to the hand-rolled named-field equivalent.</p>
-<dl class="py attribute">
-<dt class="sig sig-object py" id="quadrants.lang.struct.FieldArray.count">
-<span class="sig-name descname"><span class="pre">count</span></span><a class="reference internal" href="../../../../_modules/quadrants/lang/struct.html#FieldArray.count"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#quadrants.lang.struct.FieldArray.count" title="Link to this definition">#</a></dt>
-<dd></dd></dl>
-
-<dl class="py attribute">
-<dt class="sig sig-object py" id="quadrants.lang.struct.FieldArray.dtype">
-<span class="sig-name descname"><span class="pre">dtype</span></span><a class="reference internal" href="../../../../_modules/quadrants/lang/struct.html#FieldArray.dtype"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#quadrants.lang.struct.FieldArray.dtype" title="Link to this definition">#</a></dt>
-<dd></dd></dl>
-
-</dd></dl>
-
-<dl class="py function">
-<dt class="sig sig-object py" id="quadrants.lang.struct.field_array">
-<span class="sig-prename descclassname"><span class="pre">quadrants.lang.struct.</span></span><span class="sig-name descname"><span class="pre">field_array</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">count</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">dtype</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../../../../_modules/quadrants/lang/struct.html#field_array"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#quadrants.lang.struct.field_array" title="Link to this definition">#</a></dt>
-<dd><p>Declare a group of <code class="docutils literal notranslate"><span class="pre">count</span></code> scalar fields of <code class="docutils literal notranslate"><span class="pre">dtype</span></code> on a <code class="docutils literal notranslate"><span class="pre">&#64;qd.dataclass</span></code>.</p>
-<p>Example:</p>
-<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="nd">@qd</span><span class="o">.</span><span class="n">dataclass</span>
-<span class="k">class</span><span class="w"> </span><span class="nc">Tile</span><span class="p">:</span>
-    <span class="n">r</span><span class="p">:</span> <span class="n">qd</span><span class="o">.</span><span class="n">field_array</span><span class="p">(</span><span class="mi">32</span><span class="p">,</span> <span class="n">qd</span><span class="o">.</span><span class="n">f32</span><span class="p">)</span>   <span class="c1"># 32 scalar fields exposed as t.r[0..31]</span>
-
-<span class="n">t</span> <span class="o">=</span> <span class="n">Tile</span><span class="p">()</span>
-<span class="n">t</span><span class="o">.</span><span class="n">r</span><span class="p">[</span><span class="mi">5</span><span class="p">]</span> <span class="o">=</span> <span class="mf">1.0</span>       <span class="c1"># lowers to direct write of synthetic field _r5</span>
-<span class="n">v</span> <span class="o">=</span> <span class="n">t</span><span class="o">.</span><span class="n">r</span><span class="p">[</span><span class="mi">5</span><span class="p">]</span>         <span class="c1"># same as v = t._r5</span>
-<span class="k">for</span> <span class="n">k</span> <span class="ow">in</span> <span class="n">qd</span><span class="o">.</span><span class="n">static</span><span class="p">(</span><span class="nb">range</span><span class="p">(</span><span class="mi">32</span><span class="p">)):</span>
-    <span class="n">t</span><span class="o">.</span><span class="n">r</span><span class="p">[</span><span class="n">k</span><span class="p">]</span> <span class="o">=</span> <span class="mf">0.0</span>   <span class="c1"># each iter is one AST node, not a 32-way cascade</span>
-</pre></div>
-</div>
-<p>For python-int / <code class="docutils literal notranslate"><span class="pre">qd.static</span></code>-resolved indices, <code class="docutils literal notranslate"><span class="pre">t.r[k]</span></code> is rewritten by the AST
-transformer to the named-field access <code class="docutils literal notranslate"><span class="pre">t._r{k}</span></code>, producing identical LLVM IR / PTX to
-a struct declared with 32 individually-named scalar fields. This avoids the SROA-bailout
-that occurs with <code class="docutils literal notranslate"><span class="pre">qd.types.vector(N,</span> <span class="pre">dtype)</span></code> struct fields on runtime-indexed access.</p>
-<p>Runtime-int indexing is currently unsupported; use an explicit cascade helper for that
-case (same pattern as today’s <code class="docutils literal notranslate"><span class="pre">_get_col</span></code> in <code class="docutils literal notranslate"><span class="pre">_tile16.py</span></code>).</p>
-</dd></dl>
-
 <dl class="py function">
 <dt class="sig sig-object py" id="quadrants.lang.struct.dataclass">
 <span class="sig-prename descclassname"><span class="pre">quadrants.lang.struct.</span></span><span class="sig-name descname"><span class="pre">dataclass</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">cls</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../../../../_modules/quadrants/lang/struct.html#dataclass"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#quadrants.lang.struct.dataclass" title="Link to this definition">#</a></dt>
@@ -858,12 +807,6 @@ Functions in the class can be run on the struct instance.</p>
 <li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#quadrants.lang.struct.StructField.to_torch"><code class="docutils literal notranslate"><span class="pre">StructField.to_torch()</span></code></a></li>
 </ul>
 </li>
-<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#quadrants.lang.struct.FieldArray"><code class="docutils literal notranslate"><span class="pre">FieldArray</span></code></a><ul class="nav section-nav flex-column">
-<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#quadrants.lang.struct.FieldArray.count"><code class="docutils literal notranslate"><span class="pre">FieldArray.count</span></code></a></li>
-<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#quadrants.lang.struct.FieldArray.dtype"><code class="docutils literal notranslate"><span class="pre">FieldArray.dtype</span></code></a></li>
-</ul>
-</li>
-<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#quadrants.lang.struct.field_array"><code class="docutils literal notranslate"><span class="pre">field_array()</span></code></a></li>
 <li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#quadrants.lang.struct.dataclass"><code class="docutils literal notranslate"><span class="pre">dataclass()</span></code></a></li>
 </ul>
 </li>

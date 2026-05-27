@@ -11,7 +11,6 @@ Classes
 
    quadrants.lang.struct.Struct
    quadrants.lang.struct.StructField
-   quadrants.lang.struct.FieldArray
 
 
 Functions
@@ -19,7 +18,6 @@ Functions
 
 .. autoapisummary::
 
-   quadrants.lang.struct.field_array
    quadrants.lang.struct.dataclass
 
 
@@ -281,48 +279,6 @@ Module Contents
                     PyTorch tensor.
       :rtype: Dict[str, Union[torch.Tensor, Dict]]
 
-
-
-.. py:class:: FieldArray(count, dtype)
-
-   Type wrapper for a group of N scalar fields exposed via indexed syntax on a ``@qd.dataclass``.
-
-   See :func:`field_array`. ``field_array(N, dtype)`` annotations on a dataclass cause the
-   StructType to be built with N synthetic scalar fields named ``_{group}0`` .. ``_{group}{N-1}``,
-   while the AST transformer rewrites ``obj.{group}[i]`` to a direct reference to
-   ``obj._{group}{i}`` for python-int / qd.static-resolved indices. PTX/LLVM IR is byte-identical
-   to the hand-rolled named-field equivalent.
-
-
-   .. py:attribute:: count
-
-
-   .. py:attribute:: dtype
-
-
-.. py:function:: field_array(count, dtype)
-
-   Declare a group of ``count`` scalar fields of ``dtype`` on a ``@qd.dataclass``.
-
-   Example::
-
-       @qd.dataclass
-       class Tile:
-           r: qd.field_array(32, qd.f32)   # 32 scalar fields exposed as t.r[0..31]
-
-       t = Tile()
-       t.r[5] = 1.0       # lowers to direct write of synthetic field _r5
-       v = t.r[5]         # same as v = t._r5
-       for k in qd.static(range(32)):
-           t.r[k] = 0.0   # each iter is one AST node, not a 32-way cascade
-
-   For python-int / ``qd.static``-resolved indices, ``t.r[k]`` is rewritten by the AST
-   transformer to the named-field access ``t._r{k}``, producing identical LLVM IR / PTX to
-   a struct declared with 32 individually-named scalar fields. This avoids the SROA-bailout
-   that occurs with ``qd.types.vector(N, dtype)`` struct fields on runtime-indexed access.
-
-   Runtime-int indexing is currently unsupported; use an explicit cascade helper for that
-   case (same pattern as today's ``_get_col`` in ``_tile16.py``).
 
 
 .. py:function:: dataclass(cls)

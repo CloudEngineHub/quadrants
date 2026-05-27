@@ -8,7 +8,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="viewport" content="width=device-width, initial-scale=1" />
 
-    <title>quadrants.lang.runtime_ops &#8212; Quadrants 1.0.1 documentation</title>
+    <title>quadrants.lang.register_array &#8212; Quadrants 1.0.1 documentation</title>
   
   
   
@@ -55,12 +55,12 @@
     <script>var togglebuttonSelector = '.toggle, .admonition.dropdown';</script>
     <script src="../../../../_static/design-tabs.js?v=f930bc37"></script>
     <script>var togglebuttonSelector = '.toggle, .admonition.dropdown';</script>
-    <script>DOCUMENTATION_OPTIONS.pagename = 'autoapi/quadrants/lang/runtime_ops/index';</script>
+    <script>DOCUMENTATION_OPTIONS.pagename = 'autoapi/quadrants/lang/register_array/index';</script>
     <script>DOCUMENTATION_OPTIONS.search_as_you_type = false;</script>
     <link rel="index" title="Index" href="../../../../genindex.html" />
     <link rel="search" title="Search" href="../../../../search.html" />
-    <link rel="next" title="quadrants.lang.shell" href="../shell/index.html" />
-    <link rel="prev" title="quadrants.lang.register_array" href="../register_array/index.html" />
+    <link rel="next" title="quadrants.lang.runtime_ops" href="../runtime_ops/index.html" />
+    <link rel="prev" title="quadrants.lang.ops" href="../ops/index.html" />
   <meta name="viewport" content="width=device-width, initial-scale=1"/>
   <meta name="docsearch:language" content="en"/>
   <meta name="docsearch:version" content="1.0.1" />
@@ -343,7 +343,7 @@
     
     <li class="breadcrumb-item"><a href="../index.html" class="nav-link">quadrants.lang</a></li>
     
-    <li class="breadcrumb-item active" aria-current="page"><span class="ellipsis">quadrants.lang.runtime_ops</span></li>
+    <li class="breadcrumb-item active" aria-current="page"><span class="ellipsis">quadrants.lang.register_array</span></li>
   </ul>
 </nav>
 </div>
@@ -360,14 +360,42 @@
 <div id="searchbox"></div>
                 <article class="bd-article">
                   
-  <section id="module-quadrants.lang.runtime_ops">
-<span id="quadrants-lang-runtime-ops"></span><h1>quadrants.lang.runtime_ops<a class="headerlink" href="#module-quadrants.lang.runtime_ops" title="Link to this heading">#</a></h1>
+  <section id="module-quadrants.lang.register_array">
+<span id="quadrants-lang-register-array"></span><h1>quadrants.lang.register_array<a class="headerlink" href="#module-quadrants.lang.register_array" title="Link to this heading">#</a></h1>
+<p><code class="docutils literal notranslate"><span class="pre">qd.register_array</span></code> – indexed groups of independently-allocated scalar fields on <code class="docutils literal notranslate"><span class="pre">&#64;qd.dataclass</span></code>.</p>
+<p>A <code class="docutils literal notranslate"><span class="pre">register_array(N,</span> <span class="pre">dtype)</span></code> annotation expands at struct-definition time into N individually-named synthetic scalar
+members (<code class="docutils literal notranslate"><span class="pre">_{group}0</span></code> .. <code class="docutils literal notranslate"><span class="pre">_{group}{N-1}</span></code>). The AST transformer rewrites <code class="docutils literal notranslate"><span class="pre">obj.{group}[i]</span></code> into a direct reference to
+<code class="docutils literal notranslate"><span class="pre">obj._{group}{i}</span></code> for python-int / <code class="docutils literal notranslate"><span class="pre">qd.static</span></code>-resolved indices, so generated LLVM IR / PTX is byte-identical to a
+hand-rolled named-field struct.</p>
+<p>The motivation is register residency under pressure. A packed <code class="docutils literal notranslate"><span class="pre">qd.types.vector(N,</span> <span class="pre">dtype)</span></code> collapses into one
+<code class="docutils literal notranslate"><span class="pre">alloca</span></code> that LLVM SROA cannot decompose once register pressure crosses a threshold (e.g. two concurrent tiles in a
+Cholesky + TRSM kernel), causing spills to local memory. <code class="docutils literal notranslate"><span class="pre">register_array</span></code> pre-decomposes the storage so SROA +
+<code class="docutils literal notranslate"><span class="pre">mem2reg</span></code> can register-promote each slot independently, while keeping the ergonomic indexed-access syntax at the
+source level.</p>
+<p>Public:
+- <code class="docutils literal notranslate"><span class="pre">RegisterArray</span></code>         - type wrapper used as the annotation value
+- <code class="docutils literal notranslate"><span class="pre">register_array</span></code>        - factory: <code class="docutils literal notranslate"><span class="pre">r:</span> <span class="pre">qd.register_array(N,</span> <span class="pre">dtype)</span></code></p>
+<p>Internal (used by <code class="docutils literal notranslate"><span class="pre">StructType</span></code> and the AST transformer):
+- <code class="docutils literal notranslate"><span class="pre">_expand_register_array_naming(group,</span> <span class="pre">i)</span></code> - synthetic-field naming convention
+- <code class="docutils literal notranslate"><span class="pre">_RegisterArrayRef</span></code>                       - transient proxy yielded by attribute access</p>
+<p>This module has no dependency on <code class="docutils literal notranslate"><span class="pre">struct.py</span></code>; <code class="docutils literal notranslate"><span class="pre">struct.py</span></code> imports from here.</p>
+<section id="classes">
+<h2>Classes<a class="headerlink" href="#classes" title="Link to this heading">#</a></h2>
+<div class="pst-scrollable-table-container"><table class="autosummary longtable table autosummary">
+<tbody>
+<tr class="row-odd"><td><p><a class="reference internal" href="#quadrants.lang.register_array.RegisterArray" title="quadrants.lang.register_array.RegisterArray"><code class="xref py py-obj docutils literal notranslate"><span class="pre">RegisterArray</span></code></a></p></td>
+<td><p>Type wrapper for a group of N scalar fields exposed via indexed syntax on a <code class="docutils literal notranslate"><span class="pre">&#64;qd.dataclass</span></code>.</p></td>
+</tr>
+</tbody>
+</table>
+</div>
+</section>
 <section id="functions">
 <h2>Functions<a class="headerlink" href="#functions" title="Link to this heading">#</a></h2>
 <div class="pst-scrollable-table-container"><table class="autosummary longtable table autosummary">
 <tbody>
-<tr class="row-odd"><td><p><a class="reference internal" href="#quadrants.lang.runtime_ops.sync" title="quadrants.lang.runtime_ops.sync"><code class="xref py py-obj docutils literal notranslate"><span class="pre">sync</span></code></a>()</p></td>
-<td><p>Synchronizes the default stream.</p></td>
+<tr class="row-odd"><td><p><a class="reference internal" href="#quadrants.lang.register_array.register_array" title="quadrants.lang.register_array.register_array"><code class="xref py py-obj docutils literal notranslate"><span class="pre">register_array</span></code></a>(count, dtype)</p></td>
+<td><p>Declare a group of <code class="docutils literal notranslate"><span class="pre">count</span></code> independently-allocated fields of <code class="docutils literal notranslate"><span class="pre">dtype</span></code> on a <code class="docutils literal notranslate"><span class="pre">&#64;qd.dataclass</span></code>.</p></td>
 </tr>
 </tbody>
 </table>
@@ -375,12 +403,50 @@
 </section>
 <section id="module-contents">
 <h2>Module Contents<a class="headerlink" href="#module-contents" title="Link to this heading">#</a></h2>
+<dl class="py class">
+<dt class="sig sig-object py" id="quadrants.lang.register_array.RegisterArray">
+<em class="property"><span class="pre">class</span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">quadrants.lang.register_array.</span></span><span class="sig-name descname"><span class="pre">RegisterArray</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">count</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">dtype</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../../../../_modules/quadrants/lang/register_array.html#RegisterArray"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#quadrants.lang.register_array.RegisterArray" title="Link to this definition">#</a></dt>
+<dd><p>Type wrapper for a group of N scalar fields exposed via indexed syntax on a <code class="docutils literal notranslate"><span class="pre">&#64;qd.dataclass</span></code>.</p>
+<p>See <a class="reference internal" href="#quadrants.lang.register_array.register_array" title="quadrants.lang.register_array.register_array"><code class="xref py py-func docutils literal notranslate"><span class="pre">register_array()</span></code></a> for the user-facing constructor and the motivation writeup. Holding only <code class="docutils literal notranslate"><span class="pre">count</span></code> and
+<code class="docutils literal notranslate"><span class="pre">dtype</span></code>, this object is consumed at struct-definition time by <code class="docutils literal notranslate"><span class="pre">StructType.__init__</span></code> to lay out the N synthetic
+scalar fields.</p>
+<dl class="py attribute">
+<dt class="sig sig-object py" id="quadrants.lang.register_array.RegisterArray.count">
+<span class="sig-name descname"><span class="pre">count</span></span><a class="reference internal" href="../../../../_modules/quadrants/lang/register_array.html#RegisterArray.count"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#quadrants.lang.register_array.RegisterArray.count" title="Link to this definition">#</a></dt>
+<dd></dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="quadrants.lang.register_array.RegisterArray.dtype">
+<span class="sig-name descname"><span class="pre">dtype</span></span><a class="reference internal" href="../../../../_modules/quadrants/lang/register_array.html#RegisterArray.dtype"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#quadrants.lang.register_array.RegisterArray.dtype" title="Link to this definition">#</a></dt>
+<dd></dd></dl>
+
+</dd></dl>
+
 <dl class="py function">
-<dt class="sig sig-object py" id="quadrants.lang.runtime_ops.sync">
-<span class="sig-prename descclassname"><span class="pre">quadrants.lang.runtime_ops.</span></span><span class="sig-name descname"><span class="pre">sync</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="../../../../_modules/quadrants/lang/runtime_ops.html#sync"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#quadrants.lang.runtime_ops.sync" title="Link to this definition">#</a></dt>
-<dd><p>Synchronizes the default stream.</p>
-<p>Blocks the calling thread until all work on the default GPU stream has completed.  Kernels launched on explicit
-streams created via <code class="xref py py-func docutils literal notranslate"><span class="pre">quadrants.create_stream()</span></code> are <strong>not</strong> waited on — call <code class="docutils literal notranslate"><span class="pre">stream.synchronize()</span></code> for those.</p>
+<dt class="sig sig-object py" id="quadrants.lang.register_array.register_array">
+<span class="sig-prename descclassname"><span class="pre">quadrants.lang.register_array.</span></span><span class="sig-name descname"><span class="pre">register_array</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">count</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">dtype</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../../../../_modules/quadrants/lang/register_array.html#register_array"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#quadrants.lang.register_array.register_array" title="Link to this definition">#</a></dt>
+<dd><p>Declare a group of <code class="docutils literal notranslate"><span class="pre">count</span></code> independently-allocated fields of <code class="docutils literal notranslate"><span class="pre">dtype</span></code> on a <code class="docutils literal notranslate"><span class="pre">&#64;qd.dataclass</span></code>.</p>
+<p>The annotation expands at struct-definition time into <code class="docutils literal notranslate"><span class="pre">count</span></code> individually-named scalar members (<code class="docutils literal notranslate"><span class="pre">_{group}0</span></code> ..
+<code class="docutils literal notranslate"><span class="pre">_{group}{count-1}</span></code>). Each member gets its own LLVM <code class="docutils literal notranslate"><span class="pre">alloca</span></code>, which lets SROA + <code class="docutils literal notranslate"><span class="pre">mem2reg</span></code> promote each slot
+into its own SSA value independently. The motivation is register residency under pressure:
+<code class="docutils literal notranslate"><span class="pre">qd.types.vector(N,</span> <span class="pre">dtype)</span></code> collapses into one packed <code class="docutils literal notranslate"><span class="pre">alloca</span></code> that the optimiser often spills as a unit when
+register pressure crosses a threshold; <code class="docutils literal notranslate"><span class="pre">register_array</span></code> decomposes the storage up-front so the compiler can keep
+individual slots in registers and only spill the ones it has to.</p>
+<p>Example:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="nd">@qd</span><span class="o">.</span><span class="n">dataclass</span>
+<span class="k">class</span><span class="w"> </span><span class="nc">Tile</span><span class="p">:</span>
+    <span class="n">r</span><span class="p">:</span> <span class="n">qd</span><span class="o">.</span><span class="n">register_array</span><span class="p">(</span><span class="mi">32</span><span class="p">,</span> <span class="n">qd</span><span class="o">.</span><span class="n">f32</span><span class="p">)</span>   <span class="c1"># 32 scalar fields exposed as t.r[0..31]</span>
+
+<span class="n">t</span> <span class="o">=</span> <span class="n">Tile</span><span class="p">()</span>
+<span class="n">t</span><span class="o">.</span><span class="n">r</span><span class="p">[</span><span class="mi">5</span><span class="p">]</span> <span class="o">=</span> <span class="mf">1.0</span>       <span class="c1"># lowers to direct write of synthetic field _r5</span>
+<span class="n">v</span> <span class="o">=</span> <span class="n">t</span><span class="o">.</span><span class="n">r</span><span class="p">[</span><span class="mi">5</span><span class="p">]</span>         <span class="c1"># same as v = t._r5</span>
+<span class="k">for</span> <span class="n">k</span> <span class="ow">in</span> <span class="n">qd</span><span class="o">.</span><span class="n">static</span><span class="p">(</span><span class="nb">range</span><span class="p">(</span><span class="mi">32</span><span class="p">)):</span>
+    <span class="n">t</span><span class="o">.</span><span class="n">r</span><span class="p">[</span><span class="n">k</span><span class="p">]</span> <span class="o">=</span> <span class="mf">0.0</span>   <span class="c1"># each iter is one AST node, not a 32-way cascade</span>
+</pre></div>
+</div>
+<p>For python-int / <code class="docutils literal notranslate"><span class="pre">qd.static</span></code>-resolved indices, <code class="docutils literal notranslate"><span class="pre">t.r[k]</span></code> is rewritten by the AST transformer to the named-field
+access <code class="docutils literal notranslate"><span class="pre">t._r{k}</span></code>, producing identical LLVM IR / PTX to a struct declared with N individually-named scalar fields.</p>
+<p>Runtime-int indexing is currently unsupported; use an explicit cascade helper for that case.</p>
 </dd></dl>
 
 </section>
@@ -397,20 +463,20 @@ streams created via <code class="xref py py-func docutils literal notranslate"><
                   
 <div class="prev-next-area">
     <a class="left-prev"
-       href="../register_array/index.html"
+       href="../ops/index.html"
        title="previous page">
       <i class="fa-solid fa-angle-left"></i>
       <div class="prev-next-info">
         <p class="prev-next-subtitle">previous</p>
-        <p class="prev-next-title">quadrants.lang.register_array</p>
+        <p class="prev-next-title">quadrants.lang.ops</p>
       </div>
     </a>
     <a class="right-next"
-       href="../shell/index.html"
+       href="../runtime_ops/index.html"
        title="next page">
       <div class="prev-next-info">
         <p class="prev-next-subtitle">next</p>
-        <p class="prev-next-title">quadrants.lang.shell</p>
+        <p class="prev-next-title">quadrants.lang.runtime_ops</p>
       </div>
       <i class="fa-solid fa-angle-right"></i>
     </a>
@@ -433,9 +499,15 @@ streams created via <code class="xref py py-func docutils literal notranslate"><
   </div>
   <nav id="pst-page-toc-nav" class="page-toc" aria-labelledby="pst-page-navigation-heading-2">
     <ul class="pst-show_toc_level nav section-nav flex-column">
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#classes">Classes</a></li>
 <li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#functions">Functions</a></li>
 <li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#module-contents">Module Contents</a><ul class="nav section-nav flex-column">
-<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#quadrants.lang.runtime_ops.sync"><code class="docutils literal notranslate"><span class="pre">sync()</span></code></a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#quadrants.lang.register_array.RegisterArray"><code class="docutils literal notranslate"><span class="pre">RegisterArray</span></code></a><ul class="nav section-nav flex-column">
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#quadrants.lang.register_array.RegisterArray.count"><code class="docutils literal notranslate"><span class="pre">RegisterArray.count</span></code></a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#quadrants.lang.register_array.RegisterArray.dtype"><code class="docutils literal notranslate"><span class="pre">RegisterArray.dtype</span></code></a></li>
+</ul>
+</li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#quadrants.lang.register_array.register_array"><code class="docutils literal notranslate"><span class="pre">register_array()</span></code></a></li>
 </ul>
 </li>
 </ul>
@@ -444,7 +516,7 @@ streams created via <code class="xref py py-func docutils literal notranslate"><
   <div class="sidebar-secondary-item">
 
   <div class="tocsection sourcelink">
-    <a href="../../../../_sources/autoapi/quadrants/lang/runtime_ops/index.rst.txt">
+    <a href="../../../../_sources/autoapi/quadrants/lang/register_array/index.rst.txt">
       <i class="fa-solid fa-file-lines"></i> Show Source
     </a>
   </div>

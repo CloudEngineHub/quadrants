@@ -348,6 +348,12 @@
 <span class="kn">from</span><span class="w"> </span><span class="nn">quadrants.lang.expr</span><span class="w"> </span><span class="kn">import</span> <span class="n">Expr</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">quadrants.lang.field</span><span class="w"> </span><span class="kn">import</span> <span class="n">Field</span><span class="p">,</span> <span class="n">ScalarField</span><span class="p">,</span> <span class="n">SNodeHostAccess</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">quadrants.lang.matrix</span><span class="w"> </span><span class="kn">import</span> <span class="n">Matrix</span><span class="p">,</span> <span class="n">MatrixType</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">quadrants.lang.register_array</span><span class="w"> </span><span class="kn">import</span> <span class="p">(</span>
+    <span class="n">RegisterArray</span><span class="p">,</span>
+    <span class="n">_expand_register_array_naming</span><span class="p">,</span>
+    <span class="n">_RegisterArrayRef</span><span class="p">,</span>
+    <span class="n">register_array</span><span class="p">,</span>
+<span class="p">)</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">quadrants.lang.util</span><span class="w"> </span><span class="kn">import</span> <span class="p">(</span>
     <span class="n">cook_dtype</span><span class="p">,</span>
     <span class="n">in_python_scope</span><span class="p">,</span>
@@ -993,130 +999,22 @@
 
 
 
-<div class="viewcode-block" id="FieldArray">
-<a class="viewcode-back" href="../../../autoapi/quadrants/lang/struct/index.html#quadrants.lang.struct.FieldArray">[docs]</a>
-<span class="k">class</span><span class="w"> </span><span class="nc">FieldArray</span><span class="p">:</span>
-<span class="w">    </span><span class="sd">&quot;&quot;&quot;Type wrapper for a group of N scalar fields exposed via indexed syntax on a ``@qd.dataclass``.</span>
-
-<span class="sd">    See :func:`field_array`. ``field_array(N, dtype)`` annotations on a dataclass cause the</span>
-<span class="sd">    StructType to be built with N synthetic scalar fields named ``_{group}0`` .. ``_{group}{N-1}``,</span>
-<span class="sd">    while the AST transformer rewrites ``obj.{group}[i]`` to a direct reference to</span>
-<span class="sd">    ``obj._{group}{i}`` for python-int / qd.static-resolved indices. PTX/LLVM IR is byte-identical</span>
-<span class="sd">    to the hand-rolled named-field equivalent.</span>
-<span class="sd">    &quot;&quot;&quot;</span>
-
-    <span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">count</span><span class="p">,</span> <span class="n">dtype</span><span class="p">):</span>
-        <span class="k">if</span> <span class="ow">not</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">count</span><span class="p">,</span> <span class="nb">int</span><span class="p">)</span> <span class="ow">or</span> <span class="n">count</span> <span class="o">&lt;=</span> <span class="mi">0</span><span class="p">:</span>
-            <span class="k">raise</span> <span class="n">QuadrantsSyntaxError</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;field_array count must be a positive int, got </span><span class="si">{</span><span class="n">count</span><span class="si">!r}</span><span class="s2">&quot;</span><span class="p">)</span>
-<div class="viewcode-block" id="FieldArray.count">
-<a class="viewcode-back" href="../../../autoapi/quadrants/lang/struct/index.html#quadrants.lang.struct.FieldArray.count">[docs]</a>
-        <span class="bp">self</span><span class="o">.</span><span class="n">count</span> <span class="o">=</span> <span class="n">count</span></div>
-
-<div class="viewcode-block" id="FieldArray.dtype">
-<a class="viewcode-back" href="../../../autoapi/quadrants/lang/struct/index.html#quadrants.lang.struct.FieldArray.dtype">[docs]</a>
-        <span class="bp">self</span><span class="o">.</span><span class="n">dtype</span> <span class="o">=</span> <span class="n">dtype</span></div>
-
-
-    <span class="k">def</span><span class="w"> </span><span class="fm">__repr__</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
-        <span class="k">return</span> <span class="sa">f</span><span class="s2">&quot;field_array(count=</span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">count</span><span class="si">}</span><span class="s2">, dtype=</span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">dtype</span><span class="si">}</span><span class="s2">)&quot;</span></div>
-
-
-
-<div class="viewcode-block" id="field_array">
-<a class="viewcode-back" href="../../../autoapi/quadrants/lang/struct/index.html#quadrants.lang.struct.field_array">[docs]</a>
-<span class="k">def</span><span class="w"> </span><span class="nf">field_array</span><span class="p">(</span><span class="n">count</span><span class="p">,</span> <span class="n">dtype</span><span class="p">):</span>
-<span class="w">    </span><span class="sd">&quot;&quot;&quot;Declare a group of ``count`` scalar fields of ``dtype`` on a ``@qd.dataclass``.</span>
-
-<span class="sd">    Example::</span>
-
-<span class="sd">        @qd.dataclass</span>
-<span class="sd">        class Tile:</span>
-<span class="sd">            r: qd.field_array(32, qd.f32)   # 32 scalar fields exposed as t.r[0..31]</span>
-
-<span class="sd">        t = Tile()</span>
-<span class="sd">        t.r[5] = 1.0       # lowers to direct write of synthetic field _r5</span>
-<span class="sd">        v = t.r[5]         # same as v = t._r5</span>
-<span class="sd">        for k in qd.static(range(32)):</span>
-<span class="sd">            t.r[k] = 0.0   # each iter is one AST node, not a 32-way cascade</span>
-
-<span class="sd">    For python-int / ``qd.static``-resolved indices, ``t.r[k]`` is rewritten by the AST</span>
-<span class="sd">    transformer to the named-field access ``t._r{k}``, producing identical LLVM IR / PTX to</span>
-<span class="sd">    a struct declared with 32 individually-named scalar fields. This avoids the SROA-bailout</span>
-<span class="sd">    that occurs with ``qd.types.vector(N, dtype)`` struct fields on runtime-indexed access.</span>
-
-<span class="sd">    Runtime-int indexing is currently unsupported; use an explicit cascade helper for that</span>
-<span class="sd">    case (same pattern as today&#39;s ``_get_col`` in ``_tile16.py``).</span>
-<span class="sd">    &quot;&quot;&quot;</span>
-    <span class="k">return</span> <span class="n">FieldArray</span><span class="p">(</span><span class="n">count</span><span class="p">,</span> <span class="n">dtype</span><span class="p">)</span></div>
-
-
-
-<span class="k">def</span><span class="w"> </span><span class="nf">_expand_field_array_naming</span><span class="p">(</span><span class="n">group_name</span><span class="p">,</span> <span class="n">index</span><span class="p">):</span>
-<span class="w">    </span><span class="sd">&quot;&quot;&quot;Naming convention for synthetic scalar fields of a ``field_array`` group.</span>
-
-<span class="sd">    Public so the AST transformer can mirror this without a circular import.</span>
-<span class="sd">    &quot;&quot;&quot;</span>
-    <span class="k">return</span> <span class="sa">f</span><span class="s2">&quot;_</span><span class="si">{</span><span class="n">group_name</span><span class="si">}{</span><span class="n">index</span><span class="si">}</span><span class="s2">&quot;</span>
-
-
-<span class="k">class</span><span class="w"> </span><span class="nc">_FieldArrayRef</span><span class="p">:</span>
-<span class="w">    </span><span class="sd">&quot;&quot;&quot;Transient proxy returned by the AST transformer for ``obj.{group}`` where ``group``</span>
-<span class="sd">    is a registered ``field_array`` group on the struct type.</span>
-
-<span class="sd">    Only valid as the value of a Subscript node: ``obj.{group}[i]``. Resolved by</span>
-<span class="sd">    ``ASTTransformer.build_Subscript`` to a direct reference to the synthetic scalar field</span>
-<span class="sd">    ``_{group}{i}`` when ``i`` is a python-int / qd.static-resolved integer.</span>
-
-<span class="sd">    Used as a not-an-Expr marker; any attempt to use it as a value raises.</span>
-<span class="sd">    &quot;&quot;&quot;</span>
-
-    <span class="n">_qd_is_field_array_ref</span> <span class="o">=</span> <span class="kc">True</span>
-
-    <span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">struct</span><span class="p">,</span> <span class="n">group_name</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">count</span><span class="p">:</span> <span class="nb">int</span><span class="p">,</span> <span class="n">dtype</span><span class="p">,</span> <span class="n">naming_fn</span><span class="p">):</span>
-        <span class="bp">self</span><span class="o">.</span><span class="n">_qd_struct</span> <span class="o">=</span> <span class="n">struct</span>
-        <span class="bp">self</span><span class="o">.</span><span class="n">_qd_group_name</span> <span class="o">=</span> <span class="n">group_name</span>
-        <span class="bp">self</span><span class="o">.</span><span class="n">_qd_count</span> <span class="o">=</span> <span class="n">count</span>
-        <span class="bp">self</span><span class="o">.</span><span class="n">_qd_dtype</span> <span class="o">=</span> <span class="n">dtype</span>
-        <span class="bp">self</span><span class="o">.</span><span class="n">_qd_naming_fn</span> <span class="o">=</span> <span class="n">naming_fn</span>
-
-    <span class="k">def</span><span class="w"> </span><span class="nf">_qd_field_for</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">index</span><span class="p">:</span> <span class="nb">int</span><span class="p">):</span>
-        <span class="k">if</span> <span class="ow">not</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">index</span><span class="p">,</span> <span class="p">(</span><span class="nb">int</span><span class="p">,</span> <span class="n">np</span><span class="o">.</span><span class="n">integer</span><span class="p">)):</span>
-            <span class="k">raise</span> <span class="n">QuadrantsSyntaxError</span><span class="p">(</span>
-                <span class="sa">f</span><span class="s2">&quot;field_array </span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">_qd_group_name</span><span class="si">}</span><span class="s2">[i] requires a python-int index &quot;</span>
-                <span class="sa">f</span><span class="s2">&quot;(possibly via qd.static); got runtime index of type </span><span class="si">{</span><span class="nb">type</span><span class="p">(</span><span class="n">index</span><span class="p">)</span><span class="o">.</span><span class="vm">__name__</span><span class="si">}</span><span class="s2">&quot;</span>
-            <span class="p">)</span>
-        <span class="n">i</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="n">index</span><span class="p">)</span>
-        <span class="k">if</span> <span class="n">i</span> <span class="o">&lt;</span> <span class="mi">0</span> <span class="ow">or</span> <span class="n">i</span> <span class="o">&gt;=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_qd_count</span><span class="p">:</span>
-            <span class="k">raise</span> <span class="n">QuadrantsSyntaxError</span><span class="p">(</span>
-                <span class="sa">f</span><span class="s2">&quot;field_array index out of bounds: </span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">_qd_group_name</span><span class="si">}</span><span class="s2">[</span><span class="si">{</span><span class="n">i</span><span class="si">}</span><span class="s2">] &quot;</span>
-                <span class="sa">f</span><span class="s2">&quot;(count=</span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">_qd_count</span><span class="si">}</span><span class="s2">)&quot;</span>
-            <span class="p">)</span>
-        <span class="n">field_name</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_qd_naming_fn</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_qd_group_name</span><span class="p">,</span> <span class="n">i</span><span class="p">)</span>
-        <span class="k">return</span> <span class="nb">getattr</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_qd_struct</span><span class="p">,</span> <span class="n">field_name</span><span class="p">)</span>
-
-    <span class="k">def</span><span class="w"> </span><span class="fm">__repr__</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>  <span class="c1"># pragma: no cover - debug only</span>
-        <span class="k">return</span> <span class="p">(</span>
-            <span class="sa">f</span><span class="s2">&quot;&lt;field_array_ref group=</span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">_qd_group_name</span><span class="si">!r}</span><span class="s2"> count=</span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">_qd_count</span><span class="si">}</span><span class="s2"> &quot;</span>
-            <span class="sa">f</span><span class="s2">&quot;dtype=</span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">_qd_dtype</span><span class="si">}</span><span class="s2">&gt;&quot;</span>
-        <span class="p">)</span>
-
-
 <span class="k">class</span><span class="w"> </span><span class="nc">StructType</span><span class="p">(</span><span class="n">CompoundType</span><span class="p">):</span>
     <span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">members</span> <span class="o">=</span> <span class="p">{}</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">methods</span> <span class="o">=</span> <span class="p">{}</span>
-        <span class="c1"># Maps group name -&gt; (count, dtype, naming_fn). Populated when a member annotation</span>
-        <span class="c1"># is a ``FieldArray``; consumed by the AST transformer to rewrite ``obj.{group}[i]``.</span>
-        <span class="bp">self</span><span class="o">.</span><span class="n">_field_groups</span><span class="p">:</span> <span class="nb">dict</span> <span class="o">=</span> <span class="p">{}</span>
+        <span class="c1"># Maps group name -&gt; (count, dtype, naming_fn). Populated when a member annotation is a ``RegisterArray``;</span>
+        <span class="c1"># consumed by the AST transformer to rewrite ``obj.{group}[i]`` into a direct synthetic-field reference.</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_register_groups</span><span class="p">:</span> <span class="nb">dict</span> <span class="o">=</span> <span class="p">{}</span>
         <span class="n">elements</span> <span class="o">=</span> <span class="p">[]</span>
         <span class="k">for</span> <span class="n">k</span><span class="p">,</span> <span class="n">dtype</span> <span class="ow">in</span> <span class="n">kwargs</span><span class="o">.</span><span class="n">items</span><span class="p">():</span>
             <span class="k">if</span> <span class="n">k</span> <span class="o">==</span> <span class="s2">&quot;__struct_methods&quot;</span><span class="p">:</span>
                 <span class="bp">self</span><span class="o">.</span><span class="n">methods</span> <span class="o">=</span> <span class="n">dtype</span>
-            <span class="k">elif</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">dtype</span><span class="p">,</span> <span class="n">FieldArray</span><span class="p">):</span>
+            <span class="k">elif</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">dtype</span><span class="p">,</span> <span class="n">RegisterArray</span><span class="p">):</span>
                 <span class="n">cooked</span> <span class="o">=</span> <span class="n">cook_dtype</span><span class="p">(</span><span class="n">dtype</span><span class="o">.</span><span class="n">dtype</span><span class="p">)</span>
-                <span class="bp">self</span><span class="o">.</span><span class="n">_field_groups</span><span class="p">[</span><span class="n">k</span><span class="p">]</span> <span class="o">=</span> <span class="p">(</span><span class="n">dtype</span><span class="o">.</span><span class="n">count</span><span class="p">,</span> <span class="n">cooked</span><span class="p">,</span> <span class="n">_expand_field_array_naming</span><span class="p">)</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">_register_groups</span><span class="p">[</span><span class="n">k</span><span class="p">]</span> <span class="o">=</span> <span class="p">(</span><span class="n">dtype</span><span class="o">.</span><span class="n">count</span><span class="p">,</span> <span class="n">cooked</span><span class="p">,</span> <span class="n">_expand_register_array_naming</span><span class="p">)</span>
                 <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">dtype</span><span class="o">.</span><span class="n">count</span><span class="p">):</span>
-                    <span class="n">sub</span> <span class="o">=</span> <span class="n">_expand_field_array_naming</span><span class="p">(</span><span class="n">k</span><span class="p">,</span> <span class="n">i</span><span class="p">)</span>
+                    <span class="n">sub</span> <span class="o">=</span> <span class="n">_expand_register_array_naming</span><span class="p">(</span><span class="n">k</span><span class="p">,</span> <span class="n">i</span><span class="p">)</span>
                     <span class="bp">self</span><span class="o">.</span><span class="n">members</span><span class="p">[</span><span class="n">sub</span><span class="p">]</span> <span class="o">=</span> <span class="n">cooked</span>
                     <span class="n">elements</span><span class="o">.</span><span class="n">append</span><span class="p">([</span><span class="n">cooked</span><span class="p">,</span> <span class="n">sub</span><span class="p">])</span>
             <span class="k">elif</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">dtype</span><span class="p">,</span> <span class="n">StructType</span><span class="p">):</span>
@@ -1154,10 +1052,10 @@
         <span class="n">entries</span><span class="o">.</span><span class="n">_Struct__dtype</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">dtype</span>
         <span class="n">struct</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">cast</span><span class="p">(</span><span class="n">entries</span><span class="p">)</span>
         <span class="n">struct</span><span class="o">.</span><span class="n">_Struct__dtype</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">dtype</span>
-        <span class="c1"># Propagate the field-array group metadata onto the Struct instance so the AST</span>
-        <span class="c1"># transformer can detect indexed-group access (``obj.r``) on the per-trace expression.</span>
-        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">_field_groups</span><span class="p">:</span>
-            <span class="n">struct</span><span class="o">.</span><span class="n">_qd_field_groups</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_field_groups</span>
+        <span class="c1"># Propagate the register-array group metadata onto the Struct instance so the AST transformer can detect</span>
+        <span class="c1"># indexed-group access (``obj.r``) on the per-trace expression.</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">_register_groups</span><span class="p">:</span>
+            <span class="n">struct</span><span class="o">.</span><span class="n">_qd_register_groups</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_register_groups</span>
         <span class="k">return</span> <span class="n">struct</span>
 
     <span class="k">def</span><span class="w"> </span><span class="fm">__instancecheck__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">instance</span><span class="p">):</span>
@@ -1353,7 +1251,7 @@
 
 
 
-<span class="n">__all__</span> <span class="o">=</span> <span class="p">[</span><span class="s2">&quot;Struct&quot;</span><span class="p">,</span> <span class="s2">&quot;StructField&quot;</span><span class="p">,</span> <span class="s2">&quot;dataclass&quot;</span><span class="p">,</span> <span class="s2">&quot;FieldArray&quot;</span><span class="p">,</span> <span class="s2">&quot;field_array&quot;</span><span class="p">,</span> <span class="s2">&quot;_FieldArrayRef&quot;</span><span class="p">]</span>
+<span class="n">__all__</span> <span class="o">=</span> <span class="p">[</span><span class="s2">&quot;Struct&quot;</span><span class="p">,</span> <span class="s2">&quot;StructField&quot;</span><span class="p">,</span> <span class="s2">&quot;dataclass&quot;</span><span class="p">,</span> <span class="s2">&quot;RegisterArray&quot;</span><span class="p">,</span> <span class="s2">&quot;register_array&quot;</span><span class="p">,</span> <span class="s2">&quot;_RegisterArrayRef&quot;</span><span class="p">]</span>
 </pre></div>
 
                 </article>

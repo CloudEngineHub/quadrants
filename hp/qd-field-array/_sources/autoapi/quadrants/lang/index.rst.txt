@@ -29,6 +29,7 @@ Submodules
    /autoapi/quadrants/lang/mesh/index
    /autoapi/quadrants/lang/misc/index
    /autoapi/quadrants/lang/ops/index
+   /autoapi/quadrants/lang/register_array/index
    /autoapi/quadrants/lang/runtime_ops/index
    /autoapi/quadrants/lang/shell/index
    /autoapi/quadrants/lang/simt/index
