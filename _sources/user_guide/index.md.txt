@@ -54,7 +54,7 @@ block
 grid
 math
 subgroup
-tile16
+tile
 ```
 
 ```{toctree}
@@ -96,6 +96,14 @@ python_backend
 debug
 quirks
 troubleshooting
+```
+
+```{toctree}
+:caption: Advanced
+:maxdepth: 1
+:titlesonly:
+
+optimization_passes
 ```
 
 ```{toctree}
