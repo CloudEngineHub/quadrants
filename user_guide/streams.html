@@ -336,6 +336,7 @@
 </ul>
 <p aria-level="2" class="caption" role="heading"><span class="caption-text">Performance</span></p>
 <ul class="current nav bd-sidenav">
+<li class="toctree-l1"><a class="reference internal" href="performance.html">Performance</a></li>
 <li class="toctree-l1"><a class="reference internal" href="fastcache.html">Fastcache</a></li>
 <li class="toctree-l1"><a class="reference internal" href="graph.html">Graph</a></li>
 <li class="toctree-l1 current active"><a class="current reference internal" href="#">Streams</a></li>
@@ -365,7 +366,7 @@
 </ul>
 <p aria-level="2" class="caption" role="heading"><span class="caption-text">Internal</span></p>
 <ul class="nav bd-sidenav">
-<li class="toctree-l1"><a class="reference internal" href="building_cudagraph_conditional_fatbin.html">Building the CUDA graph conditional fatbin</a></li>
+<li class="toctree-l1"><a class="reference internal" href="building_cudagraph_conditional_fatbin.html">Advanced: Building the CUDA graph conditional fatbin</a></li>
 </ul>
 </div>
 </nav></div>
@@ -575,8 +576,8 @@
 <section id="limitations">
 <h2>Limitations<a class="headerlink" href="#limitations" title="Link to this heading">#</a></h2>
 <ul class="simple">
-<li><p><strong>Not compatible with graphs.</strong> Do not pass <code class="docutils literal notranslate"><span class="pre">qd_stream</span></code> to a kernel decorated with <code class="docutils literal notranslate"><span class="pre">graph=True</span></code> (if you do, a <code class="docutils literal notranslate"><span class="pre">RuntimeError</span></code> will be raised).</p></li>
-<li><p><strong>Not compatible with autodiff.</strong> Do not pass <code class="docutils literal notranslate"><span class="pre">qd_stream</span></code> to a kernel that uses reverse-mode or forward-mode differentiation, or inside a <code class="docutils literal notranslate"><span class="pre">qd.ad.Tape</span></code> context (if you do, a <code class="docutils literal notranslate"><span class="pre">RuntimeError</span></code> will be raised).</p></li>
+<li><p><strong>Not compatible with <a class="reference internal" href="graph.html"><span class="std std-doc">graphs</span></a>.</strong> Streams cannot be combined with <a class="reference internal" href="graph.html"><span class="std std-doc"><code class="docutils literal notranslate"><span class="pre">graph=True</span></code></span></a> kernels: passing <code class="docutils literal notranslate"><span class="pre">qd_stream</span></code> to a graph kernel raises a <code class="docutils literal notranslate"><span class="pre">RuntimeError</span></code>, and using <code class="docutils literal notranslate"><span class="pre">qd.stream_parallel()</span></code> inside a graph kernel raises a <code class="docutils literal notranslate"><span class="pre">QuadrantsSyntaxError</span></code>.</p></li>
+<li><p><strong>Not compatible with <a class="reference internal" href="autodiff.html"><span class="std std-doc">autodiff</span></a>.</strong> Do not pass <code class="docutils literal notranslate"><span class="pre">qd_stream</span></code> to a kernel that uses reverse-mode or forward-mode differentiation, or inside a <a class="reference internal" href="autodiff.html"><span class="std std-doc"><code class="docutils literal notranslate"><span class="pre">qd.ad.Tape</span></code></span></a> context (if you do, a <code class="docutils literal notranslate"><span class="pre">RuntimeError</span></code> will be raised).</p></li>
 </ul>
 </section>
 </section>
