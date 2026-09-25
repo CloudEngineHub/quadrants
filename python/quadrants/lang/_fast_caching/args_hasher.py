@@ -1,5 +1,6 @@
 import dataclasses
 import enum
+import functools
 import numbers
 import time
 from typing import Any, Sequence
@@ -86,10 +87,14 @@ _should_warn = False
 # of thousands of times.
 _warned_unknown_types: set[str] = set()
 
+# ``module.Class.name`` of kernel-read ``cached_property`` attributes already warned about.
+_warned_cached_properties: set[str] = set()
+
 
 def reset_unknown_type_warn_state() -> None:
-    """Clear the once-per-process warned-unknown-types set. Called from test setup / ``qd.init``."""
+    """Clear the once-per-process warned sets, so tests can check the warnings."""
     _warned_unknown_types.clear()
+    _warned_cached_properties.clear()
 
 
 def _mark_warn_if_not_tensor_annotation(arg_meta: ArgMetadata | None) -> None:
@@ -145,6 +150,76 @@ def _is_path_used(pruning_paths: set[str] | None, child_flat: str | None) -> boo
     if pruning_paths is None or child_flat is None:
         return True
     return child_flat in pruning_paths
+
+
+def _get_used_properties(
+    path: tuple[str, ...], obj: object, parent_flat: str | None, pruning_paths: set[str] | None
+) -> list[str] | _FailFastcache:
+    """Names of the properties of ``obj`` the kernel reads, sorted so the key is stable."""
+    seen: set[str] = set()
+    used = []
+    for class_ in type(obj).__mro__:
+        for name, attr in class_.__dict__.items():
+            # The first definition along the MRO is the one ``getattr`` resolves, so a subclass override wins.
+            if name in seen:
+                continue
+            seen.add(name)
+            if not isinstance(attr, (property, functools.cached_property)):
+                continue
+            if not _is_path_used(pruning_paths, _child_flat(parent_flat, name)):
+                continue
+            if isinstance(attr, functools.cached_property):
+                qualname = f"{type(obj).__module__}.{type(obj).__qualname__}.{name}"
+                if qualname not in _warned_cached_properties:
+                    _warned_cached_properties.add(qualname)
+                    _logging.warn(
+                        f"[FASTCACHE][CACHED_PROPERTY] Kernel reads functools.cached_property {qualname} at path "
+                        f"{path + (name,)}, which fastcache does not support. Fastcache is disabled for this call. "
+                        f"Use @property instead."
+                    )
+                _mark_should_warn()
+                return _FAIL_FASTCACHE
+            used.append(name)
+    return sorted(used)
+
+
+def _stringify_used_properties(
+    raise_on_templated_floats: bool,
+    path: tuple[str, ...],
+    obj: object,
+    pruning_paths: set[str] | None,
+    parent_flat: str | None,
+) -> list[str] | _FailFastcache:
+    """Represents names and values of used properties as a string."""
+    names = _get_used_properties(path, obj, parent_flat, pruning_paths)
+    if isinstance(names, _FailFastcache):
+        return _FAIL_FASTCACHE
+    repr_l = []
+    for name in names:
+        child_path = path + (name,)
+        try:
+            value = getattr(obj, name)
+        except Exception as e:  # pylint: disable=broad-exception-caught
+            _logging.warn(
+                f"[FASTCACHE][PROPERTY_RAISED] Property at kernel-read path {child_path} raised {e!r} while computing "
+                f"the fastcache key. Fastcache is disabled for this call."
+            )
+            _mark_should_warn()
+            return _FAIL_FASTCACHE
+        # Properties are always baked into the kernel, even with ``template_primitives=False``, so their value is in the
+        # key.
+        _repr = stringify_obj_type(
+            raise_on_templated_floats,
+            child_path,
+            value,
+            ArgMetadata(Template, ""),
+            pruning_paths=pruning_paths,
+            parent_flat=_child_flat(parent_flat, name),
+        )
+        if _repr is _FAIL_FASTCACHE:
+            return _FAIL_FASTCACHE
+        repr_l.append(f"{name}: {_repr}")
+    return repr_l
 
 
 def dataclass_to_repr(
@@ -333,6 +408,10 @@ def stringify_obj_type(
             if _child_repr is _FAIL_FASTCACHE:
                 return _FAIL_FASTCACHE
             child_repr_l.append(f"{k}: {_child_repr}")
+        property_repr_l = _stringify_used_properties(raise_on_templated_floats, path, obj, pruning_paths, parent_flat)
+        if isinstance(property_repr_l, _FailFastcache):
+            return _FAIL_FASTCACHE
+        child_repr_l.extend(property_repr_l)
         return ", ".join(child_repr_l)
     if issubclass(arg_type, (numbers.Number, np.number)):
         if _is_template(arg_meta):
