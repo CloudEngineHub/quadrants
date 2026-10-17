@@ -27,6 +27,7 @@
 #include "quadrants/math/arithmetic.h"
 #include "llvm_runtime.h"
 #include "adstack_runtime.h"
+#include "cpu_range_for.h"
 
 // In llvm 15, host_printf_type will be saved as ptr instead of ptr of FunctionType. Add dummy function to save function
 // type for host_printf_type.
@@ -1705,6 +1706,15 @@ void parallel_struct_for(RuntimeContext *context,
   runtime->parallel_for(runtime->thread_pool, list_tail * element_split, num_threads, &ctx,
                         cpu_struct_for_block_helper);
 #endif
+}
+
+i32 get_cpu_per_worker_block_start_index(i32 original_range_begin,
+                                         i32 original_range_end,
+                                         i32 num_blocks,
+                                         i32 min_block_size,
+                                         i32 boundary_index) {
+  return quadrants::lang::get_cpu_per_worker_block_start_index(original_range_begin, original_range_end, num_blocks,
+                                                               min_block_size, boundary_index);
 }
 
 using range_for_xlogue = void (*)(RuntimeContext *, /*TLS*/ char *tls_base);

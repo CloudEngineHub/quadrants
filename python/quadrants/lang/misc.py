@@ -10,6 +10,7 @@ from quadrants._lib import core as _qd_core
 from quadrants._lib.core.quadrants_python import Extension
 from quadrants._lib.utils import get_os_name
 from quadrants.lang import impl, util
+from quadrants.lang._environment_configurator import _EnvironmentConfigurator
 from quadrants.lang.checkpoint import checkpoint
 from quadrants.lang.expr import Expr
 from quadrants.lang.graph_parallel import graph_parallel, graph_parallel_context
@@ -206,39 +207,37 @@ def reset():
     impl.reset()
 
 
-class _EnvironmentConfigurator:
-    def __init__(self, kwargs, _cfg):
-        self.cfg = _cfg
-        self.kwargs = kwargs
-        self.keys = []
+def normalize_deprecated_cpu_scheduling_aliases(env_comp: _EnvironmentConfigurator) -> None:
+    kwargs = env_comp.kwargs
+    if env_comp.is_supplied("make_cpu_multithreading_loop") and env_comp.is_supplied("cpu_work_scheduling"):
+        raise ValueError(
+            "Cannot specify both make_cpu_multithreading_loop and cpu_work_scheduling, including through environment variables"
+        )
+    if env_comp.is_supplied("default_cpu_block_dim") and env_comp.is_supplied("cpu_fixed_block_dim"):
+        raise ValueError(
+            "Cannot specify both default_cpu_block_dim and cpu_fixed_block_dim, including through environment variables"
+        )
 
-    def add(self, key, _cast=None):
-        _cast = _cast or self.bool_int
+    if env_comp.is_supplied("make_cpu_multithreading_loop"):
+        warnings.warn(
+            "make_cpu_multithreading_loop is deprecated; use cpu_work_scheduling instead.",
+            DeprecationWarning,
+            stacklevel=3,
+        )
+        value = env_comp.read("make_cpu_multithreading_loop")
+        if not isinstance(value, (bool, int)) or value not in (False, True):
+            raise TypeError("make_cpu_multithreading_loop must be a boolean")
+        kwargs["cpu_work_scheduling"] = (
+            _qd_core.CPUWorkScheduling.PER_WORKER if value else _qd_core.CPUWorkScheduling.FIXED_SIZE
+        )
 
-        self.keys.append(key)
-
-        # QD_OFFLINE_CACHE=   : no effect
-        # QD_OFFLINE_CACHE=0  : False
-        # QD_OFFLINE_CACHE=1  : True
-        name = "QD_" + key.upper()
-        value = os.environ.get(name, "")
-        if key in self.kwargs:
-            self[key] = self.kwargs[key]
-            if value:
-                _qd_core.warn(f'Environment variable {name}={value} overridden by qd.init argument "{key}"')
-            del self.kwargs[key]  # mark as recognized
-        elif value:
-            self[key] = _cast(value)
-
-    def __getitem__(self, key):
-        return getattr(self.cfg, key)
-
-    def __setitem__(self, key, value):
-        setattr(self.cfg, key, value)
-
-    @staticmethod
-    def bool_int(x):
-        return bool(int(x))
+    if env_comp.is_supplied("default_cpu_block_dim"):
+        warnings.warn(
+            "default_cpu_block_dim is deprecated; use cpu_fixed_block_dim instead.",
+            DeprecationWarning,
+            stacklevel=3,
+        )
+        kwargs["cpu_fixed_block_dim"] = env_comp.read("default_cpu_block_dim", int)
 
 
 class _SpecialConfig:
@@ -381,9 +380,8 @@ def init(
                       @qd.kernel(pure=True))
         **kwargs: Quadrants provides highly customizable compilation through
             ``kwargs``, which allows for fine grained control of Quadrants compiler
-            behavior. Below we list some of the most frequently used ones. For a
-            complete list, please check out
-            https://github.com/Genesis-Embodied-AI/quadrants/blob/master/quadrants/program/compile_config.h.
+            behavior. Below we list some of the most frequently used ones. For the full configuration reference, see
+            `qd.init options <https://genesis-embodied-ai.github.io/quadrants/user_guide/init_options.html#all-options>`_.
 
             * ``cpu_max_num_threads`` (int): Sets the number of threads used by the CPU thread pool.
             * ``debug`` (bool): Enables the debug mode, under which Quadrants does a few more things like boundary checks.
@@ -452,20 +450,20 @@ def init(
         impl.get_runtime().set_default_ip(default_ip)
 
     # submodule configurations (spec_cfg):
-    env_spec.add("log_level", str)
-    env_spec.add("gdb_trigger")
-    env_spec.add("short_circuit_operators")
-    env_spec.add("print_full_traceback")
-    env_spec.add("unrolling_limit")
+    env_spec.configure("log_level", str)
+    env_spec.configure("gdb_trigger")
+    env_spec.configure("short_circuit_operators")
+    env_spec.configure("print_full_traceback")
+    env_spec.configure("unrolling_limit")
+
+    normalize_deprecated_cpu_scheduling_aliases(env_comp)
 
     # compiler configurations (qd.cfg):
     for key in dir(cfg):
+        # These options are handled separately above.
         if key in ["arch", "default_fp", "default_ip"]:
             continue
-        _cast = type(getattr(cfg, key))
-        if _cast is bool:
-            _cast = None
-        env_comp.add(key, _cast)
+        env_comp.configure(key)
 
     unexpected_keys = kwargs.keys()
 
